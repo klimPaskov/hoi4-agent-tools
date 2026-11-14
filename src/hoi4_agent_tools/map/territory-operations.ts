@@ -7,7 +7,7 @@ import {
   type BorderEdgeTable,
   type BorderScore,
 } from './border-quality.js';
-import { borderQualityInputFromIndex } from './border-quality-input.js';
+import { borderQualityInputFromIndex, type BorderQualityScope } from './border-quality-input.js';
 import type { MapWorkspaceIndex, StateRecord } from './model.js';
 import {
   cloneState,
@@ -111,6 +111,8 @@ export interface AssignTerritoryOperation extends MapOperationBase {
   remapReferences?: 'refuse' | 'override';
   borderQuality?: BorderQualityMode;
   borderTargets?: BorderTargetsInput;
+  /** Measure and judge the border quality only inside this scope. */
+  borderQualityScope?: BorderQualityScope;
   /** Culture or people group of provinces, by province id. */
   groups?: Record<string, string>;
   /** Extra cost of growing across a group boundary; default 2 (three times the cost). */
@@ -130,6 +132,8 @@ export interface RepartitionStatesOperation extends MapOperationBase {
   remapReferences?: 'refuse' | 'override';
   borderQuality?: BorderQualityMode;
   borderTargets?: BorderTargetsInput;
+  /** Measure and judge the border quality only inside this scope. */
+  borderQualityScope?: BorderQualityScope;
 }
 
 export interface TerritoryReport {
@@ -151,6 +155,7 @@ export interface TerritoryReport {
     mode: BorderQualityMode;
     layer: 'country' | 'state';
     targets?: BorderTargetsInput;
+    scope?: BorderQualityScope;
     /** Filled after planning, from the metric on the proposed map. */
     verdicts?: Array<{
       layer: string;
@@ -867,6 +872,9 @@ export function* applyAssignTerritory(
       mode: operation.borderQuality ?? 'report',
       layer: 'country',
       ...(operation.borderTargets === undefined ? {} : { targets: operation.borderTargets }),
+      ...(operation.borderQualityScope === undefined
+        ? {}
+        : { scope: operation.borderQualityScope }),
     },
   };
   const undefinedTags = undefinedTagDiagnostics(index, operation);
@@ -1392,6 +1400,9 @@ export function* applyRepartitionStates(
       mode: operation.borderQuality ?? 'report',
       layer: 'state',
       ...(operation.borderTargets === undefined ? {} : { targets: operation.borderTargets }),
+      ...(operation.borderQualityScope === undefined
+        ? {}
+        : { scope: operation.borderQualityScope }),
     },
   };
   const diagnostics: Diagnostic[] = [
