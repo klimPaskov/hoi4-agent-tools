@@ -10,8 +10,7 @@ import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js'
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 
 /**
- * Tools whose analysis builds the shared symbol index (ADR 0085), and map tools that read
- * `provinces.bmp` (ADR 0084), need the engine. Without one (no bundle for the platform, or
+ * Tools whose analysis builds the shared symbol index (ADR 0085) need the engine. Without one (no bundle for the platform, or
  * `HOI4_ENGINE` naming a missing file) each answers `ENGINE_UNAVAILABLE` with a message that
  * names the engine, instead of crashing or answering from TypeScript.
  */
@@ -39,7 +38,6 @@ async function clientWithoutEngine() {
     path.join(mod, 'common', 'technologies', 'a.txt'),
     'technologies = { tech_a = { research_cost = 1 } }\n',
   );
-  await write(path.join(mod, 'map', 'definition.csv'), '0;0;0;0;land;false;unknown;0\n');
   const previous = process.env.HOI4_ENGINE;
   process.env.HOI4_ENGINE = path.join(root, 'no-such-engine', 'hoi4-engine.exe');
   close.push(async () => {
