@@ -386,3 +386,25 @@ fn fixtures_round_trip_byte_for_byte() {
         assert!(report.files > 0);
     }
 }
+
+#[test]
+fn a_missing_localisation_key_is_a_warning_and_scripted_text_is_information() {
+    use hoi4_engine::findings::Severity;
+    let missing = analyze(
+        "loc_severity_missing",
+        &[
+            ("events/t.txt", "add_namespace = t\ncountry_event = { id = t.1 title = t.1.missing desc = t.1.d }\n"),
+            ("localisation/english/t_l_english.yml", EVENT_LOC),
+        ],
+    );
+    let finding = missing.findings.iter().find(|f| f.code == "REF_MISSING_LOCALISATION_KEY").expect("the missing key is reported");
+    assert_eq!(finding.severity, Severity::Warning, "the game shows the raw key, so it is not an error");
+
+    let literal = analyze(
+        "loc_severity_literal",
+        &[("common/scripted_localisation/t.txt", "defined_text = {\n\tname = T_text\n\ttext = {\n\t\tlocalization_key = \"Planes\"\n\t}\n}\n")],
+    );
+    assert!(!literal.findings.iter().any(|f| f.code == "REF_MISSING_LOCALISATION_KEY"), "{:?}", codes(&literal));
+    let text = literal.findings.iter().find(|f| f.code == "LOC_SCRIPTED_TEXT_LITERAL").expect("the literal text is noted");
+    assert_eq!(text.severity, Severity::Info);
+}
