@@ -478,7 +478,7 @@ const commandHeading = /^[a-z][a-z0-9_]*$/u;
  * Plain-word phrasings count this many times a game text word, because they name the
  * command the way a question does rather than the way a tooltip labels it.
  */
-const PHRASE_WEIGHT = 4;
+const PHRASE_WEIGHT = 2;
 let phraseTerms: Map<string, Map<string, number>> | undefined;
 
 /**

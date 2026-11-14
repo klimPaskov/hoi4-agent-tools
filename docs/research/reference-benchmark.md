@@ -252,6 +252,31 @@ Still missing: "check that my country is currently fighting a war" ranks `has_wa
 
 Run the new sets with `npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --common-dev` and `--common-blind`. The blind half has now been scored once, so the next round needs a new one.
 
+## Six more phrasings per command, and a second blind set (issue 64, round four)
+
+Measured on 2026-11-14 on HOI4 1.19.4.1 with the kit's `hoi4_wiki` pack.
+Direction from the coordinator and recorded on the issue: no runtime embeddings, a deterministic runtime, and more phrasing data written at build time.
+Twelve writers, one batch of about 100 each, wrote six new plain-word phrasings for every one of the 1,127 documented effects and triggers (6,747 added, none dropped by the checks: three to ten words, no command name or underscore). Each writer saw only its batch with the documentation text and the existing phrasings. Modifiers were not part of this round, so they keep four phrasings each. A sample of the output reads like real questions ("fill the army chief slot with a character" for `activate_advisor`, "give a subject flat freedom points" for `add_autonomy_score`) and was checked by script, not item by item.
+With ten phrasings instead of four, the per-term weight of a phrasing was too high. The weight was set from 4 to 2 on the older sets before the new blind set was looked at: 3 and 2 tied on total first-place answers (99 each across five sets) and on mean reciprocal rank, and 2 was taken as the safer one.
+
+A new set of 48 questions (`scripts/reference-common-blind2-cases.ts`, `--common-blind2`) was written by a fresh author who saw no ranking code, no phrasing data and no results. It leans on the long tail (17 effects, 11 triggers, 5 modifiers, 7 wiki concepts, 3 exact names, 5 negatives). It was scored once, before and after the data change.
+
+| Set (HOI4 1.19.4.1)                     | First before | First after | Within three before | Within three after | Within five before | Within five after |
+| --------------------------------------- | -----------: | ----------: | ------------------: | -----------------: | -----------------: | ----------------: |
+| New blind set (43 answerable)           |           12 |          14 |                  16 |                 19 |                 16 |                19 |
+| Common questions, tuning half (20)      |           12 |          15 |                  15 |                 17 |                 16 |                17 |
+| Common questions, first blind half (22) |           13 |          13 |                  16 |                 17 |                 17 |                17 |
+| ADR 0078 fresh set (38)                 |           19 |          22 |                  22 |                 26 |                 26 |                29 |
+| Held-out (24)                           |           11 |          11 |                  15 |                 16 |                 20 |                19 |
+| Validation (24)                         |           19 |          19 |                  20 |                 20 |                 20 |                20 |
+| Test (40)                               |           25 |          25 |                  31 |                 30 |                 32 |                32 |
+| Discovery (37)                          |           25 |          26 |                  28 |                 28 |                 31 |                31 |
+
+Mean reciprocal rank on the new blind set went from 0.318 to 0.376. Exact names stay first, and the negatives return what they returned before.
+The gain is real and small. Two points first, three more in the top three on a set built to be hard, and no older set loses more than one answer. The target of issue 64 (22 of 24 first) is far off: about a third of this set is first.
+What is left is the same two kinds of miss as before: a long question lets other commands outscore the short exact one, and modifier questions (the doc has only names) match on name alone.
+The next step with the most to gain is probably the ranking of long questions, not more phrasings.
+
 ## Compact context budgets
 
 A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.
