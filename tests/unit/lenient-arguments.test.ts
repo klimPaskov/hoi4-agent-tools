@@ -84,6 +84,21 @@ describe('argument shorthands agents send', () => {
       },
     });
     expect(probabilityInspectRequestSchema.safeParse(probability).success).toBe(true);
+    // A top-level path names the source; with a source given, path is left for validation.
+    const byPath = normalizeToolArguments('hoi4.probability_inspect', {
+      path: 'common/national_focus/germany.txt',
+      candidatePool: ['GER_remilitarize_the_rhineland'],
+    });
+    expect(byPath).toEqual({
+      source: { path: 'common/national_focus/germany.txt' },
+      candidatePool: ['GER_remilitarize_the_rhineland'],
+    });
+    expect(probabilityInspectRequestSchema.safeParse(byPath).success).toBe(true);
+    const both = normalizeToolArguments('hoi4.probability_inspect', {
+      path: 'a.txt',
+      source: { path: 'b.txt' },
+    });
+    expect(probabilityInspectRequestSchema.safeParse(both).success).toBe(false);
   });
 
   it('passes other tools and malformed arguments through unchanged', () => {
