@@ -100,6 +100,26 @@ describe('state ids stay contiguous after a write', () => {
       ({ relativePath }) => relativePath === 'common/scripted_effects/mine.txt',
     )!;
     expect(rewritten.bytes.toString('utf8')).toContain(`state = ${merged}`);
+    // The world record lists exactly the state files left after the write.
+    const record = JSON.parse(
+      after
+        .find(({ relativePath }) => relativePath === '.hoi4-agent-world.json')!
+        .bytes.toString('utf8'),
+    ) as { files: Array<{ relativePath: string; sha256: string }> };
+    const recordedStates = record.files
+      .map(({ relativePath }) => relativePath)
+      .filter((path) => path.startsWith('history/states/'))
+      .sort();
+    const stateFiles = after
+      .map(({ relativePath }) => relativePath)
+      .filter((path) => path.startsWith('history/states/'))
+      .sort();
+    expect(recordedStates).toEqual(stateFiles);
+    const hashes = new Map(record.files.map(({ relativePath, sha256 }) => [relativePath, sha256]));
+    for (const file of after.filter(({ relativePath }) =>
+      relativePath.startsWith('history/states/'),
+    ))
+      expect(hashes.get(file.relativePath), file.relativePath).toBe(file.sha256);
   });
 
   it('keeps a state id the request asks for by name, and reports the holes beside it', () => {
