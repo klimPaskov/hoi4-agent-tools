@@ -5698,7 +5698,7 @@ function fillStateBuildingPositions(
     index.sourceFiles.find(
       (file) => file.shadowedBy === undefined && file.relativePath === relativePath,
     )?.bytes;
-  if (current === undefined || current === null) return [];
+  if (current === undefined) return [];
   const text = Buffer.from(current).toString('utf8');
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
   const existing = new Set(text.split(/\r?\n/u).map((line) => line.trim()));
