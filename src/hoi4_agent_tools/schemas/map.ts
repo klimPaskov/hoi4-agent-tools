@@ -981,6 +981,12 @@ const territoryOperation = z
     remapReferences: z.enum(['refuse', 'override']).optional(),
     borderQuality: borderQualityModeSchema.default('report'),
     borderTargets: borderTargetsSchema.optional(),
+    strictTags: z
+      .boolean()
+      .optional()
+      .describe(
+        'Refuse the operation when a country or overlord tag is not declared in common/country_tags; by default that is a warning (MAP_TERRITORY_TAG_UNDEFINED).',
+      ),
   })
   .strict();
 const repartitionOperation = z
