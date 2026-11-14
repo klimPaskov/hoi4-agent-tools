@@ -268,6 +268,12 @@ export interface BorderQualityInput {
   provinceKinds: Uint8Array;
   layers: readonly BorderLayerInput[];
   features?: BorderFeaturePlanes;
+  /**
+   * 1 for each pixel inside the measured area, row-major. A border edge and a chance pair count
+   * when either of their two pixels is inside, so the borders of a scoped country with its
+   * neighbours are measured. Undefined measures the whole map.
+   */
+  scope?: Uint8Array;
 }
 
 /** Every land-to-land pixel edge between two provinces, with the natural features it lies on. */
@@ -294,6 +300,8 @@ export interface BorderEdgeTable {
   readonly coastEdgesByProvince: Uint32Array;
   readonly inputs: Readonly<Record<'heights' | 'rivers' | 'terrain' | 'extra', boolean>>;
   readonly options: Readonly<ResolvedOptions>;
+  /** Pixels inside the measured scope, or undefined when the whole map was measured. */
+  readonly scopePixels?: number;
 }
 
 export interface BorderRun {
@@ -368,6 +376,8 @@ export interface BorderQualityReport {
   width: number;
   height: number;
   landPixels: number;
+  /** Pixels inside the measured scope, when the measurement was limited to one. */
+  scopePixels?: number;
   inputs: Readonly<Record<'heights' | 'rivers' | 'terrain' | 'extra', boolean>>;
   parameters: {
     riverRadius: number;
@@ -612,6 +622,12 @@ function validateInput(input: BorderQualityInput): void {
       'Border quality province raster does not match its dimensions',
       { width: input.width, height: input.height, length: input.provinceIds.length },
     );
+  if (input.scope !== undefined && input.scope.length !== input.width * input.height)
+    throw new ServiceError(
+      'MAP_BORDER_QUALITY_INPUT_INVALID',
+      'Border quality scope does not match the raster dimensions',
+      { width: input.width, height: input.height, length: input.scope.length },
+    );
   if (input.layers.length > MAX_LAYERS)
     throw new ServiceError('MAP_BORDER_QUALITY_INPUT_INVALID', 'Too many border layers', {
       layers: input.layers.length,
@@ -723,7 +739,16 @@ export function* buildBorderEdgeTableSteps(
     id < provinceKinds.length &&
     (provinceKinds[id] === BORDER_PROVINCE_KIND.sea ||
       provinceKinds[id] === BORDER_PROVINCE_KIND.lake);
-  const visitPair = (a: number, b: number, key: number, bits: number): void => {
+  const scope = input.scope;
+  const visitPair = (
+    a: number,
+    b: number,
+    key: number,
+    bits: number,
+    pixel: number,
+    neighbour: number,
+  ): void => {
+    if (scope !== undefined && scope[pixel] !== 1 && scope[neighbour] !== 1) return;
     if (isLand(b)) {
       landPairs += 1;
       if ((bits & BARRIER_MASK) !== 0) barrierPairs += 1;
@@ -749,22 +774,40 @@ export function* buildBorderEdgeTableSteps(
         // A water pixel's land neighbours are counted from the land side below.
         continue;
       }
-      landPixels += 1;
+      if (scope === undefined || scope[pixel] === 1) landPixels += 1;
       const east = x === width - 1 ? 0 : x + 1;
-      visitPair(id, provinceIds[rowStart + east]!, pixel * 2, current[x]! | current[east]!);
+      visitPair(
+        id,
+        provinceIds[rowStart + east]!,
+        pixel * 2,
+        current[x]! | current[east]!,
+        pixel,
+        rowStart + east,
+      );
       if (y + 1 < height)
-        visitPair(id, provinceIds[pixel + width]!, pixel * 2 + 1, current[x]! | next[x]!);
+        visitPair(
+          id,
+          provinceIds[pixel + width]!,
+          pixel * 2 + 1,
+          current[x]! | next[x]!,
+          pixel,
+          pixel + width,
+        );
     }
     // Coast edges to the north and west of land come from water pixels looking at land.
     for (let x = 0; x < width; x += 1) {
       const id = provinceIds[rowStart + x]!;
       if (!isWater(id)) continue;
+      const inside = (other: number): boolean =>
+        scope === undefined || scope[rowStart + x] === 1 || scope[other] === 1;
       const east = x === width - 1 ? 0 : x + 1;
       const eastId = provinceIds[rowStart + east]!;
-      if (isLand(eastId)) coastEdgesByProvince[eastId] = coastEdgesByProvince[eastId]! + 1;
+      if (isLand(eastId) && inside(rowStart + east))
+        coastEdgesByProvince[eastId] = coastEdgesByProvince[eastId]! + 1;
       if (y + 1 < height) {
         const southId = provinceIds[rowStart + width + x]!;
-        if (isLand(southId)) coastEdgesByProvince[southId] = coastEdgesByProvince[southId]! + 1;
+        if (isLand(southId) && inside(rowStart + width + x))
+          coastEdgesByProvince[southId] = coastEdgesByProvince[southId]! + 1;
       }
     }
     [current, next] = [next, current];
@@ -792,6 +835,7 @@ export function* buildBorderEdgeTableSteps(
       extra: input.features?.extra !== undefined,
     },
     options: resolved,
+    ...(scope === undefined ? {} : { scopePixels: scope.reduce((sum, value) => sum + value, 0) }),
   };
 }
 
@@ -1471,6 +1515,7 @@ export async function measureBorderNaturalness(
     width: table.width,
     height: table.height,
     landPixels: table.landPixels,
+    ...(table.scopePixels === undefined ? {} : { scopePixels: table.scopePixels }),
     inputs: table.inputs,
     parameters: {
       riverRadius: table.options.riverRadius,

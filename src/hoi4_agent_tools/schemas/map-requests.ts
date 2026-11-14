@@ -1,7 +1,12 @@
 import { z } from 'zod/v4';
 import { MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT } from '../map/limits.js';
 import { backgroundRequestKeySchema, workspaceIdSchema } from './common.js';
-import { mapAllocationRequestSchema, mapOperationSchema, naturalLandOptionsSchema } from './map.js';
+import {
+  borderQualityScopeSchema,
+  mapAllocationRequestSchema,
+  mapOperationSchema,
+  naturalLandOptionsSchema,
+} from './map.js';
 
 function compact<T extends z.ZodType>(schema: T, description: string): z.ZodPipe<z.ZodUnknown, T> {
   return z.unknown().describe(description).pipe(schema);
@@ -127,6 +132,7 @@ export const mapInspectRequestSchema = z
     landOptions: naturalLandOptionsSchema
       .optional()
       .describe('Natural lands thresholds (docs/map.md); needs lands.'),
+    qualityScope: borderQualityScopeSchema.optional().describe('With quality: measure one region.'),
     layer: mapLayerSchema
       .optional()
       .describe('Render this base layer; combine with overlays, tile or area.'),
@@ -152,6 +158,12 @@ export const mapInspectRequestSchema = z
         message: 'Choose tile or area, not both',
       });
     const viewRequested = MAP_VIEW_FIELDS.some((field) => value[field] !== undefined);
+    if (value.qualityScope !== undefined && !value.quality)
+      context.addIssue({
+        code: 'custom',
+        path: ['qualityScope'],
+        message: 'qualityScope limits the quality measurement; set quality: true',
+      });
     if (value.quality && (viewRequested || value.lookupOnly))
       context.addIssue({
         code: 'custom',
