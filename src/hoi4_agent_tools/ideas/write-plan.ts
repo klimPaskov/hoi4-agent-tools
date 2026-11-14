@@ -316,3 +316,10 @@ export function planIdeaWrite(
     untouchedDefinitions: untouched,
   };
 }
+
+/** The category blocks of a `common/ideas` file, or none when the file cannot be parsed. */
+export function ideaCategories(source: { bytes: Uint8Array; path: string }): string[] {
+  const document = parseClausewitz(source.bytes, source.path);
+  if (hasBlockingDiagnostics(document.diagnostics)) return [];
+  return [...new Set(categoryBlocks(document).map(({ key }) => key.value))];
+}
