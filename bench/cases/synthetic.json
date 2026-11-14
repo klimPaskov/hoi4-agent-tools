@@ -948,6 +948,81 @@
           "includes": "IDEA_WRITE_CATEGORY_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.idea-write-create-category-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.idea_write",
+      "title": "createCategory previews a new category block holding the idea, next to the existing one",
+      "evidence": "bench/fixtures/synthetic/common/ideas/bench_ideas.txt defines two ideas in one country category, bench_first_spirit and bench_second_spirit, and nothing else; apply is false, so the call writes nothing.",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_adviser",
+        "category": "political_advisor",
+        "body": "slot = political_advisor",
+        "createCategory": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "IDEA_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/ideas/bench_ideas.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 2
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\tpolitical_advisor = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.idea-write-create-file-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.idea_write",
+      "title": "createFile previews a new common/ideas file holding one category and one idea",
+      "evidence": "bench/fixtures/synthetic/common/ideas/bench_ideas.txt defines two ideas in one country category, bench_first_spirit and bench_second_spirit, and nothing else; apply is false, so the call writes nothing.",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_fresh_spirit",
+        "category": "country",
+        "body": "picture = bench_fresh_spirit",
+        "file": "common/ideas/bench_fresh.txt",
+        "createFile": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "IDEA_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/ideas/bench_fresh.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 0
+        },
+        {
+          "path": "data.diff",
+          "includes": "+ideas = {"
+        }
+      ]
     }
   ]
 }

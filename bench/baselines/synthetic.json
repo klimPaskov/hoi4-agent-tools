@@ -92,6 +92,14 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.idea-write-create-category-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.idea-write-create-file-preview": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true

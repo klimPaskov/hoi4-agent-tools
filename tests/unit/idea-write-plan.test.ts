@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
-import { planIdeaWrite, type IdeaWriteInput } from '../../src/hoi4_agent_tools/ideas/write-plan.js';
+import {
+  planIdeaWrite,
+  planNewIdeaFile,
+  type IdeaWriteInput,
+} from '../../src/hoi4_agent_tools/ideas/write-plan.js';
 
 const FILE = [
   '# Ideas of the test mod',
@@ -200,5 +204,93 @@ describe('idea_write plan: replace and remove', () => {
     expect(codeOf(() => plan({ operation: 'remove', id: 'first_spirit' }, twice))).toBe(
       'IDEA_WRITE_DUPLICATE_ID',
     );
+  });
+});
+
+describe('idea_write plan: creating a category or a file', () => {
+  it('adds a missing category with the idea in it, only when asked to', () => {
+    const input = {
+      operation: 'add',
+      id: 'adviser_one',
+      category: 'political_advisor',
+      body: 'slot = political_advisor',
+    } as const;
+    expect(codeOf(() => plan(input))).toBe('IDEA_WRITE_CATEGORY_NOT_FOUND');
+    const result = plan({ ...input, createCategory: true });
+    expect(result.text).toBe(
+      FILE.replace(
+        '\thidden_ideas = {\n\t}\n}',
+        '\thidden_ideas = {\n\t}\n\n\tpolitical_advisor = {\n\t\tadviser_one = {\n\t\t\tslot = political_advisor\n\t\t}\n\t}\n}',
+      ),
+    );
+    expect(result.category).toBe('political_advisor');
+    expect(result.untouchedDefinitions).toBe(2);
+  });
+
+  it('refuses a bad category name and a file with no single ideas block', () => {
+    expect(
+      codeOf(() =>
+        plan({
+          operation: 'add',
+          id: 'x_one',
+          category: 'bad name',
+          body: 'a = b',
+          createCategory: true,
+        }),
+      ),
+    ).toBe('IDEA_WRITE_CATEGORY_INVALID');
+    expect(
+      codeOf(() =>
+        plan(
+          { operation: 'add', id: 'x_one', category: 'extra', body: 'a = b', createCategory: true },
+          'ideas = {\n}\nideas = {\n}\n',
+        ),
+      ),
+    ).toBe('IDEA_WRITE_LAYOUT_UNSUPPORTED');
+  });
+
+  it('makes a new file with one category and one idea, in the game own layout', () => {
+    const result = planNewIdeaFile('common/ideas/new_ideas.txt', {
+      operation: 'add',
+      id: 'fresh_spirit',
+      category: 'country',
+      body: 'picture = fresh_spirit\nmodifier = {\n\tstability_factor = 0.05\n}',
+    });
+    expect(result.text).toBe(
+      [
+        'ideas = {',
+        '\tcountry = {',
+        '\t\tfresh_spirit = {',
+        '\t\t\tpicture = fresh_spirit',
+        '\t\t\tmodifier = {',
+        '\t\t\t\tstability_factor = 0.05',
+        '\t\t\t}',
+        '\t\t}',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    expect(result.diff).toContain('+ideas = {');
+    expect(result.untouchedDefinitions).toBe(0);
+  });
+
+  it('refuses a new file without a category or body, and anything but add', () => {
+    const base = {
+      operation: 'add',
+      id: 'fresh_spirit',
+      category: 'country',
+      body: 'a = b',
+    } as const;
+    const { category: _category, ...withoutCategory } = base;
+    expect(codeOf(() => planNewIdeaFile('common/ideas/n.txt', withoutCategory))).toBe(
+      'IDEA_WRITE_CATEGORY_REQUIRED',
+    );
+    expect(codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, body: '' }))).toBe(
+      'IDEA_WRITE_BODY_REQUIRED',
+    );
+    expect(
+      codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, operation: 'remove' })),
+    ).toBe('IDEA_WRITE_FILE_NOT_FOUND');
   });
 });

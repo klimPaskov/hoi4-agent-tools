@@ -26,6 +26,8 @@ export interface IdeaWriteInput {
   id: string;
   /** The category block the idea lives in (`country`, `hidden_ideas`, an advisor slot). */
   category?: string;
+  /** add only: put the idea in a category the file does not have yet, creating it. */
+  createCategory?: boolean;
   /** The text between the idea's braces. Required by add and replace, refused by remove. */
   body?: string;
 }
@@ -141,6 +143,106 @@ function definitionTexts(document: SourceDocument, skip?: AssignmentNode): Map<s
   return byKey;
 }
 
+/**
+ * The edit that adds a category block holding the new idea to the file's single `ideas` block, for
+ * `createCategory: true`.
+ */
+function categoryCreation(
+  document: SourceDocument,
+  input: IdeaWriteInput,
+  unit: string,
+): SourceReplacement {
+  const wanted = input.category!;
+  if (!ID_PATTERN.test(wanted))
+    fail('IDEA_WRITE_CATEGORY_INVALID', `${JSON.stringify(wanted)} is not a valid category name`, {
+      category: wanted,
+    });
+  const text = document.text;
+  const newline = document.newline;
+  const ideasBlocks = assignments(document.root, 'ideas').filter(
+    ({ value }) => value.type === 'block',
+  );
+  if (ideasBlocks.length !== 1)
+    fail(
+      'IDEA_WRITE_LAYOUT_UNSUPPORTED',
+      ideasBlocks.length === 0
+        ? 'The file has no ideas block to put a new category in'
+        : `The file has ${ideasBlocks.length} ideas blocks, so the new category has no single place`,
+      { blocks: ideasBlocks.length },
+    );
+  const ideas = ideasBlocks[0]!;
+  const block = ideas.value as BlockNode;
+  const close = block.close;
+  if (close === undefined)
+    fail('IDEA_WRITE_LAYOUT_UNSUPPORTED', 'The ideas block has no closing brace');
+  const closeLineStart = text.lastIndexOf('\n', close.start - 1) + 1;
+  if (!/^[ \t]*$/u.test(text.slice(closeLineStart, close.start)))
+    fail(
+      'IDEA_WRITE_LAYOUT_UNSUPPORTED',
+      'The closing brace of the ideas block shares its line with other text',
+      { line: close.line },
+    );
+  const categoryIndent = lineIndent(text, ideas.start) + unit;
+  const ideaIndent = categoryIndent + unit;
+  const ideaText = `${ideaIndent}${input.id} = {${newline}${indentedBody(input.body!, ideaIndent + unit, newline)}${newline}${ideaIndent}}${newline}`;
+  return {
+    start: closeLineStart,
+    end: closeLineStart,
+    text: `${block.entries.length > 0 ? newline : ''}${categoryIndent}${wanted} = {${newline}${ideaText}${categoryIndent}}${newline}`,
+    description: `add ${input.id} in the new category ${wanted}`,
+  };
+}
+
+/**
+ * The plan that creates a new `common/ideas` file holding one new idea in one category, for
+ * `createFile: true`. The file is UTF-8 without a byte order mark and uses tabs and LF, as the
+ * game's own ideas files do.
+ */
+export function planNewIdeaFile(path: string, input: IdeaWriteInput): IdeaWritePlan {
+  if (!ID_PATTERN.test(input.id))
+    fail('IDEA_WRITE_ID_INVALID', `${JSON.stringify(input.id)} is not a valid idea id`, {
+      id: input.id,
+    });
+  if (input.operation !== 'add')
+    fail('IDEA_WRITE_FILE_NOT_FOUND', `${path} does not exist, and only add can create a file`);
+  if (input.category === undefined || !ID_PATTERN.test(input.category))
+    fail('IDEA_WRITE_CATEGORY_REQUIRED', 'a new file needs the category block the idea goes in');
+  if (input.body === undefined || input.body.trim() === '')
+    fail('IDEA_WRITE_BODY_REQUIRED', 'add needs the body of the idea');
+  assertBodyIsOneBlock(input.id, input.body);
+  const text = [
+    'ideas = {',
+    `\t${input.category} = {`,
+    `\t\t${input.id} = {`,
+    indentedBody(input.body, '\t\t\t', '\n'),
+    '\t\t}',
+    '\t}',
+    '}',
+    '',
+  ].join('\n');
+  const written = parseClausewitz(Buffer.from(text, 'utf8'), path);
+  if (hasBlockingDiagnostics(written.diagnostics))
+    fail('IDEA_WRITE_RESULT_INVALID', 'The new file would have syntax errors', {
+      diagnosticCodes: written.diagnostics.map(({ code }) => code),
+    });
+  return {
+    operation: 'add',
+    id: input.id,
+    category: input.category,
+    path,
+    text,
+    bytes: Buffer.from(text, 'utf8'),
+    edit: {
+      start: 0,
+      end: 0,
+      text,
+      description: `create ${path} with ${input.id}`,
+    },
+    diff: unifiedTextDiff('', text, `a/${path}`, `b/${path}`),
+    untouchedDefinitions: 0,
+  };
+}
+
 export function planIdeaWrite(
   source: { bytes: Uint8Array; path: string },
   input: IdeaWriteInput,
@@ -182,10 +284,10 @@ export function planIdeaWrite(
       fail('IDEA_WRITE_CATEGORY_REQUIRED', 'add needs the category block the idea goes in');
     const wanted = input.category;
     const matching = categoryBlocks(document).filter(({ key }) => key.value === wanted);
-    if (matching.length === 0)
+    if (matching.length === 0 && input.createCategory !== true)
       fail(
         'IDEA_WRITE_CATEGORY_NOT_FOUND',
-        `The file has no ${wanted} category, and creating one is not supported yet`,
+        `The file has no ${wanted} category; pass createCategory: true to create it`,
         {
           category: wanted,
           categories: [...new Set(categoryBlocks(document).map(({ key }) => key.value))],
@@ -200,28 +302,32 @@ export function planIdeaWrite(
           lines: matching.map(({ key }) => key.token.line),
         },
       );
-    const target = matching[0]!;
-    const block = target.value as BlockNode;
-    const close = block.close;
-    if (close === undefined)
-      fail('IDEA_WRITE_LAYOUT_UNSUPPORTED', `The ${wanted} category has no closing brace`);
-    const closeLineStart = text.lastIndexOf('\n', close.start - 1) + 1;
-    if (!/^[ \t]*$/u.test(text.slice(closeLineStart, close.start)))
-      fail(
-        'IDEA_WRITE_LAYOUT_UNSUPPORTED',
-        `The closing brace of ${wanted} shares its line with other text, so the new idea has no line to go on`,
-        { category: wanted, line: close.line },
-      );
-    const categoryIndent = lineIndent(text, target.start);
-    const ideaIndent = categoryIndent + unit;
-    const hasSiblings = block.entries.length > 0;
-    const ideaText = `${ideaIndent}${input.id} = {${newline}${indentedBody(input.body!, ideaIndent + unit, newline)}${newline}${ideaIndent}}${newline}`;
-    edit = {
-      start: closeLineStart,
-      end: closeLineStart,
-      text: `${hasSiblings ? newline : ''}${ideaText}`,
-      description: `add ${input.id} to ${wanted}`,
-    };
+    if (matching.length === 0) {
+      edit = categoryCreation(document, input, unit);
+    } else {
+      const target = matching[0]!;
+      const block = target.value as BlockNode;
+      const close = block.close;
+      if (close === undefined)
+        fail('IDEA_WRITE_LAYOUT_UNSUPPORTED', `The ${wanted} category has no closing brace`);
+      const closeLineStart = text.lastIndexOf('\n', close.start - 1) + 1;
+      if (!/^[ \t]*$/u.test(text.slice(closeLineStart, close.start)))
+        fail(
+          'IDEA_WRITE_LAYOUT_UNSUPPORTED',
+          `The closing brace of ${wanted} shares its line with other text, so the new idea has no line to go on`,
+          { category: wanted, line: close.line },
+        );
+      const categoryIndent = lineIndent(text, target.start);
+      const ideaIndent = categoryIndent + unit;
+      const hasSiblings = block.entries.length > 0;
+      const ideaText = `${ideaIndent}${input.id} = {${newline}${indentedBody(input.body!, ideaIndent + unit, newline)}${newline}${ideaIndent}}${newline}`;
+      edit = {
+        start: closeLineStart,
+        end: closeLineStart,
+        text: `${hasSiblings ? newline : ''}${ideaText}`,
+        description: `add ${input.id} to ${wanted}`,
+      };
+    }
     category = wanted;
   } else {
     if (existing.length === 0)

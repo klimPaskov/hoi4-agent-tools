@@ -13,6 +13,10 @@ export const ideaWriteRequestSchema = z
     id: z.string().regex(/^[A-Za-z_][A-Za-z0-9_.-]{0,255}$/u),
     /** The category block of the file that holds the idea: country, hidden_ideas, an advisor slot. */
     category: z.string().min(1).max(128).optional(),
+    /** add only: create the category block when the file has none. Without it a missing category is refused, so a typo is not silently made into one. */
+    createCategory: z.boolean().optional(),
+    /** add only: create the file named by file when the mod has no such common/ideas file. */
+    createFile: z.boolean().optional(),
     /** The text between the idea braces. Required by add and replace, refused by remove. */
     body: z.string().max(32_000).optional(),
     /** The common/ideas file. Omit it for replace and remove, and for an add into a category that one file defines. */

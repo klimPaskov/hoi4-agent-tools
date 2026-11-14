@@ -48,9 +48,9 @@ A test fails when this page differs from `tools/list`, so edit the tool descript
 
 ## Ideas
 
-| Tool              | Purpose                                                                                                                                                                                                                                                                                                                    | Writes    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `hoi4.idea_write` | Add, replace or remove one idea (national spirit, law, advisor) in a mod common/ideas file, touching only that block. add needs category and body (the text between the braces); replace and remove find the idea. apply false returns the diff; true writes it. Warns about a missing localisation key or picture sprite. | mod files |
+| Tool              | Purpose                                                                                                                                                                                                                                                                                                                                                                                              | Writes    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `hoi4.idea_write` | Add, replace or remove one idea (national spirit, law, advisor) in a mod common/ideas file, touching only that block. add needs category and body (the text between the braces); replace and remove find the idea. apply false returns the diff; true writes it. createCategory and createFile (add only) make a missing category or file. Warns about a missing localisation key or picture sprite. | mod files |
 
 ## Focus trees
 
