@@ -3,18 +3,13 @@ import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import {
   ENGINE_BUNDLE_MANIFEST_SCHEMA,
+  ENGINE_BUNDLE_PLATFORMS,
   engineBundleManifestSchema,
   type EngineBundleManifest,
+  type EngineBundlePlatform,
 } from '../../src/hoi4_agent_tools/core/engine-client.js';
 
-/** Every platform a release ships `hoi4-engine` for (ADR 0074), as `<process.platform>-<process.arch>`. */
-export const ENGINE_BUNDLE_PLATFORMS = [
-  'darwin-arm64',
-  'linux-arm64',
-  'linux-x64',
-  'win32-x64',
-] as const;
-export type EngineBundlePlatform = (typeof ENGINE_BUNDLE_PLATFORMS)[number];
+export { ENGINE_BUNDLE_PLATFORMS, type EngineBundlePlatform };
 
 export function engineBinaryFile(platform: EngineBundlePlatform): string {
   return `${platform}/${platform.startsWith('win32-') ? 'hoi4-engine.exe' : 'hoi4-engine'}`;
