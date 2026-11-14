@@ -155,6 +155,63 @@ describe('hoi4.mod_index on the engine', () => {
     expect(request.limits.maxFiles).toBeGreaterThan(0);
   });
 
+  it('keeps a large mod overview inline: the busiest namespaces, a prefix to reach the rest', async () => {
+    const { call, mod } = await client({ HOI4_ENGINE: '<root>/fake-engine.mjs' });
+    const namespaces = Array.from({ length: 300 }, (_, index) => ({
+      namespace: `ns${String(index).padStart(3, '0')}`,
+      // Namespaces 100 to 149 are the busiest, so a plain alphabetical cut would miss them.
+      events: index >= 100 && index < 150 ? 500 - index : 1,
+      lowest: 1,
+      highest: 9,
+      files: 1,
+    }));
+    const folders = Array.from({ length: 80 }, (_, index) => ({
+      folder: `common/folder_${String(index).padStart(2, '0')}`,
+      files: 100 - index,
+      bytes: 1000,
+    }));
+    await fakeEngine(
+      path.dirname(mod),
+      JSON.stringify({
+        schema: 'hoi4-mod-index/1',
+        status: 'ok',
+        complete: true,
+        skippedSourceCount: 0,
+        skippedSources: [],
+        files: 5000,
+        kinds: [{ kind: 'event', count: 900 }],
+        folders,
+        namespaces,
+      }),
+      0,
+    );
+    const result = await call({});
+    const data = result.structuredContent as unknown as {
+      data: {
+        namespaces: Array<{ namespace: string }>;
+        folders: Array<{ folder: string }>;
+        omittedNamespaces: number;
+      };
+    };
+    expect(data.data.namespaces).toHaveLength(50);
+    expect(data.data.namespaces.map(({ namespace }) => namespace)).toEqual(
+      Array.from({ length: 50 }, (_, index) => `ns${100 + index}`),
+    );
+    expect(data.data.omittedNamespaces).toBe(250);
+    expect(data.data.folders).toHaveLength(25);
+    // The whole structured answer fits the 8 KB inline budget of issue 66.
+    expect(JSON.stringify(result.structuredContent).length).toBeLessThan(8 * 1024);
+
+    const filtered = await call({ namespace: 'ns02' });
+    const rest = filtered.structuredContent as unknown as {
+      data: { namespaces: Array<{ namespace: string }>; omittedNamespaces: number };
+    };
+    expect(rest.data.namespaces.map(({ namespace }) => namespace)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `ns02${index}`),
+    );
+    expect(rest.data.omittedNamespaces).toBe(0);
+  });
+
   it('counts next_id over every layer and builds the identifiers from the prefix', async () => {
     const { call, recorded, mod } = await client({ HOI4_ENGINE: '<root>/fake-engine.mjs' });
     await fakeEngine(
