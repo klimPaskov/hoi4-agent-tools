@@ -1142,7 +1142,11 @@ export class AgentNudger {
           operation.kind === 'remap_map_references' ||
           'remapReferences' in operation,
       ),
-      operations.some((operation) => operation.kind === 'create_world'),
+      // record_world_outputs needs every world output scanned, as create_world does.
+      operations.some(
+        (operation) =>
+          operation.kind === 'create_world' || operation.kind === 'record_world_outputs',
+      ),
       false,
       operations.some(
         (operation) =>
