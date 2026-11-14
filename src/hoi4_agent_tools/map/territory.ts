@@ -41,6 +41,8 @@ export interface TerritoryCountry {
   overlord?: string;
   /** Tag the finished territory is relabelled to (a merge); the target must be in the list. */
   mergeInto?: string;
+  /** The country owns exactly its seeds and forced atoms and never grows. */
+  fixed?: boolean;
 }
 
 export type IslandPolicy = 'one-owner' | 'nearest' | 'unowned';
@@ -79,6 +81,12 @@ export interface TerritoryOptions {
   excluded?: readonly number[];
   /** Largest number of balancing rounds. Default 20. */
   maxRounds?: number;
+  /** Culture or people group of each atom, -1 for none. */
+  groups?: Int32Array;
+  /** Extra cost of a step across a group boundary: the step costs `1 + groupPenalty` times more. Default 2. */
+  groupPenalty?: number;
+  /** Growth never crosses a group boundary. */
+  groupHard?: boolean;
   signal?: AbortSignal;
 }
 
@@ -140,6 +148,7 @@ interface ResolvedCountry {
   home: Set<number>;
   overlord: number;
   mergeInto: number;
+  fixed: boolean;
 }
 
 interface LevelEntity {
@@ -151,6 +160,8 @@ interface LevelEntity {
   forced: number[];
   blocked: Set<number>;
   home: Set<number>;
+  /** Owns exactly its seeds and forced atoms. */
+  fixed: boolean;
 }
 
 const TAG_PATTERN = /^[A-Z0-9]{3}$/u;
@@ -376,6 +387,9 @@ class TerritoryRun {
   readonly rules: TerritoryRules;
   readonly barriers: 'natural' | 'none';
   readonly seaCost: number;
+  readonly groups: Int32Array | undefined;
+  readonly groupFactor: number;
+  readonly groupHard: boolean;
   readonly jitter: number;
   readonly seed: number;
   readonly tolerance: number;
@@ -404,6 +418,9 @@ class TerritoryRun {
     };
     this.barriers = options.barriers ?? 'natural';
     this.seaCost = options.seaCost ?? 3;
+    this.groups = options.groups;
+    this.groupFactor = 1 + (options.groupPenalty ?? 2);
+    this.groupHard = options.groupHard === true;
     this.jitter = options.jitter ?? 0.08;
     this.seed = options.seed ?? 0;
     this.tolerance = options.shareTolerance ?? 0.15;
@@ -582,6 +599,13 @@ class TerritoryRun {
       high[index]! += islandTotal;
     }
     const fixedTarget = new Float64Array(entityCount).fill(-1);
+    // A fixed country's target is the land it starts with.
+    for (const [index, entity] of entities.entries())
+      if (entity.fixed)
+        fixedTarget[index] = [...new Set([...entity.seeds, ...entity.forced])].reduce(
+          (sum, atom) => sum + (open[atom] === 1 ? graph.size[atom]! : 0),
+          0,
+        );
     this.lastTargets = targets;
     for (let pass = 0; pass < entityCount + 1; pass += 1) {
       let remaining = openWeight;
@@ -626,8 +650,18 @@ class TerritoryRun {
       };
       for (let index = 0; index < entityCount; index += 1)
         for (const atom of sources(index)) give(atom, index);
+      const groups = this.groups;
+      // A step across a culture line costs more, or is never taken when the lines are hard.
+      const across = (atom: number, next: number): number => {
+        if (groups === undefined) return 1;
+        const from = groups[atom]!;
+        const to = groups[next]!;
+        if (from < 0 || to < 0 || from === to) return 1;
+        return this.groupHard ? 0 : this.groupFactor;
+      };
       const relax = (atom: number, index: number, distance: number): void => {
         const entity = entities[index]!;
+        if (entity.fixed) return;
         // With the nearest policy an unseeded landmass is reached atom by atom over sea edges.
         const byLand = !(this.rules.islandPolicy === 'nearest' && seeded[component[atom]!] === 0);
         for (
@@ -637,8 +671,11 @@ class TerritoryRun {
         ) {
           const next = graph.to[slot]!;
           if (open[next] === 0 || owner[next]! >= 0 || entity.blocked.has(next)) continue;
+          const culture = across(atom, next);
+          if (culture === 0) continue;
           heap.push(
-            distance + (this.baseCost[slot]! * regionFactor(index, next)) / multiplier[index]!,
+            distance +
+              (this.baseCost[slot]! * regionFactor(index, next) * culture) / multiplier[index]!,
             index,
             next,
           );
@@ -646,9 +683,14 @@ class TerritoryRun {
         for (let slot = seaOffsets[atom]!; slot < seaOffsets[atom + 1]!; slot += 1) {
           const next = seaAdjacent[slot]!;
           if (owner[next]! >= 0 || entity.blocked.has(next)) continue;
+          const seaCulture = across(atom, next);
+          if (seaCulture === 0) continue;
           heap.push(
             distance +
-              (this.centreDistance(atom, next) * this.seaCost * jitterSea(atom, next)) /
+              (this.centreDistance(atom, next) *
+                this.seaCost *
+                jitterSea(atom, next) *
+                seaCulture) /
                 multiplier[index]!,
             index,
             next,
@@ -796,6 +838,7 @@ class TerritoryRun {
   ): boolean {
     const graph = this.graph;
     for (const [index, entity] of entities.entries()) {
+      if (entity.fixed) continue;
       const capital = entity.seeds[0] ?? entity.forced[0];
       if (capital === undefined) continue;
       // The capital's piece.
@@ -902,6 +945,8 @@ class TerritoryRun {
           if (candidate < 0 || candidate === from || tried.has(candidate)) continue;
           tried.add(candidate);
           if (entities[candidate]!.blocked.has(atom)) continue;
+          if (entities[candidate]!.fixed || entities[from]!.fixed) continue;
+          if (this.groupHard && !this.#sameGroupNeighbour(atom, candidate, owner)) continue;
           // Artificial border length before and after, over the atom's edges.
           let gain = 0;
           for (let s = graph.offsets[atom]!; s < graph.offsets[atom + 1]!; s += 1) {
@@ -932,6 +977,19 @@ class TerritoryRun {
       }
       if (moved === 0) break;
     }
+  }
+
+  /** With hard culture lines: whether `atom` touches land of `candidate` in its own group. */
+  #sameGroupNeighbour(atom: number, candidate: number, owner: Int32Array): boolean {
+    const groups = this.groups;
+    if (groups === undefined || groups[atom]! < 0) return true;
+    const graph = this.graph;
+    for (let slot = graph.offsets[atom]!; slot < graph.offsets[atom + 1]!; slot += 1) {
+      const next = graph.to[slot]!;
+      if (owner[next] === candidate && (groups[next]! < 0 || groups[next] === groups[atom]))
+        return true;
+    }
+    return false;
   }
 
   /** Whether the neighbours of `atom` owned by `from` stay joined when `atom` is taken away. */
@@ -1035,6 +1093,7 @@ function validateCountries(
       forced,
       blocked: new Set(country.blocked ?? []),
       home: new Set(country.homeRegions ?? []),
+      fixed: country.fixed === true,
       overlord: -1,
       mergeInto: -1,
     });
@@ -1112,6 +1171,7 @@ export function growTerritory(
     ['jitter', options.jitter ?? 0.08, 0, 0.5],
     ['barrierStrength', options.barrierStrength ?? 6, 0, 60],
     ['seaCost', options.seaCost ?? 3, 1, 50],
+    ['groupPenalty', options.groupPenalty ?? 2, 0, 100],
     ['smoothing.maxShareChange', options.smoothing?.maxShareChange ?? 0.15, 0, 1],
   ] as const)
     if (!Number.isFinite(value) || value < low || value > high)
@@ -1133,6 +1193,11 @@ export function growTerritory(
         value: passes,
       },
     );
+  if (options.groups !== undefined && options.groups.length !== atoms.count)
+    refuse('MAP_TERRITORY_OPTION_INVALID', 'Territory groups must give one group per atom', {
+      option: 'groups',
+      value: options.groups.length,
+    });
   const resolved = validateCountries(atoms, countries, options);
   const run = new TerritoryRun(atoms, options);
   const signal = options.signal;
@@ -1144,6 +1209,7 @@ export function growTerritory(
     forced: resolved[index]!.forced,
     blocked: resolved[index]!.blocked,
     home: resolved[index]!.home,
+    fixed: resolved[index]!.fixed,
   });
   // Subjects form a tree under their overlord; a bloc is grown as one entity first.
   const children = new Map<number, number[]>();
@@ -1169,6 +1235,7 @@ export function growTerritory(
       forced: members.flatMap((member) => resolved[member]!.forced),
       blocked,
       home: new Set(members.flatMap((member) => [...resolved[member]!.home])),
+      fixed: members.every((member) => resolved[member]!.fixed),
     };
   };
   const origin = new Int32Array(n).fill(-1);
