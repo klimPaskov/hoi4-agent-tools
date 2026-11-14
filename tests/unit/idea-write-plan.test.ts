@@ -89,7 +89,7 @@ describe('idea_write plan: add', () => {
   });
 
   it('keeps CRLF line endings and a byte order mark', () => {
-    const crlf = `﻿${FILE.replaceAll('\n', '\r\n')}`;
+    const crlf = `${String.fromCharCode(0xfeff)}${FILE.replaceAll('\n', '\r\n')}`;
     const result = plan(
       { operation: 'add', id: 'crlf_one', category: 'country', body: 'picture = x\nname = y' },
       crlf,
