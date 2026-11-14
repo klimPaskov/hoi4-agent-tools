@@ -250,6 +250,9 @@ describe('documentation-backed script checks', () => {
     expect(result.valid).toBeNull();
     expect(result.unresolvedCount).toBe(3);
     expect(result.findings[0]?.suggestions).toContain('add_power');
+    // The message says it too, for a caller that reads the diagnostics and not the findings.
+    expect(result.findings[0]?.message).toContain('Did you mean add_power');
+    expect(result.findings[1]?.message).not.toContain('Did you mean');
     expect(result.findings.some(({ code }) => code === 'SCRIPT_COMMAND_SUPPORTED')).toBe(false);
   });
 

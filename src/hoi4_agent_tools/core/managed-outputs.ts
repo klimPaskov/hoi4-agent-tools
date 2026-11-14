@@ -186,6 +186,18 @@ export interface ManagedOutputRefreshInput {
    * earlier hand edit stays protected.
    */
   adoptAll?: boolean;
+  /**
+   * The paths this inventory manages. A file the request creates at such a path joins the
+   * inventory; without it no file is added.
+   */
+  addable?: (relativePath: string) => boolean;
+  /** Also add every file of the workspace at an `addable` path the inventory lacks. */
+  adoptUnrecorded?: boolean;
+  /**
+   * Paths every scan reads, so a recorded file missing there is gone and `adoptAll` drops it.
+   * Elsewhere a missing file may just be unread, and its entry is kept.
+   */
+  alwaysScanned?: (relativePath: string) => boolean;
 }
 
 export interface ManagedOutputRefresh {
@@ -199,6 +211,13 @@ export interface ManagedOutputRefresh {
   keptEdited: string[];
   /** Recorded outputs whose hash already matched, sorted. */
   unchanged: string[];
+  /**
+   * Recorded outputs `adoptAll` could not read because the scan did not include them: kept with
+   * their recorded hash, never dropped, sorted.
+   */
+  unscanned: string[];
+  /** Files at managed paths added to the inventory: created by the request, or adopted. */
+  added: string[];
   /** The operations that wrote the refreshed or dropped outputs, sorted. */
   operationIds: string[];
 }
@@ -226,6 +245,7 @@ export function refreshManagedOutputs(
   const dropped: string[] = [];
   const keptEdited: string[] = [];
   const unchanged: string[] = [];
+  const unscanned: string[] = [];
   const operationIds = new Set<string>();
   const next: ManifestEntry[] = [];
   for (const entry of parseManifest(bytes)) {
@@ -245,8 +265,19 @@ export function refreshManagedOutputs(
       }
       current = change.content;
       for (const id of change.operationIds) operationIds.add(id);
-    } else if (input.adoptAll === true) current = source === undefined ? null : source.bytes;
-    else {
+    } else if (input.adoptAll === true) {
+      // A file the scan did not read is not a file that is gone: keep its entry.
+      if (source === undefined && input.alwaysScanned?.(entry.relativePath) === true) {
+        dropped.push(entry.relativePath);
+        continue;
+      }
+      if (source === undefined) {
+        unscanned.push(entry.relativePath);
+        next.push(entry);
+        continue;
+      }
+      current = source.bytes;
+    } else {
       next.push(entry);
       continue;
     }
@@ -259,13 +290,52 @@ export function refreshManagedOutputs(
     else refreshed.push(entry.relativePath);
     next.push({ relativePath: entry.relativePath, sha256 });
   }
-  const changed = refreshed.length > 0 || dropped.length > 0;
+  // Files the request creates at managed paths, and on request the ones already on disk.
+  const added: string[] = [];
+  const recorded = new Set(next.map(({ relativePath }) => key(relativePath)));
+  for (const entry of dropped) recorded.add(key(entry));
+  const addable = input.addable;
+  if (addable !== undefined) {
+    const candidates = new Map<
+      string,
+      { relativePath: string; bytes: Uint8Array; ids: string[] }
+    >();
+    if (input.adoptUnrecorded === true)
+      for (const [name, file] of sources)
+        candidates.set(name, {
+          relativePath: file.relativePath.replaceAll('\\', '/'),
+          bytes: file.bytes,
+          ids: [],
+        });
+    for (const [name, change] of proposed) {
+      if (change.content === null) {
+        candidates.delete(name);
+        continue;
+      }
+      // A change to an existing unrecorded file is not a creation unless adoption was asked for.
+      if (!sources.has(name) || input.adoptUnrecorded === true)
+        candidates.set(name, {
+          relativePath: change.relativePath.replaceAll('\\', '/'),
+          bytes: change.content,
+          ids: [...change.operationIds],
+        });
+    }
+    for (const [name, candidate] of [...candidates].sort(([a], [b]) => compareCodeUnits(a, b))) {
+      if (name === manifestKey || recorded.has(name) || !addable(candidate.relativePath)) continue;
+      next.push({ relativePath: candidate.relativePath, sha256: sha256Bytes(candidate.bytes) });
+      added.push(candidate.relativePath);
+      for (const id of candidate.ids) operationIds.add(id);
+    }
+  }
+  const changed = refreshed.length > 0 || dropped.length > 0 || added.length > 0;
   return {
     content: changed ? manifestBytes(next) : undefined,
+    added: added.sort(compareCodeUnits),
     refreshed: refreshed.sort(compareCodeUnits),
     dropped: dropped.sort(compareCodeUnits),
     keptEdited: keptEdited.sort(compareCodeUnits),
     unchanged: unchanged.sort(compareCodeUnits),
+    unscanned: unscanned.sort(compareCodeUnits),
     operationIds: [...operationIds].sort(compareCodeUnits),
   };
 }
