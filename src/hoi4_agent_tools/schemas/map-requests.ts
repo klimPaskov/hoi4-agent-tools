@@ -1,7 +1,12 @@
 import { z } from 'zod/v4';
 import { MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT } from '../map/limits.js';
 import { backgroundRequestKeySchema, workspaceIdSchema } from './common.js';
-import { borderQualityScopeSchema, mapAllocationRequestSchema, mapOperationSchema } from './map.js';
+import {
+  borderQualityScopeSchema,
+  mapAllocationRequestSchema,
+  mapOperationSchema,
+  naturalLandOptionsSchema,
+} from './map.js';
 
 function compact<T extends z.ZodType>(schema: T, description: string): z.ZodPipe<z.ZodUnknown, T> {
   return z.unknown().describe(description).pipe(schema);
@@ -120,6 +125,13 @@ export const mapInspectRequestSchema = z
       .describe(
         'Also measure how well province, state, region and country borders follow rivers, slopes, lake shores and terrain changes: enrichment over chance, the natural share of border length, straightness, and the worst artificial runs. Reads the height, river and terrain bitmaps; full inspection only.',
       ),
+    lands: z
+      .boolean()
+      .default(false)
+      .describe('Also cut land into natural lands along rivers, crests, terrain edges and basins.'),
+    landOptions: naturalLandOptionsSchema
+      .optional()
+      .describe('Natural lands thresholds (docs/map.md); needs lands.'),
     qualityScope: borderQualityScopeSchema.optional().describe('With quality: measure one region.'),
     layer: mapLayerSchema
       .optional()
@@ -159,6 +171,20 @@ export const mapInspectRequestSchema = z
         message: viewRequested
           ? 'quality belongs to full inspection; request the border-quality overlay for a rendered view'
           : 'quality needs full inspection; remove lookupOnly',
+      });
+    if (value.lands && (viewRequested || value.lookupOnly))
+      context.addIssue({
+        code: 'custom',
+        path: ['lands'],
+        message: viewRequested
+          ? 'lands belongs to full inspection; request a rendered view in a separate call'
+          : 'lands needs full inspection; remove lookupOnly',
+      });
+    if (value.landOptions !== undefined && !value.lands)
+      context.addIssue({
+        code: 'custom',
+        path: ['landOptions'],
+        message: 'landOptions needs lands: true',
       });
     if (!viewRequested) return;
     for (const field of MAP_LOOKUP_FIELDS) {
