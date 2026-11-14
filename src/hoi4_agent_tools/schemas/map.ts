@@ -1,6 +1,11 @@
 import { z } from 'zod/v4';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
-import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
+import {
+  MAP_MASK_CELL_LIMIT,
+  MAP_SELECTED_PIXEL_LIMIT,
+  NATURAL_LAND_ID_PATTERN,
+  NATURAL_TERRAIN_CLASSES,
+} from '../map/limits.js';
 import { workspaceRelativePathSchema } from './common.js';
 import { geographyModelSchema, geographyPathSchema } from './geography.js';
 import { referenceSheetsDocumentSchema, referenceSheetsPathSchema } from './reference-sheets.js';
@@ -859,6 +864,40 @@ const stateChangesSchema = z
   })
   .strict();
 
+export const naturalLandOptionsSchema = z
+  .object({
+    minProvinces: z.number().int().min(1).max(10_000).optional(),
+    minBasinProvinces: z.number().int().min(1).max(10_000).optional(),
+    maxBasinProvinces: z.number().int().min(2).max(100_000).optional(),
+    riverMajorIndex: z.number().int().min(0).max(11).optional(),
+    riverShare: z.number().gt(0).max(1).optional(),
+    crestExcess: z.number().gt(0).max(255).optional(),
+    splitRangesAtCrests: z.boolean().optional(),
+    terrainClasses: z
+      .record(z.string().regex(/^[A-Za-z0-9_]{1,64}$/u), z.enum(NATURAL_TERRAIN_CLASSES))
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (Object.keys(value.terrainClasses ?? {}).length > 64)
+      context.addIssue({
+        code: 'custom',
+        path: ['terrainClasses'],
+        message: 'terrainClasses names at most 64 categories',
+      });
+    const minimum = value.minBasinProvinces ?? value.minProvinces ?? 6;
+    if (value.maxBasinProvinces !== undefined && value.maxBasinProvinces < 2 * minimum)
+      context.addIssue({
+        code: 'custom',
+        path: ['maxBasinProvinces'],
+        message: 'maxBasinProvinces must be at least twice minBasinProvinces',
+      });
+  });
+
+const naturalLandIdSchema = z
+  .string()
+  .regex(NATURAL_LAND_ID_PATTERN)
+  .describe('A natural land id from hoi4.map_inspect with lands: true, such as L120.');
 const tagSchema = z
   .string()
   .regex(/^[A-Z0-9]{3}$/u, 'A country tag is three capital letters or digits');
@@ -866,12 +905,21 @@ const territoryRefSchema = z.union([
   z.object({ state: stateId }).strict(),
   z.object({ province: provinceId }).strict(),
   z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
+  z
+    .object({ land: naturalLandIdSchema })
+    .strict()
+    .describe('The province of a natural land nearest its centre.'),
 ]);
 const territorySelectionSchema = z
   .object({
     stateIds: z.array(stateId).max(100_000).optional(),
     provinceIds: z.array(provinceId).max(100_000).optional(),
     regionIds: z.array(z.number().int().positive()).max(10_000).optional(),
+    landIds: z
+      .array(naturalLandIdSchema)
+      .max(10_000)
+      .optional()
+      .describe('Natural lands, cut with the operation landOptions.'),
   })
   .strict();
 const borderQualityModeSchema = z
@@ -902,7 +950,9 @@ const territoryCountrySchema = z
       .array(territoryRefSchema)
       .min(1)
       .max(64)
-      .describe('{ state }, { province } or a pixel { x, y }. The first is the capital.'),
+      .describe(
+        '{ state }, { province }, a pixel { x, y } or a natural { land }. The first is the capital.',
+      ),
     forced: territorySelectionSchema.optional(),
     blocked: territorySelectionSchema.optional(),
     regions: z
@@ -987,6 +1037,11 @@ const territoryOperation = z
     remapReferences: z.enum(['refuse', 'override']).optional(),
     borderQuality: borderQualityModeSchema.default('report'),
     borderTargets: borderTargetsSchema.optional(),
+    landOptions: naturalLandOptionsSchema
+      .optional()
+      .describe(
+        'Thresholds of the natural lands that landIds and { land } seeds name; use the same options as the hoi4.map_inspect call that listed them.',
+      ),
     groups: z
       .record(z.string().regex(/^\d{1,6}$/u), z.string().min(1).max(64))
       .refine((value) => Object.keys(value).length <= 65_000, 'At most 65,000 provinces')
