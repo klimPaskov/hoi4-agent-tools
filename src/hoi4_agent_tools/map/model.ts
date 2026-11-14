@@ -1,7 +1,6 @@
 import { compareCodeUnits } from '../core/canonical.js';
 import path from 'node:path';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
-import { SymbolIndex } from '../core/index.js';
 import { assertRenderDimensions } from '../core/render-budget.js';
 import { addMapDiagnostic, addMapDiagnostics } from './diagnostic-limit.js';
 import { ServiceError } from '../core/result.js';
@@ -1528,8 +1527,6 @@ export class MapWorkspaceIndex {
   /** Every scanned root file, including entries shadowed by a higher-load-order root. */
   readonly sourceFiles: readonly ScannedFile[];
   readonly sourceRoots: MapIndexSourceRoots;
-  /** Shared cross-domain symbol/reference authority for these exact source bytes. */
-  readonly sharedIndex: SymbolIndex;
   readonly activeFiles: ActiveFileSet;
   readonly earliestBookmark: MapBookmarkDate | undefined;
   readonly diagnostics: Diagnostic[] = [];
@@ -1620,10 +1617,8 @@ export class MapWorkspaceIndex {
   private constructor(
     files: readonly ScannedFile[],
     sourceRoots: MapIndexSourceRoots = defaultMapIndexSourceRoots,
-    sharedIndex: SymbolIndex = SymbolIndex.build(files),
   ) {
     this.sourceFiles = [...files];
-    this.sharedIndex = sharedIndex;
     this.sourceRoots = {
       map: sourceRoots.map.map(normalizeConfiguredRoot),
       states: sourceRoots.states.map(normalizeConfiguredRoot),
@@ -1956,9 +1951,8 @@ export class MapWorkspaceIndex {
   static build(
     files: readonly ScannedFile[],
     sourceRoots: MapIndexSourceRoots = defaultMapIndexSourceRoots,
-    sharedIndex: SymbolIndex = SymbolIndex.build(files),
   ): MapWorkspaceIndex {
-    return new MapWorkspaceIndex(files, sourceRoots, sharedIndex);
+    return new MapWorkspaceIndex(files, sourceRoots);
   }
 
   provinceAtMapCoordinate(x: number, z: number): number | undefined {

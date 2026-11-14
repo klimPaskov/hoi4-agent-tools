@@ -136,6 +136,32 @@ describe('authenticated dependency checkpoints', () => {
     ).rejects.toMatchObject({ code: 'ANALYSIS_CHECKPOINT_INVALID' });
   });
 
+  it('commits to the exact saved bytes and refuses state JSON cannot hold or a bad identity', async () => {
+    const { jobs, record, contextFor } = await fixture();
+    const checkpoints = jobAnalysisCheckpoints(contextFor());
+    await checkpoints.save(key, revision, { frontier: 'round-trip' }, 1, 2);
+    const saved = (await jobs.get('test', record.id)).checkpoint!;
+    expect(saved.stateHash).toBe(
+      hashCanonical({
+        version: 1,
+        key,
+        sourceRevision: revision,
+        state: { frontier: 'round-trip' },
+      }),
+    );
+    expect(
+      await jobAnalysisCheckpoints(contextFor(saved)).load(key, revision, stateSchema),
+    ).toEqual({ frontier: 'round-trip' });
+    await expect(checkpoints.save(key, revision, { frontier: Number.NaN }, 1, 2)).rejects.toThrow(
+      'non-finite',
+    );
+    await expect(checkpoints.save(key, revision, { frontier: [undefined] }, 1, 2)).rejects.toThrow(
+      'undefined',
+    );
+    await expect(checkpoints.save('not-a-digest', revision, {}, 1, 2)).rejects.toThrow();
+    expect((await jobs.get('test', record.id)).checkpoint).toEqual(saved);
+  });
+
   it('retains the previous checkpoint if publishing its replacement job record fails', async () => {
     const { engine, jobs, record, contextFor } = await fixture();
     await jobAnalysisCheckpoints(contextFor()).save(key, revision, { frontier: 'before' }, 0, 2);

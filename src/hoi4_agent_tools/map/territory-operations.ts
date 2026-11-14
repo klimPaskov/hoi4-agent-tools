@@ -27,6 +27,7 @@ import {
   type StatePatchFields,
 } from './operations.js';
 import { clusterProvinces } from './partition-groups.js';
+import { declaredCountryTags } from './references.js';
 import { restructureStates, type RestructureGroup } from './state-restructure.js';
 import {
   buildTerritoryAtoms,
@@ -118,6 +119,8 @@ export interface AssignTerritoryOperation extends MapOperationBase {
   borderTargets?: BorderTargetsInput;
   /** Thresholds of the natural lands that `landIds` and `{ land }` seeds name. */
   landOptions?: Omit<NaturalLandsOptions, 'signal'>;
+  /** Refuse instead of warning when a tag gets land that no country_tags file declares. */
+  strictTags?: boolean;
 }
 
 export interface RepartitionStatesOperation extends MapOperationBase {
@@ -864,7 +867,52 @@ export function* applyAssignTerritory(
       ...(operation.borderTargets === undefined ? {} : { targets: operation.borderTargets }),
     },
   };
-  return { diagnostics: territoryDiagnostics(operation, world, report, result, model), report };
+  const undefinedTags = undefinedTagDiagnostics(index, operation);
+  if (operation.strictTags === true && undefinedTags.length > 0)
+    refuse(
+      'MAP_TERRITORY_TAG_UNDEFINED',
+      `strictTags: no common/country_tags file declares ${undefinedTags
+        .map(({ details }) => String(details?.tag))
+        .join(', ')}; declare the countries first or leave strictTags off`,
+      { tags: undefinedTags.map(({ details }) => details?.tag) },
+    );
+  return {
+    diagnostics: [
+      ...territoryDiagnostics(operation, world, report, result, model),
+      ...undefinedTags,
+    ],
+    report,
+  };
+}
+
+/**
+ * A warning for each country or overlord tag no active `common/country_tags` file declares: the
+ * states are written, but the game does not know the owner until the country is defined. Nothing
+ * is said when the workspace declares no tags at all, since then nothing can be checked.
+ */
+function undefinedTagDiagnostics(
+  index: MapWorkspaceIndex,
+  operation: AssignTerritoryOperation,
+): Diagnostic[] {
+  const declared = declaredCountryTags(index.sourceFiles);
+  if (declared === undefined) return [];
+  const used = new Map<string, 'country' | 'overlord'>();
+  for (const country of operation.countries) {
+    used.set(country.tag, 'country');
+    if (country.overlord !== undefined && !used.has(country.overlord))
+      used.set(country.overlord, 'overlord');
+  }
+  return [...used]
+    .filter(([tag]) => !declared.has(tag))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([tag, role]) => ({
+      code: 'MAP_TERRITORY_TAG_UNDEFINED',
+      severity: 'warning' as const,
+      category: 'map' as const,
+      operationId: operation.id,
+      message: `${tag} gets land, but no common/country_tags file declares it; define the country (country_tags, common/countries and history/countries) before the game loads the mod`,
+      details: { tag, role },
+    }));
 }
 
 const excludedCache = new WeakMap<AtomModel, Set<number>>();

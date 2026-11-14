@@ -1036,6 +1036,12 @@ const territoryOperation = z
       .describe(
         'Thresholds of the natural lands that landIds and { land } seeds name; use the same options as the hoi4.map_inspect call that listed them.',
       ),
+    strictTags: z
+      .boolean()
+      .optional()
+      .describe(
+        'Refuse the operation when a country or overlord tag is not declared in common/country_tags; by default that is a warning (MAP_TERRITORY_TAG_UNDEFINED).',
+      ),
   })
   .strict();
 const repartitionOperation = z

@@ -5,6 +5,7 @@ import {
   analyzeEventImpact,
   compareEventGraphs,
   discoverEventRoots,
+  eventGraphHash,
   eventStronglyConnectedComponents,
   explainEventPath,
   inspectEventStateFlow,
@@ -680,6 +681,35 @@ describe('Event Chain Viewer graph algorithms', () => {
     const comparison = compareEventGraphs(before, shifted);
     expect(comparison.changes).toEqual([]);
     expect(comparison.beforeGraphHash).toBe(comparison.afterGraphHash);
+  });
+
+  it('sees a change inside a condition that edges and state accesses share', () => {
+    const shared = (expression: string) => ({
+      id: 'condition:shared',
+      kind: 'limit' as const,
+      expression,
+      location: location('shared', 10),
+      confidence: 'confirmed' as const,
+    });
+    const withCondition = (condition: ReturnType<typeof shared>): EventGraphSnapshot => {
+      const base = graph();
+      return {
+        ...base,
+        edges: base.edges.map((edge) => ({ ...edge, conditions: [condition] })),
+        stateAccesses: base.stateAccesses.map((access) => ({ ...access, conditions: [condition] })),
+      };
+    };
+    const before = withCondition(shared('has_country_flag = a'));
+    const same = withCondition(shared('has_country_flag = a'));
+    const after = withCondition(shared('has_country_flag = b'));
+    expect(eventGraphHash(before)).toBe(eventGraphHash(same));
+    expect(eventGraphHash(before)).not.toBe(eventGraphHash(after));
+    const comparison = compareEventGraphs(before, after);
+    expect(comparison.changedEdgeIds).toEqual(before.edges.map(({ id }) => id).sort());
+    expect(comparison.changedStateAccessIds).toEqual(
+      before.stateAccesses.map(({ id }) => id).sort(),
+    );
+    expect(compareEventGraphs(before, same).changes).toEqual([]);
   });
 
   it('lays out and renders the same graph to identical source-linked artifacts', async () => {
