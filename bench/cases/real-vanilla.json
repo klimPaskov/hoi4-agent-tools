@@ -159,8 +159,8 @@
       "surface": "validation",
       "corpus": "vanilla",
       "problem": 12,
-      "title": "A wrong idea id inside add_timed_idea is caught",
-      "evidence": "No idea named bench_no_such_idea exists in vanilla; GER_mefo_bills_1 does (common/ideas/GER.txt:1313).",
+      "title": "A wrong idea id inside add_timed_idea is reported as a warning that names it",
+      "evidence": "No idea named bench_no_such_idea exists in vanilla; GER_mefo_bills_1 does (common/ideas/GER.txt:1313). An unknown id is a warning, not an error: the game loads the file and the command does nothing, and vanilla ships such dangling ids (coordinator decision 2026-11-13, as vanilla.validation.dangling-event-is-a-warning).",
       "tool": "hoi4.script_validate",
       "arguments": {
         "source": "add_timed_idea = { idea = bench_no_such_idea days = 10 }",
@@ -173,12 +173,16 @@
           "equals": true
         },
         {
-          "path": "**",
-          "includes": "bench_no_such_idea"
+          "path": "data.findings[*].code",
+          "includes": "SCRIPT_ARGUMENT_UNKNOWN_ID"
         },
         {
           "path": "data.findings[*].status",
-          "includes": "error"
+          "includes": "warning"
+        },
+        {
+          "path": "**",
+          "includes": "add_timed_idea names idea bench_no_such_idea, which no loaded file defines"
         }
       ]
     },

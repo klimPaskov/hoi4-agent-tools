@@ -42,6 +42,7 @@ USAGE:
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
+    hoi4-engine map-provinces [--input FILE] [--output FILE]
     hoi4-engine serve
     hoi4-engine --version
 
@@ -79,7 +80,7 @@ struct Args {
 }
 
 const VALUE_OPTIONS: &[&str] =
-    &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix", "--request", "--allowlist", "--max-pixels"];
+    &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--input", "--prefix", "--request", "--allowlist", "--max-pixels"];
 
 impl Args {
     fn parse(raw: Vec<String>) -> Result<Args, String> {
@@ -655,6 +656,48 @@ fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) 
     Ok(ExitCode::from(code))
 }
 
+/// `map-provinces`: one frame in (a `hoi4-map-provinces-request/1` JSON line, then the bitmap
+/// bytes its `payload` field counts) and one frame out, as `serve` answers the `map.provinces`
+/// op: the JSON result line, then the province ids as little-endian i32. The frames are read from
+/// `--input FILE` and written to `--output FILE` when given, else from stdin and to stdout; the
+/// server uses files, so no large frame passes through a pipe of a synchronous call.
+fn cmd_map_provinces(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&["--input", "--output"])?;
+    let input = match args.value("--input") {
+        Some(path) => fs::read(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut input = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut input).map_err(|e| format!("cannot read stdin: {e}"))?;
+            input
+        }
+    };
+    let newline = input.iter().position(|byte| *byte == b'\n').ok_or("map-provinces reads a JSON line and then the bitmap bytes")?;
+    let header: serde_json::Value = serde_json::from_slice(&input[..newline]).map_err(|e| format!("invalid map-provinces header: {e}"))?;
+    let payload = &input[newline + 1..];
+    if header["payload"].as_u64() != Some(payload.len() as u64) {
+        return Err(format!("the header counts {} payload bytes but {} followed", header["payload"], payload.len()));
+    }
+    let (frame, code) = match hoi4_engine::map_provinces::respond(&header, payload) {
+        Ok((result, ids)) => {
+            let mut frame = serde_json::to_vec(&serde_json::json!({ "ok": true, "result": result, "payload": ids.len() })).map_err(|e| e.to_string())?;
+            frame.push(b'\n');
+            frame.extend_from_slice(&ids);
+            (frame, ExitCode::SUCCESS)
+        }
+        Err(error) => {
+            eprintln!("hoi4-engine: map-provinces: {}", error["message"].as_str().unwrap_or("invalid request"));
+            let mut frame = serde_json::to_vec(&serde_json::json!({ "ok": false, "error": error })).map_err(|e| e.to_string())?;
+            frame.push(b'\n');
+            (frame, ExitCode::from(1))
+        }
+    };
+    match args.value("--output") {
+        Some(path) => fs::write(path, &frame).map_err(|e| format!("cannot write {path}: {e}"))?,
+        None => std::io::stdout().lock().write_all(&frame).map_err(|e| e.to_string())?,
+    }
+    Ok(code)
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -688,6 +731,7 @@ fn main() -> ExitCode {
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),
+        Some("map-provinces") => cmd_map_provinces(&args),
         Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {
             print!("{HELP}");

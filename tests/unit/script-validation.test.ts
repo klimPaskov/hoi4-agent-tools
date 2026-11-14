@@ -208,17 +208,20 @@ describe('documentation-backed script checks', () => {
     ).toEqual([
       {
         status: 'warning',
-        message: 'add_timed_idea names idea GER_mefo_bill_1, which no loaded file defines',
+        message:
+          'add_timed_idea names idea GER_mefo_bill_1, which no loaded file defines; the game loads the file, but this command does nothing',
         suggestions: ['GER_mefo_bills_1'],
       },
       {
         status: 'warning',
-        message: 'add_ideas names idea no_idea, which no loaded file defines',
+        message:
+          'add_ideas names idea no_idea, which no loaded file defines; the game loads the file, but this command does nothing',
         suggestions: [],
       },
       {
         status: 'warning',
-        message: 'country_event names event news.2, which no loaded file defines',
+        message:
+          'country_event names event news.2, which no loaded file defines; the game loads the file, but this command does nothing',
         suggestions: ['news.1'],
       },
     ]);

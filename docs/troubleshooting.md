@@ -57,6 +57,10 @@ This server reads source and never starts the game.
 To reproduce a problem in game, read what the game logged with `hoi4.error_log` (the last launch only, with the file and line where the message names one), then fix the file and ask `hoi4.script_validate` with `path` to check it before relaunching.
 For launching, loading a save and watching a campaign, pair it with the separate HOI4 Live Tools server (see [A running game](setup.md#a-running-game)).
 
+## A game file I edited does not show up
+
+The server reads the installed game once and then trusts that read for as long as the game's own version files (`hoi4_rev.txt`, `hoi4_branch.txt`, `clausewitz_rev.txt`, `checksum_manifest.txt`) and the game's top-level folders look the same. That keeps a focus call under a second. A game update changes those files, and the server reads the game again at once. A game file you edit in place without an update is not seen until the server restarts. Set the environment variable `HOI4_AGENT_FULL_GAME_SCAN` to any value to read the game on every call instead. A mod, a dependency and a game folder that has no `hoi4_rev.txt` are always read in full.
+
 ## Still stuck
 
 Run `hoi4-agent-tools-setup --diagnose`, then open an issue at <https://github.com/klimPaskov/hoi4-agent-tools/issues> with the tool name, the arguments (without private paths), the error code and message, and the output of `hoi4-agent-tools-setup --diagnose`, which includes the server and Node.js versions.

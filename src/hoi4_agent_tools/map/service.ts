@@ -77,6 +77,7 @@ import { buildWorldPreviewArtifacts, generatedWorldOperationIds } from './world-
 import type { TerritoryReport } from './territory-operations.js';
 import {
   evaluateTerritoryQuality,
+  territoryAssignmentContent,
   territoryArtifactContent,
   type TerritoryQuality,
 } from './territory-quality.js';
@@ -1952,6 +1953,18 @@ export class AgentNudger {
           ...provenance,
           kind: 'map-territory-report',
           schemaVersion: 'map-territory.v1',
+        },
+      });
+    if (prepared.territory.reports.length > 0)
+      writes.push({
+        name: 'map-territory-assignment.json',
+        mimeType: 'application/json',
+        content: `${canonicalJson(territoryAssignmentContent(prepared.territory.reports, plan.finalIndex))}
+`,
+        provenance: {
+          ...provenance,
+          kind: 'map-territory-assignment',
+          schemaVersion: 'map-territory-assignment.v1',
         },
       });
     for (const [ordinal, imported] of prepared.imports.entries())

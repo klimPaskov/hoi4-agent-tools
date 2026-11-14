@@ -56,6 +56,10 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.localisation.audit-undefined-desc": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.lookup.exact-name": {
       "inline": true,
       "passed": true

@@ -240,7 +240,13 @@ describe('concurrent production MCP workloads', () => {
             ],
             cwd: repository,
             // The test counts every tool, so it asks for every profile; the default is core only.
-            env: { HOI4_AGENT_TOOLS_PROFILES: 'all' },
+            // Map tools need the engine (ADR 0084), which the test setup names in HOI4_ENGINE.
+            env: {
+              HOI4_AGENT_TOOLS_PROFILES: 'all',
+              ...(process.env.HOI4_ENGINE === undefined
+                ? {}
+                : { HOI4_ENGINE: process.env.HOI4_ENGINE }),
+            },
             stderr: 'pipe',
           });
           transport.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));

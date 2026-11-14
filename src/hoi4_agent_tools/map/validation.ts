@@ -12,6 +12,7 @@ import { MAP_PROVINCE_ENGINE_MAX_PIXELS } from './model.js';
 import type {
   ProvinceDefinition,
   ProvinceRaster,
+  ProvinceTopology,
   StateRecord,
   StrategicRegionRecord,
   TextFileDocument,
@@ -320,6 +321,25 @@ function* provinceHoleCounts(
   return holes;
 }
 
+/**
+ * The TypeScript geometry checks on a raster, run to the end: the reference the engine's
+ * topology (ADR 0084) is checked against in tests and `scripts/map-raster-parity.ts`.
+ */
+export function typeScriptProvinceTopology(raster: ProvinceRaster): ProvinceTopology {
+  const run = <T>(steps: MapValidationSteps<T>): T => {
+    for (;;) {
+      const next = steps.next();
+      if (next.done === true) return next.value;
+    }
+  };
+  const components = run(provinceComponents(raster));
+  return {
+    components,
+    holes: run(provinceHoleCounts(raster, components)),
+    thin: run(provinceThinPixels(raster)),
+  };
+}
+
 function* validateGeometry(
   index: MapWorkspaceIndex,
   diagnostics: Diagnostic[],
@@ -455,9 +475,12 @@ function* validateGeometry(
       },
     });
   }
-  const components = yield* provinceComponents(raster, options.signal);
-  const holes = yield* provinceHoleCounts(raster, components, options.signal);
-  const thin = yield* provinceThinPixels(raster, options.signal);
+  // The engine computes these with the raster (ADR 0084); a raster built in TypeScript does not.
+  const components =
+    raster.topology?.components ?? (yield* provinceComponents(raster, options.signal));
+  const holes =
+    raster.topology?.holes ?? (yield* provinceHoleCounts(raster, components, options.signal));
+  const thin = raster.topology?.thin ?? (yield* provinceThinPixels(raster, options.signal));
   for (const definition of index.definitions) {
     if (definition.id === 0) continue;
     const geometry = raster.geometry.get(definition.id);

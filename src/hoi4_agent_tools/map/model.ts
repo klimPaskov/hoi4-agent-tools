@@ -23,6 +23,7 @@ import {
   type SourceDocument,
 } from '../core/source/index.js';
 import { BmpImage, rgbKey, type RgbColor } from './bmp.js';
+import { engineProvinceRaster } from './engine-raster.js';
 
 export type ProvinceType = string;
 
@@ -257,6 +258,17 @@ export interface ProvinceRaster {
   unknownColors: readonly UnknownMapColor[];
   unknownColorCount: number;
   coastalProvinceIds: ReadonlySet<number>;
+  /** The geometry checks' inputs, when the engine built the raster (ADR 0084). */
+  topology?: ProvinceTopology;
+}
+
+export interface ProvinceTopology {
+  /** 4-connected parts per province, wrapping sideways. */
+  components: ReadonlyMap<number, number>;
+  /** Enclosed holes per province; provinces on the first or last column are left out. */
+  holes: ReadonlyMap<number, number>;
+  /** Provinces with a one-pixel-thin run. */
+  thin: ReadonlySet<number>;
 }
 
 export const MAP_PROVINCE_ENGINE_MAX_PIXELS = 13_238_272;
@@ -1380,6 +1392,10 @@ function addNeighbor(adjacency: Map<number, Set<number>>, left: number, right: n
   adjacency.set(right, rightSet);
 }
 
+/**
+ * The TypeScript raster, kept as the reference the engine's (`engineProvinceRaster`, ADR 0084)
+ * is checked against in tests and `scripts/map-raster-parity.ts`. The map model uses the engine.
+ */
 export function buildProvinceRaster(
   bitmap: BmpImage,
   definitionsByColor: ReadonlyMap<string, ProvinceDefinition>,
@@ -1696,7 +1712,7 @@ export class MapWorkspaceIndex {
       }
     }
     if (this.provinceBitmap !== undefined) {
-      this.raster = buildProvinceRaster(
+      this.raster = engineProvinceRaster(
         this.provinceBitmap,
         this.definitionsByColor,
         this.definitionsById,

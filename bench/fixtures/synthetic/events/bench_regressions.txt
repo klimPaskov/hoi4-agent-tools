@@ -10,3 +10,14 @@ country_event = {
 		name = bench_regress.1.a
 	}
 }
+
+# Its description is the literal `undefined`, a key no language defines (from ZIN, 2026-11-02).
+country_event = {
+	id = bench_regress.2
+	title = bench_regress.2.t
+	desc = undefined
+	is_triggered_only = yes
+	option = {
+		name = bench_regress.2.a
+	}
+}

@@ -1,6 +1,8 @@
 ﻿l_english:
-  bench_regress.1.t: 'Benchmark regression'
-  bench_regress.1.d: 'Fired through a scripted effect.'
-  bench_regress.1.a: 'Fine'
-  bench_regress_category: 'Benchmark'
-  bench_regress_decision: 'Fire the regression event'
+  bench_regress.1.t:0 "Benchmark regression"
+  bench_regress.1.d:0 "Fired through a scripted effect."
+  bench_regress.1.a:0 "Fine"
+  bench_regress_category:0 "Benchmark"
+  bench_regress_decision:0 "Fire the regression event"
+  bench_regress.2.t:0 "A description that names no key"
+  bench_regress.2.a:0 "Fine"
