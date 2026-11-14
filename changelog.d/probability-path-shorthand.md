@@ -1,0 +1,1 @@
+- `hoi4.probability_inspect` and `hoi4.probability_analyze` accept a top-level `path` for the source file, as their description promises ("by path, ID or candidate IDs"). `{"path":"common/national_focus/germany.txt","candidatePool":[...]}` was refused with `INVALID_ARGUMENTS`; it now means `source: {"path": ...}`. A call that gives both `path` and `source` is still refused.

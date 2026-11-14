@@ -116,8 +116,10 @@
     "release:order:verify": "tsx scripts/verify-npm-release-order.ts",
     "pack:check": "tsx scripts/check-package.ts",
     "inspector": "tsx scripts/run-inspector.ts",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:all && npm run fixtures:check && npm run schemas:check && npm run build && npm run pack:check && npm run registry:validate",
-    "prepack": "npm run build"
+    "check": "npm run changelog:check && npm run format:check && npm run lint && npm run typecheck && npm run test:all && npm run fixtures:check && npm run schemas:check && npm run build && npm run pack:check && npm run registry:validate",
+    "prepack": "npm run build",
+    "changelog:check": "tsx scripts/changelog.ts check",
+    "changelog:release": "tsx scripts/changelog.ts release"
   },
   "dependencies": {
     "@fontsource-variable/roboto": "5.3.0",
