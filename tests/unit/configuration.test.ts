@@ -120,6 +120,24 @@ describe('configuration loading and path selection', () => {
     });
   });
 
+  it('starts with no workspace outside a mod when asked, so documentation still answers', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-no-mod-'));
+    temporaryRoots.push(root);
+    // A game marker ends the upward search, so no parent folder can be taken for a mod.
+    await writeFile(path.join(root, 'hoi4.exe'), 'game marker\n', 'utf8');
+    const start = path.join(root, 'home');
+    await mkdir(start, { recursive: true });
+
+    await expect(automaticConfiguration(start)).rejects.toMatchObject({
+      code: 'AUTO_MOD_ROOT_NOT_FOUND',
+    });
+    const configuration = await automaticConfiguration(start, { allowNoMod: true });
+    expect(configuration.workspaces).toEqual([]);
+    expect(configuration.serverStateRoot).toBeDefined();
+    const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
+    expect(engine.resolver.list()).toEqual([]);
+  });
+
   it('scans a sparse mod through the shared engine without a descriptor or game root', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-sparse-engine-'));
     temporaryRoots.push(root);

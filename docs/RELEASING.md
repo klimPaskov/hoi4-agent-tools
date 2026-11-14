@@ -62,6 +62,7 @@ The local cut-over installs a packed 4.0.0 build and pins its tarball integrity 
    The release workflow refuses a tag whose commit is not an ancestor of `origin/main`.
 2. Keep the version identical in `package.json`, `npm-shrinkwrap.json`, `server.json` and `PACKAGE_VERSION` in `src/hoi4_agent_tools/version.ts`.
    `CHANGELOG.md` needs a `## <version> - <date>` section, because the workflow turns it into the GitHub release page, and `docs/releases/v<version>.md` holds the longer introduction.
+   Pull requests add their entries as files under `changelog.d/` and never edit `## Unreleased`; the release pull request runs `npm run changelog:release -- <version>`, which writes that section from the fragments and deletes them (see `changelog.d/README.md`).
 3. Run the project check on a clean checkout of that commit:
 
    ```bash
