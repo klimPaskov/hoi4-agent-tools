@@ -59,7 +59,7 @@ export const referenceTools = [
     name: 'hoi4.reference_search',
     title: 'Find a modding rule',
     description:
-      'Find the right modding rule in the offline wiki and installed game docs using ordinary words or script names. Returns up to 10 short candidates (limit up to 12), each with its file, lines, revision and, for a command, a one-line meaning and the scopes it works in. Read the candidates and pick the one that fits the task, since several commands often sound alike; read it with hoi4.reference_read using its id and revision. Example: {"query":"add_timed_idea"} or {"query":"give a country a spirit that ends after some days"}.',
+      'Find a modding rule in the offline wiki and installed game docs by plain words or script name. Returns up to 10 short candidates (limit up to 12) with file, lines, revision and, for a command, a one-line meaning and its scopes. Pick the one that fits, since several commands sound alike, then read it with hoi4.reference_read using its id and revision. Example: {"query":"add_timed_idea"} or {"query":"make a country hold elections now"}.',
     inputSchema: referenceSearchRequestSchema,
     outputSchema: strictOperationResultSchema(referenceSearchToolDataSchema),
     annotations: readOnly,
