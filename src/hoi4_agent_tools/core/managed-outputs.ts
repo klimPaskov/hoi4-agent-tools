@@ -193,6 +193,11 @@ export interface ManagedOutputRefreshInput {
   addable?: (relativePath: string) => boolean;
   /** Also add every file of the workspace at an `addable` path the inventory lacks. */
   adoptUnrecorded?: boolean;
+  /**
+   * Paths every scan reads, so a recorded file missing there is gone and `adoptAll` drops it.
+   * Elsewhere a missing file may just be unread, and its entry is kept.
+   */
+  alwaysScanned?: (relativePath: string) => boolean;
 }
 
 export interface ManagedOutputRefresh {
@@ -206,6 +211,11 @@ export interface ManagedOutputRefresh {
   keptEdited: string[];
   /** Recorded outputs whose hash already matched, sorted. */
   unchanged: string[];
+  /**
+   * Recorded outputs `adoptAll` could not read because the scan did not include them: kept with
+   * their recorded hash, never dropped, sorted.
+   */
+  unscanned: string[];
   /** Files at managed paths added to the inventory: created by the request, or adopted. */
   added: string[];
   /** The operations that wrote the refreshed or dropped outputs, sorted. */
@@ -235,6 +245,7 @@ export function refreshManagedOutputs(
   const dropped: string[] = [];
   const keptEdited: string[] = [];
   const unchanged: string[] = [];
+  const unscanned: string[] = [];
   const operationIds = new Set<string>();
   const next: ManifestEntry[] = [];
   for (const entry of parseManifest(bytes)) {
@@ -254,8 +265,19 @@ export function refreshManagedOutputs(
       }
       current = change.content;
       for (const id of change.operationIds) operationIds.add(id);
-    } else if (input.adoptAll === true) current = source === undefined ? null : source.bytes;
-    else {
+    } else if (input.adoptAll === true) {
+      // A file the scan did not read is not a file that is gone: keep its entry.
+      if (source === undefined && input.alwaysScanned?.(entry.relativePath) === true) {
+        dropped.push(entry.relativePath);
+        continue;
+      }
+      if (source === undefined) {
+        unscanned.push(entry.relativePath);
+        next.push(entry);
+        continue;
+      }
+      current = source.bytes;
+    } else {
       next.push(entry);
       continue;
     }
@@ -313,6 +335,7 @@ export function refreshManagedOutputs(
     dropped: dropped.sort(compareCodeUnits),
     keptEdited: keptEdited.sort(compareCodeUnits),
     unchanged: unchanged.sort(compareCodeUnits),
+    unscanned: unscanned.sort(compareCodeUnits),
     operationIds: [...operationIds].sort(compareCodeUnits),
   };
 }

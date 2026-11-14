@@ -1,4 +1,10 @@
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
 import type { ProposedFileChange } from '../../src/hoi4_agent_tools/core/transactions.js';
@@ -185,6 +191,51 @@ describe('world output inventory after later map operations', () => {
     expect(recorded(after).has(stray.relativePath)).toBe(true);
     expect(recorded(after).has(notes.relativePath)).toBe(false);
   });
+
+  it('keeps recorded outputs the scan did not read instead of dropping them', () => {
+    // ZIN, 13 November 2026: record_world_outputs dropped 12 recorded files that were on disk
+    // (the bitmaps, colour maps and world scripts) because its scan did not read them.
+    const unread = written.filter(
+      ({ relativePath }) =>
+        relativePath !== 'map/rivers.bmp' && relativePath !== 'common/on_actions/world.txt',
+    );
+    const result = plan(unread, [{ id: 'adopt', kind: 'record_world_outputs' }]);
+    expect(result.changes).toEqual([]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_RECORDED')!;
+    expect(note.details).toMatchObject({
+      dropped: 0,
+      unscanned: 2,
+      unscannedPaths: ['common/on_actions/world.txt', 'map/rivers.bmp'],
+    });
+  });
+
+  it('reads every world output when record_world_outputs runs through the service', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-world-record-'));
+    const mod = path.join(base, 'mod');
+    await mkdir(mod);
+    await writeFile(path.join(mod, 'descriptor.mod'), 'name="World"' + String.fromCharCode(10));
+    for (const file of written) {
+      await mkdir(path.dirname(path.join(mod, file.relativePath)), { recursive: true });
+      await writeFile(path.join(mod, file.relativePath), file.bytes);
+    }
+    const resolver = await WorkspaceResolver.create(
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(base, 'state'),
+        workspaces: [{ id: 'w', name: 'W', root: mod }],
+      }),
+    );
+    const preview = await new AgentNudger(resolver).previewRewriteWithDiff({
+      workspaceId: 'w',
+      operations: [{ id: 'adopt', kind: 'record_world_outputs' }] as never,
+    });
+    expect(preview.plan.blockers).toEqual([]);
+    const note = preview.plan.diagnostics.find(
+      ({ code }) => code === 'MAP_WORLD_OUTPUTS_RECORDED',
+    )!;
+    expect(note.details).toMatchObject({ dropped: 0, unscanned: 0 });
+    expect(preview.plan.changes).toEqual([]);
+  }, 120_000);
 
   it('refuses record_world_outputs in a mod without a world inventory', () => {
     const result = planMapOperations(MapWorkspaceIndex.build([]), [

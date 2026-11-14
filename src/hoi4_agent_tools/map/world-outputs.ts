@@ -64,6 +64,12 @@ export function refreshWorldOutputs(
     // New files join the record where the world keeps its map outputs; country files stay out,
     // since a workspace may own its countries (ADR 0069).
     addable: (name) => permits(name) && !isWorldCountryOutput(name),
+    // States and strategic regions are in every map scan; bitmaps, colour maps and the world
+    // scripts only in some, so only the first can be known to be gone.
+    alwaysScanned: (name) => {
+      const dir = path.posix.dirname(name);
+      return roots.stateRoots.includes(dir) || dir === `${roots.mapRoot}/strategicregions`;
+    },
     ...(options.adoptAll === true ? { adoptAll: true } : {}),
     ...(options.adoptUnrecorded === true ? { adoptUnrecorded: true } : {}),
   });
