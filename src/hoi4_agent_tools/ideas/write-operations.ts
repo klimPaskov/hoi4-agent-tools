@@ -13,7 +13,12 @@ import {
   type IdeaWriteData,
   type IdeaWriteRequest,
 } from '../schemas/idea-write.js';
-import { ideaCategories, planIdeaWrite, type IdeaWritePlan } from './write-plan.js';
+import {
+  ideaCategories,
+  planIdeaWrite,
+  planNewIdeaFile,
+  type IdeaWritePlan,
+} from './write-plan.js';
 
 export interface IdeaWriteOperationContext {
   workspaceId: string;
@@ -52,20 +57,49 @@ function modIdeaFiles(snapshot: ScanSnapshot): ScannedFile[] {
   );
 }
 
+/** The file the operation writes: an existing mod file, or the path of one createFile makes. */
+type IdeaWriteTarget = { file: ScannedFile } | { newPath: string };
+
+/** A path createFile may make: a .txt file under common/ideas, inside the mod. */
+function newIdeaFilePath(file: string): string {
+  const path = file.replaceAll('\\', '/').replace(/^\.\//u, '');
+  if (
+    !normalized(path).startsWith('common/ideas/') ||
+    !path.toLowerCase().endsWith('.txt') ||
+    path.split('/').some((part) => part === '' || part === '.' || part === '..')
+  )
+    fail(
+      'IDEA_WRITE_FILE_INVALID',
+      `${file} is not a .txt file under common/ideas, so a new idea file cannot go there`,
+      { file },
+    );
+  return path;
+}
+
 /** The file the operation writes: the one named, the one that defines the idea, or the one with the category. */
-function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): ScannedFile {
+function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): IdeaWriteTarget {
   const files = modIdeaFiles(snapshot);
   if (input.file !== undefined) {
     const named = files.find(
       ({ relativePath }) => normalized(relativePath) === normalized(input.file!),
     );
-    if (named === undefined)
+    if (named !== undefined) {
+      if (input.operation === 'add' && input.createFile === true)
+        // The file exists, so the flag has nothing to create; refusing keeps a wrong guess visible.
+        fail(
+          'IDEA_WRITE_FILE_EXISTS',
+          `${named.relativePath} already exists; drop createFile to add to it`,
+          { file: named.relativePath },
+        );
+      return { file: named };
+    }
+    if (input.operation !== 'add' || input.createFile !== true)
       fail(
         'IDEA_WRITE_FILE_NOT_FOUND',
-        `${input.file} is not a common/ideas file of the mod; creating a new file is not supported yet`,
+        `${input.file} is not a common/ideas file of the mod${input.operation === 'add' ? '; pass createFile: true to create it' : ''}`,
         { file: input.file, files: files.map(({ relativePath }) => relativePath).slice(0, 20) },
       );
-    return named;
+    return { newPath: newIdeaFilePath(input.file) };
   }
   const definitions = snapshot.index.findAll('idea', input.id);
   const inMod = definitions.filter(({ path }) => path.startsWith('mod:'));
@@ -81,10 +115,20 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): ScannedFil
     const holding = files.filter(({ bytes, relativePath }) =>
       ideaCategories({ bytes, path: relativePath }).includes(category),
     );
-    if (holding.length === 0)
+    if (holding.length === 0) {
+      if (input.createCategory === true) {
+        if (files.length === 1) return { file: files[0]! };
+        fail(
+          'IDEA_WRITE_FILE_REQUIRED',
+          files.length === 0
+            ? 'The mod has no common/ideas file; name a new one with file and createFile: true'
+            : `${files.length} files of the mod could hold the new ${category} category; name one with file`,
+          { files: files.map(({ relativePath }) => relativePath).slice(0, 20) },
+        );
+      }
       fail(
         'IDEA_WRITE_CATEGORY_NOT_FOUND',
-        `No common/ideas file of the mod has a ${category} category, and creating one is not supported yet`,
+        `No common/ideas file of the mod has a ${category} category; pass createCategory: true to create it`,
         {
           category,
           categories: [
@@ -96,6 +140,7 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): ScannedFil
           ],
         },
       );
+    }
     if (holding.length > 1)
       fail(
         'IDEA_WRITE_FILE_REQUIRED',
@@ -104,7 +149,7 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): ScannedFil
           files: holding.map(({ relativePath }) => relativePath),
         },
       );
-    return holding[0]!;
+    return { file: holding[0]! };
   }
   if (inMod.length === 0) {
     if (definitions.length > 0)
@@ -127,7 +172,7 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): ScannedFil
   const found = files.find(({ displayPath }) => displayPath === paths[0]);
   if (found === undefined)
     fail('IDEA_WRITE_NOT_FOUND', `${input.id} is not in an active mod file`, { path: paths[0] });
-  return found;
+  return { file: found };
 }
 
 /** The localisation key and the picture the body names, from the body itself. */
@@ -143,7 +188,8 @@ function referencesOf(id: string, body: string): { name: string; picture: string
 
 export interface IdeaWriteComputed {
   plan: IdeaWritePlan;
-  file: ScannedFile;
+  /** The file the write changes; absent when the call creates the file. */
+  file: ScannedFile | undefined;
   data: IdeaWriteData;
   diagnostics: Diagnostic[];
 }
@@ -160,16 +206,30 @@ export async function computeIdeaWrite(
     context.principal,
     context.signal,
   );
-  const file = targetFile(snapshot, input);
-  const plan = planIdeaWrite(
-    { bytes: file.bytes, path: file.relativePath },
-    {
-      operation: input.operation,
-      id: input.id,
-      ...(input.category === undefined ? {} : { category: input.category }),
-      ...(input.body === undefined ? {} : { body: input.body }),
-    },
-  );
+  const target = targetFile(snapshot, input);
+  const planInput = {
+    operation: input.operation,
+    id: input.id,
+    ...(input.category === undefined ? {} : { category: input.category }),
+    ...(input.createCategory === undefined ? {} : { createCategory: input.createCategory }),
+    ...(input.body === undefined ? {} : { body: input.body }),
+  };
+  let file: ScannedFile | undefined;
+  let plan: IdeaWritePlan;
+  if ('file' in target) {
+    file = target.file;
+    plan = planIdeaWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+  } else {
+    const inMod = snapshot.index
+      .findAll('idea', input.id)
+      .find(({ path }) => path.startsWith('mod:'));
+    if (inMod !== undefined)
+      fail('IDEA_WRITE_DUPLICATE_ID', `${input.id} is already defined in the mod`, {
+        id: input.id,
+        path: inMod.path,
+      });
+    plan = planNewIdeaFile(target.newPath, planInput);
+  }
   const missing: IdeaWriteData['missing'] = { localisation: [], picture: [] };
   const diagnostics: Diagnostic[] = [];
   if (input.operation !== 'remove' && input.body !== undefined) {
@@ -245,7 +305,9 @@ export async function previewIdeaWrite(
   const result = resultFor(
     context.workspaceId,
     computed.data,
-    computed.plan.bytes.equals(computed.file.bytes) ? 'unchanged' : 'preview',
+    computed.file !== undefined && computed.plan.bytes.equals(computed.file.bytes)
+      ? 'unchanged'
+      : 'preview',
   );
   result.diagnostics = computed.diagnostics;
   await context.progress?.(2, 2, 'Idea preview ready');
@@ -269,7 +331,7 @@ export async function prepareIdeaWrite(
   await context.progress?.(0, 3, "Reading the mod's ideas");
   const computed = await computeIdeaWrite(engine, input, context, true);
   const { plan, file, data, diagnostics } = computed;
-  if (plan.bytes.equals(file.bytes)) {
+  if (file !== undefined && plan.bytes.equals(file.bytes)) {
     const result = resultFor(context.workspaceId, { ...data, applied: false }, 'unchanged');
     result.diagnostics = diagnostics;
     return { readOnlyPreview: result };
@@ -298,14 +360,17 @@ export async function prepareIdeaWrite(
         mediaType: 'text/plain',
       },
     ],
-    readDependencies: [
-      {
-        rootKind: 'mod' as const,
-        loadOrder: modRoot?.loadOrder ?? 0,
-        relativePath: file.relativePath,
-        sha256: file.sha256,
-      },
-    ],
+    readDependencies:
+      file === undefined
+        ? []
+        : [
+            {
+              rootKind: 'mod' as const,
+              loadOrder: modRoot?.loadOrder ?? 0,
+              relativePath: file.relativePath,
+              sha256: file.sha256,
+            },
+          ],
     validate: (proposed, signal) => {
       signal?.throwIfAborted();
       const bytes = proposed.get(plan.path);

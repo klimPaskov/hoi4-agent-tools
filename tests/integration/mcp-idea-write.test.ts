@@ -219,4 +219,53 @@ describe('hoi4.idea_write through an MCP client', () => {
     expect(text).toContain('# edited by hand');
     expect(text).toContain('late_spirit = {');
   });
+
+  it('creates a missing category and a new file only when told to, and the file path stays in common/ideas', async () => {
+    const { call, read } = await fixture();
+    const category = {
+      operation: 'add',
+      id: 'adviser_one',
+      category: 'political_advisor',
+      body: 'slot = political_advisor',
+    };
+    expect(JSON.stringify(await call({ ...category, apply: true }))).toContain(
+      'IDEA_WRITE_CATEGORY_NOT_FOUND',
+    );
+    const madeCategory = await call({ ...category, createCategory: true, apply: true });
+    expect(madeCategory.code).toBe('IDEA_WRITE_APPLIED');
+    expect(await read('common/ideas/my_ideas.txt')).toContain(
+      '\n\tpolitical_advisor = {\n\t\tadviser_one = {\n\t\t\tslot = political_advisor\n\t\t}\n\t}\n}',
+    );
+
+    const file = {
+      operation: 'add',
+      id: 'fresh_spirit',
+      category: 'country',
+      body: 'picture = first_spirit',
+      file: 'common/ideas/fresh_ideas.txt',
+    };
+    expect(JSON.stringify(await call({ ...file, apply: true }))).toContain(
+      'IDEA_WRITE_FILE_NOT_FOUND',
+    );
+    const preview = await call({ ...file, createFile: true });
+    expect(preview).toMatchObject({ code: 'IDEA_WRITE_PREVIEW', proposedFiles: [file.file] });
+    expect(preview.data.diff).toContain('+ideas = {');
+    const made = await call({ ...file, createFile: true, apply: true });
+    expect(made).toMatchObject({ code: 'IDEA_WRITE_APPLIED', changedFiles: [file.file] });
+    expect(await read(file.file)).toBe(
+      'ideas = {\n\tcountry = {\n\t\tfresh_spirit = {\n\t\t\tpicture = first_spirit\n\t\t}\n\t}\n}\n',
+    );
+    // The file exists now, so the flag is refused and the idea is a duplicate.
+    expect(JSON.stringify(await call({ ...file, createFile: true, apply: true }))).toContain(
+      'IDEA_WRITE_FILE_EXISTS',
+    );
+    for (const bad of [
+      'common/ideas/../../escape.txt',
+      'common/other/x.txt',
+      'common/ideas/x.yml',
+    ]) {
+      const refused = await call({ ...file, id: 'other_spirit', file: bad, createFile: true });
+      expect(refused.status).toBe('error');
+    }
+  });
 });

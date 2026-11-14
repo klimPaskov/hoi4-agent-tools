@@ -11,7 +11,7 @@ export const ideaWriteTaskTools = [
     name: 'hoi4.idea_write',
     title: 'Add, replace or remove an idea',
     description:
-      'Add, replace or remove one idea (national spirit, law, advisor) in a mod common/ideas file, touching only that block. add needs category and body (the text between the braces); replace and remove find the idea. apply false returns the diff; true writes it. Warns about a missing localisation key or picture sprite. Example: {"operation":"add","id":"my_spirit","category":"country","body":"picture = my_spirit"}',
+      'Add, replace or remove one idea (national spirit, law, advisor) in a mod common/ideas file, touching only that block. add needs category and body (the text between the braces); replace and remove find the idea. apply false returns the diff; true writes it. createCategory and createFile (add only) make a missing category or file; without them a typo is refused. Warns about a missing localisation key or picture sprite. Example: {"operation":"add","id":"my_spirit","category":"country","body":"picture = my_spirit"}',
     inputSchema: ideaWriteRequestSchema,
     outputSchema: strictOperationResultSchema(ideaWriteDataSchema),
     annotations: {
