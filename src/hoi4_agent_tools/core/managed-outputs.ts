@@ -186,6 +186,11 @@ export interface ManagedOutputRefreshInput {
    * earlier hand edit stays protected.
    */
   adoptAll?: boolean;
+  /**
+   * The paths the inventory manages. With it, a managed file this request creates is added, and
+   * with `adoptAll` every managed file of the mod the inventory does not list yet.
+   */
+  manages?: (relativePath: string) => boolean;
 }
 
 export interface ManagedOutputRefresh {
@@ -199,6 +204,8 @@ export interface ManagedOutputRefresh {
   keptEdited: string[];
   /** Recorded outputs whose hash already matched, sorted. */
   unchanged: string[];
+  /** Managed files the inventory did not list and now records, sorted. */
+  added: string[];
   /** The operations that wrote the refreshed or dropped outputs, sorted. */
   operationIds: string[];
 }
@@ -259,13 +266,46 @@ export function refreshManagedOutputs(
     else refreshed.push(entry.relativePath);
     next.push({ relativePath: entry.relativePath, sha256 });
   }
-  const changed = refreshed.length > 0 || dropped.length > 0;
+  // Outputs the inventory does not list yet: files this request creates under a managed path, and
+  // with adoptAll every managed file of the mod. Before, a state file that a later split, create
+  // or merge wrote was never recorded, so a sync driven by the inventory left it out.
+  const added: string[] = [];
+  if (input.manages !== undefined) {
+    const recorded = new Set(next.map(({ relativePath }) => key(relativePath)));
+    const candidates = new Map<string, { relativePath: string; bytes: Uint8Array }>();
+    if (input.adoptAll === true)
+      for (const file of sources.values()) {
+        const relativePath = file.relativePath.replaceAll('\\', '/');
+        candidates.set(key(relativePath), { relativePath, bytes: file.bytes });
+      }
+    for (const [changeKey, change] of proposed) {
+      if (change.content === null) {
+        candidates.delete(changeKey);
+        continue;
+      }
+      if (input.adoptAll === true || !sources.has(changeKey))
+        candidates.set(changeKey, {
+          relativePath: change.relativePath.replaceAll('\\', '/'),
+          bytes: change.content,
+        });
+    }
+    for (const [candidateKey, { relativePath, bytes: content }] of candidates) {
+      if (candidateKey === manifestKey || recorded.has(candidateKey)) continue;
+      if (!input.manages(relativePath)) continue;
+      added.push(relativePath);
+      next.push({ relativePath, sha256: sha256Bytes(content) });
+      const change = proposed.get(candidateKey);
+      if (change !== undefined) for (const id of change.operationIds) operationIds.add(id);
+    }
+  }
+  const changed = refreshed.length > 0 || dropped.length > 0 || added.length > 0;
   return {
     content: changed ? manifestBytes(next) : undefined,
     refreshed: refreshed.sort(compareCodeUnits),
     dropped: dropped.sort(compareCodeUnits),
     keptEdited: keptEdited.sort(compareCodeUnits),
     unchanged: unchanged.sort(compareCodeUnits),
+    added: added.sort(compareCodeUnits),
     operationIds: [...operationIds].sort(compareCodeUnits),
   };
 }

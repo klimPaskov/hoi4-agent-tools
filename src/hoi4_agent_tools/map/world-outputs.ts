@@ -45,59 +45,46 @@ export function reconcileWorldOutputs(
     .changes;
 }
 
+/** Where a world's outputs live: its map folder, state folders and localisation folders. */
+export interface WorldOutputRoots {
+  mapRoot: string;
+  stateRoots: readonly string[];
+  localisationRoots: readonly string[];
+}
+
 /**
  * The world inventory brought up to date with the bytes a request leaves behind: every recorded
- * output the request writes gets its new hash, or with `adoptAll` every recorded output its
- * current bytes (`record_world_outputs`). Undefined when the workspace has no world inventory.
+ * output the request writes gets its new hash, and every world output it creates is added; with
+ * `adoptAll` (`record_world_outputs`) every recorded output gets its current bytes and every
+ * world output of the mod the inventory does not list is added. Undefined when the workspace has
+ * no world inventory.
  */
 export function refreshWorldOutputs(
   sources: readonly ScannedFile[],
   proposed: readonly ProposedFileChange[],
+  roots: WorldOutputRoots,
   adoptAll = false,
 ): ManagedOutputRefresh | undefined {
   return refreshManagedOutputs({
     manifestPath: WORLD_OUTPUT_MANIFEST,
     sources,
     proposed,
+    manages: worldOutputPath(roots),
     ...(adoptAll ? { adoptAll: true } : {}),
   });
 }
 
-export function planWorldOutputs(
-  sources: readonly ScannedFile[],
-  proposed: readonly ProposedFileChange[],
-  operationId: string,
-  mapRoot: string,
-  stateRoots: readonly string[],
-  localisationRoots: readonly string[],
-  options: WorldOutputOptions = {},
-): ManagedOutputPlan {
-  const mapFiles = new Set([
-    'provinces.bmp',
-    'definition.csv',
-    'default.map',
-    'continent.txt',
-    'adjacencies.csv',
-    'adjacency_rules.txt',
-    'positions.txt',
-    'ambient_object.txt',
-    'heightmap.bmp',
-    'terrain.bmp',
-    'rivers.bmp',
-    'trees.bmp',
-    'cities.bmp',
-    'world_normal.bmp',
-    'buildings.txt',
-    'unitstacks.txt',
-    'weatherpositions.txt',
-    'supply_nodes.txt',
-    'railways.txt',
-  ]);
-  const permitsPath = (name: string): boolean => {
+/** Whether a relative path is one a generated world writes, so its inventory manages it. */
+export function worldOutputPath({
+  mapRoot,
+  stateRoots,
+  localisationRoots,
+}: WorldOutputRoots): (name: string) => boolean {
+  return (name) => {
     const dir = path.posix.dirname(name),
       file = path.posix.basename(name);
     return (
-      (dir === mapRoot && mapFiles.has(file)) ||
+      (dir === mapRoot && WORLD_MAP_FILES.has(file)) ||
       (dir === `${mapRoot}/terrain` && /^colormap_[a-z0-9_]+\.dds$/u.test(file)) ||
       (dir === `${mapRoot}/strategicregions` && /^\d+.*\.txt$/u.test(file)) ||
       (stateRoots.includes(dir) && /^\d+.*\.txt$/u.test(file)) ||
@@ -114,6 +101,40 @@ export function planWorldOutputs(
       )
     );
   };
+}
+
+const WORLD_MAP_FILES = new Set([
+  'provinces.bmp',
+  'definition.csv',
+  'default.map',
+  'continent.txt',
+  'adjacencies.csv',
+  'adjacency_rules.txt',
+  'positions.txt',
+  'ambient_object.txt',
+  'heightmap.bmp',
+  'terrain.bmp',
+  'rivers.bmp',
+  'trees.bmp',
+  'cities.bmp',
+  'world_normal.bmp',
+  'buildings.txt',
+  'unitstacks.txt',
+  'weatherpositions.txt',
+  'supply_nodes.txt',
+  'railways.txt',
+]);
+
+export function planWorldOutputs(
+  sources: readonly ScannedFile[],
+  proposed: readonly ProposedFileChange[],
+  operationId: string,
+  mapRoot: string,
+  stateRoots: readonly string[],
+  localisationRoots: readonly string[],
+  options: WorldOutputOptions = {},
+): ManagedOutputPlan {
+  const permitsPath = worldOutputPath({ mapRoot, stateRoots, localisationRoots });
   return planManagedOutputs({
     manifestPath: WORLD_OUTPUT_MANIFEST,
     sources,

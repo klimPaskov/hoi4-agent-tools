@@ -68,7 +68,12 @@ import {
   type CountryTagCatalog,
   WORLD_COUNTRY_TAG_FILE,
 } from './world-context.js';
-import { planWorldOutputs, refreshWorldOutputs, WORLD_OUTPUT_MANIFEST } from './world-outputs.js';
+import {
+  planWorldOutputs,
+  refreshWorldOutputs,
+  WORLD_OUTPUT_MANIFEST,
+  type WorldOutputRoots,
+} from './world-outputs.js';
 import type { ManagedOutputRefresh } from '../core/managed-outputs.js';
 import { resolvePartitionMode } from './partition.js';
 import {
@@ -6183,6 +6188,15 @@ function applyRegenerateMapPositions(
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
 }
 
+/** The folders of a workspace that hold world outputs. */
+function worldOutputRootsOf(base: MapWorkspaceIndex): WorldOutputRoots {
+  return {
+    mapRoot: base.sourceRoots.map[0] ?? 'map',
+    stateRoots: base.sourceRoots.states,
+    localisationRoots: base.sourceRoots.localisation,
+  };
+}
+
 function worldOutputsRefreshedDiagnostic(refresh: ManagedOutputRefresh): Diagnostic {
   return {
     code: 'MAP_WORLD_OUTPUTS_REFRESHED',
@@ -6191,12 +6205,15 @@ function worldOutputsRefreshedDiagnostic(refresh: ManagedOutputRefresh): Diagnos
     message:
       `The world output inventory records the new bytes of ${refresh.refreshed.length} output(s) this request wrote` +
       (refresh.dropped.length > 0 ? ` and drops ${refresh.dropped.length} it deleted` : '') +
+      (refresh.added.length > 0 ? `; it adds ${refresh.added.length} new output(s)` : '') +
       (refresh.keptEdited.length > 0
         ? `; ${refresh.keptEdited.length} output(s) were edited before this request and keep their recorded hash, so the next create_world still refuses them (record_world_outputs adopts them)`
         : ''),
     details: {
       refreshed: refresh.refreshed.length,
       dropped: refresh.dropped.length,
+      added: refresh.added.length,
+      addedPaths: refresh.added.slice(0, 200),
       keptEdited: refresh.keptEdited.slice(0, 200),
       keptEditedCount: refresh.keptEdited.length,
     },
@@ -6212,7 +6229,12 @@ function applyRecordWorldOutputs(
   changes: Map<string, MutableChange>,
   operation: RecordWorldOutputsOperation,
 ): Diagnostic {
-  const refresh = refreshWorldOutputs(base.sourceFiles, proposedChanges(changes), true);
+  const refresh = refreshWorldOutputs(
+    base.sourceFiles,
+    proposedChanges(changes),
+    worldOutputRootsOf(base),
+    true,
+  );
   if (refresh === undefined)
     throw new ServiceError(
       'MAP_WORLD_OUTPUTS_MISSING',
@@ -6225,13 +6247,15 @@ function applyRecordWorldOutputs(
     severity: 'info',
     category: 'map',
     operationId: operation.id,
-    message: `The world output inventory now records the current bytes of its outputs: ${refresh.refreshed.length} refreshed, ${refresh.unchanged.length} unchanged, ${refresh.dropped.length} dropped because the file is gone`,
+    message: `The world output inventory now records the current bytes of its outputs: ${refresh.refreshed.length} refreshed, ${refresh.unchanged.length} unchanged, ${refresh.dropped.length} dropped because the file is gone, ${refresh.added.length} added that it did not list`,
     details: {
       refreshed: refresh.refreshed.length,
       unchanged: refresh.unchanged.length,
       dropped: refresh.dropped.length,
+      added: refresh.added.length,
       refreshedPaths: refresh.refreshed.slice(0, 200),
       droppedPaths: refresh.dropped.slice(0, 200),
+      addedPaths: refresh.added.slice(0, 200),
     },
   };
 }
@@ -6518,7 +6542,11 @@ function* planMapOperationSteps(
   }
   // The tool's own later edits of world outputs must never read as hand edits at the next
   // create_world, in this request or a later one.
-  const refresh = refreshWorldOutputs(base.sourceFiles, proposedChanges(changes));
+  const refresh = refreshWorldOutputs(
+    base.sourceFiles,
+    proposedChanges(changes),
+    worldOutputRootsOf(base),
+  );
   if (refresh?.content !== undefined) {
     const [first, ...rest] = refresh.operationIds;
     addChange(changes, WORLD_OUTPUT_MANIFEST, refresh.content, first!, 'application/json');
