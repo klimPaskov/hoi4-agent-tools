@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '../core/canonical.js';
+import { compareCodeUnits, type JsonValue } from '../core/canonical.js';
 import { helperExpansionValidation } from '../core/helper-expansion.js';
 import { publicArtifactLink } from '../core/artifacts.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
@@ -106,6 +106,30 @@ export function eventGraphValidation(graph: EventGraphSnapshot) {
   };
 }
 
+/**
+ * Whether the answer to the question that was asked is complete. A result is partial only when
+ * something the answer needs is missing, and the narrower scope of a focused analysis (the
+ * whole-workspace passes it defers, named by \`analysisMode\`) is not a gap in an answer that
+ * stands on its own. A focused trace is complete when no source was skipped, no limit cut it
+ * short and no node sits on its boundary. A focused path is complete when it was found without an
+ * assumption.
+ */
+function eventAnswerComplete(inspected: {
+  graph: EventGraphSnapshot;
+  helperExpansion?: { complete: boolean } | undefined;
+  summary?: Record<string, JsonValue> | undefined;
+}): boolean {
+  if (inspected.helperExpansion !== undefined) return inspected.helperExpansion.complete;
+  const { graph, summary } = inspected;
+  if (graph.complete) return true;
+  if (graph.analysisMode !== 'focused' || graph.skippedSourceCount !== 0 || summary === undefined)
+    return false;
+  const trace = summary.trace;
+  if (typeof trace === 'object' && trace !== null && !Array.isArray(trace))
+    return trace.truncated === false && trace.boundaryNodes === 0;
+  return summary.found === true && summary.unresolvedAssumptions === 0;
+}
+
 /** Transport-independent event inspection and its complete bounded result contract. */
 export async function inspectEvents(viewer: EventChainViewer, input: EventInspectInput) {
   const inspected = await viewer.inspect(input);
@@ -130,10 +154,7 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
       refresh: input.refresh ?? input.mode === 'scan',
     },
   });
-  result.code =
-    (inspected.helperExpansion?.complete ?? inspected.graph.complete)
-      ? 'EVENT_INSPECTED'
-      : 'EVENT_INSPECTED_PARTIAL';
+  result.code = eventAnswerComplete(inspected) ? 'EVENT_INSPECTED' : 'EVENT_INSPECTED_PARTIAL';
   setInlineFilesScanned(result, inspected.graph.filesScanned);
   result.artifacts = inspected.artifacts.map(publicArtifactLink);
   if (inspected.graphSnapshotOmitted === true)
