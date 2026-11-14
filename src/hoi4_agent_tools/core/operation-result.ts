@@ -220,10 +220,42 @@ function essentialDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic[] 
   return kept;
 }
 
+/**
+ * The first paths of a list that fit in `budget` bytes. A truncated reply keeps them, with the
+ * total, so a write that changed files never reads as one that changed nothing.
+ */
+function leadingPaths(paths: readonly string[], budget: number): string[] {
+  const kept: string[] = [];
+  let bytes = 0;
+  for (const path of paths) {
+    bytes += Buffer.byteLength(JSON.stringify(path), 'utf8') + 1;
+    if (bytes > budget) break;
+    kept.push(path);
+  }
+  return kept;
+}
+
+/** How many files the reply named before any inline cap, so a cut reply still reports them. */
+interface FileTotals {
+  changedFiles: number;
+  proposedFiles: number;
+  filesScanned: number;
+}
+
 function boundedResult(
   result: ServiceResult<unknown>,
   actualBytes: number,
+  totals: FileTotals,
 ): ServiceResult<unknown> {
+  const changedFiles = leadingPaths(result.changedFiles, 4_096);
+  const proposedFiles = leadingPaths(result.proposedFiles, 2_048);
+  const fileCounts = {
+    changedFilesTotal: totals.changedFiles,
+    changedFilesShown: changedFiles.length,
+    proposedFilesTotal: totals.proposedFiles,
+    proposedFilesShown: proposedFiles.length,
+    filesScannedTotal: totals.filesScanned,
+  };
   const hasLinkedEvidence = result.artifacts.length > 0;
   const truncationDiagnostic: Diagnostic = {
     code: 'MCP_RESPONSE_TRUNCATED',
@@ -232,7 +264,7 @@ function boundedResult(
     message: hasLinkedEvidence
       ? 'Tool output exceeded the wire budget; inspect the linked evidence for complete details'
       : 'Tool output exceeded the wire budget; nonessential inline details were omitted',
-    details: { actualBytes, maxBytes: MAX_TOOL_RESULT_BYTES },
+    details: { actualBytes, maxBytes: MAX_TOOL_RESULT_BYTES, ...fileCounts },
   };
   const compactData =
     result.data !== null && typeof result.data === 'object' && !Array.isArray(result.data)
@@ -243,8 +275,8 @@ function boundedResult(
     code: result.code.slice(0, 256),
     workspaceId: result.workspaceId.slice(0, 64),
     filesScanned: [],
-    proposedFiles: [],
-    changedFiles: [],
+    proposedFiles,
+    changedFiles,
     diagnostics: [truncationDiagnostic, ...essentialDiagnostics(result.diagnostics)],
     artifacts: result.artifacts
       .slice(0, 1)
@@ -608,15 +640,26 @@ export function toolResult(
   });
   const completeResult = preserveDeferredFilesDiagnostic(result);
   const compact = compactDescriptions(completeResult);
+  const totals: FileTotals = {
+    changedFiles: completeResult.changedFiles.length,
+    proposedFiles: completeResult.proposedFiles.length,
+    filesScanned: completeResult.filesScanned.length,
+  };
   const estimatedBytes = jsonBytesWithin(compact, MAX_TOOL_RESULT_BYTES)
     ? Buffer.byteLength(canonicalJson(compact), 'utf8')
     : MAX_TOOL_RESULT_BYTES + 1;
   const selected =
-    estimatedBytes > MAX_TOOL_RESULT_BYTES ? boundedResult(compact, estimatedBytes) : compact;
+    estimatedBytes > MAX_TOOL_RESULT_BYTES
+      ? boundedResult(compact, estimatedBytes, totals)
+      : compact;
   let output = buildToolResult(selected, images.length, options.compact);
   const wireBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (wireBytes > MAX_TOOL_RESULT_BYTES) {
-    output = buildToolResult(boundedResult(compact, wireBytes), images.length, options.compact);
+    output = buildToolResult(
+      boundedResult(compact, wireBytes, totals),
+      images.length,
+      options.compact,
+    );
   }
   const finalBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (finalBytes > MAX_TOOL_RESULT_BYTES) {
