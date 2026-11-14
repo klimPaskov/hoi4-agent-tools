@@ -252,6 +252,35 @@ Still missing: "check that my country is currently fighting a war" ranks `has_wa
 
 Run the new sets with `npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --common-dev` and `--common-blind`. The blind half has now been scored once, so the next round needs a new one.
 
+## Ten phrasings per command, a second blind set, and ten candidates (issue 64, round four)
+
+Measured on 2026-11-14 on HOI4 1.19.4.1 with the kit's `hoi4_wiki` pack.
+The direction, recorded on the issue: no runtime embeddings (a model download and a runtime dependency for a tool hobbyists install), a deterministic runtime, more phrasing data written at build time, and a fresh blind set that never saw that data.
+
+**Data.** Twelve writers, one batch of about 100 each, wrote six new plain-word phrasings for every one of the 1,127 documented effects and triggers (6,747 added, none dropped by the checks: three to ten words, no command name, no underscore). Each writer saw only its batch with the documentation text and the existing phrasings. Modifiers were not part of this round and keep four. A sample reads like real questions ("fill the army chief slot with a character" for `activate_advisor`, "give a subject flat freedom points" for `add_autonomy_score`), and the output was checked by script, not item by item. With ten phrasings instead of four the per-term weight was too high, so `PHRASE_WEIGHT` went from 4 to 2. The weight was chosen on the older sets before the new blind set was looked at (3 and 2 tied on total first-place answers, 99 each across five sets).
+
+**Blind set.** `scripts/reference-common-blind2-cases.ts` (`--common-blind2`) holds 48 questions written by a fresh author who saw no ranking code, no phrasing data and no results. It leans on the long tail (17 effects, 11 triggers, 5 modifiers, 7 wiki concepts, 3 exact names, 5 negatives). It was scored once before and once after the data change.
+
+**How a hit is counted.** The first version of this evaluation matched a hit to the answer's documentation file, so a question whose author listed only `effects_documentation.md` counted `effects.md#add_timed_idea` (the same command, from the wiki table) as a miss. That under-counted every set whose author listed one file, and it made this round look weaker than it is (first place on the new set read 12 to 14 of 43). With `EVAL_BY_COMMAND=1` a result answers a question when it is the same command under any documentation file. The tables below use that.
+
+| Set (HOI4 1.19.4.1, answerable questions) | First before / after | Within three | Within five | Within ten |
+| ----------------------------------------- | -------------------: | -----------: | ----------: | ---------: |
+| New blind set (43)                        |              23 / 31 |      30 / 36 |     33 / 37 |    36 / 39 |
+| Common questions, first blind half (22)   |              14 / 15 |      17 / 19 |     18 / 19 |    19 / 21 |
+| Common questions, tuning half (20)        |              14 / 16 |      16 / 18 |     17 / 18 |    19 / 19 |
+| ADR 0078 fresh set (38)                   |              19 / 23 |      23 / 27 |     27 / 30 |    30 / 31 |
+| Held-out (24)                             |              11 / 11 |      15 / 16 |     20 / 19 |    23 / 22 |
+| Test (40)                                 |              25 / 25 |      31 / 30 |     32 / 32 |    36 / 34 |
+| Discovery (37)                            |              27 / 28 |      30 / 30 |     32 / 33 |    33 / 34 |
+| Validation (24)                           |              21 / 21 |      22 / 22 |     22 / 22 |    24 / 24 |
+
+On the two blind sets the right answer is among the first ten hits 21 of 22 times (95 percent) and 39 of 43 times (91 percent), and first on 15 of 22 and 31 of 43 (72 percent). The older sets, written for the earlier rounds, put it in the top ten between 82 and 100 percent of the time. Exact names stay first and the negatives return what they returned before.
+
+**Ten short candidates.** The caller is an agent, which reads ten short lines as easily as one. `hoi4.reference_search` now returns up to ten hits by default (twelve at most), and a hit for an installed-documentation command carries a one-line meaning with the scopes it works in as its excerpt ("COUNTRY: Add a time-limited idea to country in scope"), a wiki table row carries its description cell, and the tool description tells the agent to read the candidates and pick the one that fits. A reply of ten hits is about 6 KB. Where the description is only script, the excerpt stays the plain best-matching lines.
+
+Tried and not kept this round: doubling the weight of the per-command phrasing cards (mixed on every set).
+Still missing: "check that my country is currently fighting a war" ranks `has_war` outside the first twelve, and nonsense questions still return a few weak hits.
+
 ## Compact context budgets
 
 A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.

@@ -329,16 +329,65 @@ describe('reference ranking with game text and question intent', () => {
   it("finds a command by the words of the game's own tooltip", async () => {
     const plain = await workspace(docs);
     expect(
-      await search(new ReferenceService(), plain, 'landlocked state without access'),
+      await search(new ReferenceService(), plain, 'wibbleland state frobnicated'),
     ).not.toContain('is_coastal');
     const localised = await workspace({
       ...docs,
       'game/localisation/english/triggers_l_english.yml':
-        '﻿l_english:\n TRIGGER_IS_COASTAL: "§HBorders the sea§!"\n TRIGGER_IS_NOT_COASTAL: "Landlocked $STATE$"\n',
+        '﻿l_english:\n TRIGGER_IS_COASTAL: "§HHas a frobnicated shore§!"\n TRIGGER_IS_NOT_COASTAL: "Wibbleland $STATE$"\n',
     });
     const service = new ReferenceService();
-    expect((await search(service, localised, 'state borders the sea'))[0]).toBe('is_coastal');
-    expect((await search(service, localised, 'landlocked state'))[0]).toBe('is_coastal');
+    expect((await search(service, localised, 'state with a frobnicated shore'))[0]).toBe(
+      'is_coastal',
+    );
+    expect((await search(service, localised, 'wibbleland state'))[0]).toBe('is_coastal');
+  });
+
+  it('describes a candidate in one line with the scopes it works in', async () => {
+    const target = await workspace({
+      'game/documentation/effects_documentation.md': [
+        '# Effects',
+        '## add_widget',
+        '* Supported Scopes: COUNTRY',
+        '* Supported Targets: none',
+        '```',
+        'Adds a widget to the country for a number of days',
+        'Example:',
+        'add_widget = { days = 5 }',
+        '```',
+        '## odd_widget',
+        '* Supported Scopes: STATE',
+        '```',
+        'odd_widget = { id = 1 }',
+        '```',
+        '',
+      ].join('\n'),
+      'wiki/Effects.md': [
+        '| Effect | Arguments | Example | Description |',
+        '| --- | --- | --- | --- |',
+        '| row_widget | `days = <int>`<br>How long. | `row_widget = yes` | Gives the country a row widget for a while. |',
+        '',
+      ].join('\n'),
+    });
+    const service = new ReferenceService();
+    const excerpt = async (query: string, heading: string) =>
+      (
+        await service.search(
+          target,
+          referenceSearchRequestSchema.parse({ workspaceId: 'fixture', query }),
+        )
+      ).results.find((result) => result.heading === heading)?.excerpt;
+    expect(await excerpt('add_widget', 'add_widget')).toBe(
+      'COUNTRY: Adds a widget to the country for a number of days',
+    );
+    // A description that is only script keeps the plain excerpt instead of a wrong meaning.
+    expect(await excerpt('odd_widget', 'odd_widget')).not.toContain('STATE:');
+    expect(await excerpt('row_widget', 'row_widget')).toBe(
+      'Gives the country a row widget for a while.',
+    );
+    expect(referenceSearchRequestSchema.parse({ workspaceId: 'fixture', query: 'ab' }).limit).toBe(
+      10,
+    );
   });
 
   it('prefers an effect for an action and a trigger for a check', async () => {

@@ -20,7 +20,7 @@ export const referenceSearchRequestSchema = z
     workspaceId: workspaceIdSchema,
     query: z.string().trim().min(2).max(160),
     sources: z.array(referenceSourceSchema).min(1).max(3).optional(),
-    limit: z.number().int().min(1).max(12).default(6),
+    limit: z.number().int().min(1).max(12).default(10),
   })
   .strict();
 

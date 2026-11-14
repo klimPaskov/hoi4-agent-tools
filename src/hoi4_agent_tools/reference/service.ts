@@ -159,6 +159,45 @@ interface ReferenceInventory {
   skipped: number;
 }
 
+/**
+ * The meaning of an installed-documentation command in one line, with the scopes it works in:
+ * "COUNTRY: Adds an idea to the country for a number of days". The game's text puts the
+ * description inside a code fence below the scope lines and stops it with "Example"; a line that
+ * only looks like script is not a meaning, so such an entry keeps the plain excerpt.
+ */
+function commandSummary(lines: readonly string[]): string | undefined {
+  let scopes: string | undefined;
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    const scope = /^\*\s*Supported Scopes:\s*(.+)$/iu.exec(line);
+    if (scope !== null) {
+      scopes = scope[1]!.trim();
+      continue;
+    }
+    if (line === '' || line.startsWith('```') || line.startsWith('*')) continue;
+    if (/^(?:examples?|usage)\b/iu.test(line) || /[={}]\s*$|^[a-z_][a-z0-9_]*\s*=/u.test(line))
+      return undefined;
+    const meaning = line.replace(/\s+/gu, ' ').slice(0, 200);
+    return scopes === undefined ? meaning : `${scopes}: ${meaning}`;
+  }
+  return undefined;
+}
+
+/**
+ * The meaning of a wiki table row: its description cell, without the markup. The wiki tables of
+ * effects, triggers and modifiers keep the name, arguments, example and then the description.
+ */
+function rowSummary(row: string): string | undefined {
+  const cells = row.split('|').map((cell) => cell.trim());
+  const description = cells[4];
+  if (description === undefined || description.length < 8) return undefined;
+  return description
+    .replace(/<br\s*\/?>/giu, ' ')
+    .replace(/[`*]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .slice(0, 200);
+}
+
 /** Up to three non-empty lines from `first`, trimmed to the 300-character excerpt bound. */
 function snippet(lines: readonly string[], first = 0): string {
   return lines
@@ -478,7 +517,7 @@ const commandHeading = /^[a-z][a-z0-9_]*$/u;
  * Plain-word phrasings count this many times a game text word, because they name the
  * command the way a question does rather than the way a tooltip labels it.
  */
-const PHRASE_WEIGHT = 4;
+const PHRASE_WEIGHT = 2;
 let phraseTerms: Map<string, Map<string, number>> | undefined;
 
 /**
@@ -878,7 +917,12 @@ export class ReferenceService {
         return {
           section,
           score,
-          excerpt: snippet(section.lines, offset),
+          excerpt:
+            (section.source === 'game_doc' && section.terms.role !== undefined
+              ? commandSummary(section.lines)
+              : section.source === 'wiki' && section.lines.length === 1
+                ? rowSummary(section.lines[0]!)
+                : undefined) ?? snippet(section.lines, offset),
           matchLine: section.startLine + offset,
         };
       },
