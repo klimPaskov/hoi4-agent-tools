@@ -36,6 +36,10 @@ pub struct FileRequest {
     /// exists only in the server's memory.
     #[serde(default)]
     pub payload: Option<(usize, usize)>,
+    /// The size of a file past the parsing ceiling, given instead of `path` and `payload`: the index
+    /// skips such a file on its size alone, so its bytes are not sent.
+    #[serde(default)]
+    pub oversized_bytes: Option<usize>,
     /// SHA-256 of the bytes the server read; a file on disk that no longer has it is refused.
     #[serde(default)]
     pub sha256: Option<String>,
@@ -230,9 +234,9 @@ fn index_diagnostic(code: &str, message: &str, details: Value) -> Value {
     json!({ "code": code, "severity": "blocker", "category": "reference", "message": message, "details": details })
 }
 
-fn table_answer(file: &FileRequest, bytes: &[u8], kind: TableKind) -> FileAnswer {
+fn table_answer(file: &FileRequest, bytes: &[u8], byte_len: usize, kind: TableKind) -> FileAnswer {
     let mut answer = FileAnswer::default();
-    if bytes.len() > super::reader::SOURCE_MAX_BYTES {
+    if byte_len > super::reader::SOURCE_MAX_BYTES {
         answer.skip = Some(vec![index_diagnostic(
             "INDEX_TABLE_FILE_LIMIT",
             "Shared-index map table exceeds the fixed parsing-byte limit",
@@ -321,15 +325,16 @@ enum TableKind {
     Network(SymbolKind),
 }
 
-/// `indexFile` for one file's bytes.
-fn index_one(file: &FileRequest, bytes: &[u8]) -> FileAnswer {
+/// `indexFile` for one file's bytes; `byte_len` is the file's size, which is `bytes.len()` except
+/// for an oversized file the server did not send.
+fn index_one(file: &FileRequest, bytes: &[u8], byte_len: usize) -> FileAnswer {
     let lower = file.relative_path.to_lowercase();
     let display = file.display_path.as_str();
     if lower.ends_with(".yml") {
         let mut answer = FileAnswer::default();
         let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
         let (text, _) = decode(bytes);
-        let parsed = parse_localisation_detailed(&text, bytes.len(), bom);
+        let parsed = parse_localisation_detailed(&text, byte_len, bom);
         let positions = Positions::new(&text);
         let limits = parsed.diagnostics.retained_limits();
         if !limits.is_empty() {
@@ -366,15 +371,15 @@ fn index_one(file: &FileRequest, bytes: &[u8]) -> FileAnswer {
         None
     };
     if let Some(table) = table {
-        return table_answer(file, bytes, table);
+        return table_answer(file, bytes, byte_len, table);
     }
-    if !(lower.ends_with(".txt") || lower.ends_with(".gui") || lower.ends_with(".gfx")) || !bytes.contains(&b'=') {
+    if !(lower.ends_with(".txt") || lower.ends_with(".gui") || lower.ends_with(".gfx")) || (byte_len == bytes.len() && !bytes.contains(&b'=')) {
         return FileAnswer::default();
     }
     let mut answer = FileAnswer::default();
     let (text, lossy) = decode(bytes);
     let loss = if lossy { windows_1252_loss(bytes) } else { None };
-    let document = parse_clausewitz_detailed(&text, bytes.len(), loss.as_ref());
+    let document = parse_clausewitz_detailed(&text, byte_len, loss.as_ref());
     let positions = Positions::new(&text);
     let limits = document.diagnostics.retained_limits();
     if !limits.is_empty() {
@@ -436,6 +441,9 @@ pub fn index_files(request: &Request, payload: &[u8]) -> Result<Vec<u8>, Refusal
         .par_iter()
         .map(|file| {
             let owned_bytes;
+            if let (None, None, Some(size)) = (&file.path, file.payload, file.oversized_bytes) {
+                return serde_json::to_vec(&index_one(file, &[], size)).map_err(|e| Refusal { code: "internal", message: e.to_string() });
+            }
             let bytes: &[u8] = match (&file.path, file.payload) {
                 (Some(path), None) => {
                     // A file that is gone or no longer holds the bytes the server read (an edit
@@ -455,7 +463,7 @@ pub fn index_files(request: &Request, payload: &[u8]) -> Result<Vec<u8>, Refusal
                     return Err(Refusal { code: "invalid_request", message: format!("{} needs exactly one of path and payload", file.display_path) });
                 }
             };
-            serde_json::to_vec(&index_one(file, bytes)).map_err(|e| Refusal { code: "internal", message: e.to_string() })
+            serde_json::to_vec(&index_one(file, bytes, bytes.len())).map_err(|e| Refusal { code: "internal", message: e.to_string() })
         })
         .collect();
     let answers = answers?;
@@ -499,11 +507,12 @@ mod tests {
             definition_file: false,
             owned: true,
             shadowed: false,
+            oversized_bytes: None,
         }
     }
 
     fn answer(file: &FileRequest, text: &[u8]) -> Value {
-        serde_json::to_value(index_one(file, text)).unwrap()
+        serde_json::to_value(index_one(file, text, text.len())).unwrap()
     }
 
     #[test]
@@ -583,5 +592,25 @@ mod tests {
         assert_eq!(out["files"][0]["symbols"][0][1], "a");
         assert_eq!(out["files"][1], json!({ "retry": true }));
         assert_eq!(out["files"][2]["symbols"], json!([]));
+    }
+
+    #[test]
+    fn an_oversized_file_is_skipped_on_its_size_without_its_bytes() {
+        let over = super::super::reader::SOURCE_MAX_BYTES + 1;
+        let skip_code = |relative: &str, definition: bool| {
+            let mut oversized = file(relative);
+            oversized.oversized_bytes = Some(over);
+            oversized.definition_file = definition;
+            let request = Request { schema: REQUEST_SCHEMA.into(), files: vec![oversized] };
+            let out: Value = serde_json::from_slice(&index_files(&request, &[]).unwrap()).unwrap();
+            (out["files"][0]["skip"][0]["code"].clone(), out["files"][0]["skip"][0]["message"].clone())
+        };
+        let (code, message) = skip_code("common/ideas/huge.txt", false);
+        assert_eq!(code, "SOURCE_FILE_SIZE_LIMIT");
+        assert!(message.as_str().unwrap().starts_with("Clausewitz source exceeds"));
+        let (code, message) = skip_code("localisation/english/huge_l_english.yml", false);
+        assert_eq!(code, "SOURCE_FILE_SIZE_LIMIT");
+        assert!(message.as_str().unwrap().starts_with("Localisation source exceeds"));
+        assert_eq!(skip_code("map/definition.csv", true).0, "INDEX_TABLE_FILE_LIMIT");
     }
 }

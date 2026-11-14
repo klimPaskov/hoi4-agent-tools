@@ -10,6 +10,7 @@ import { ServiceError } from './result.js';
 import type { Diagnostic, SourceLocation } from './diagnostics.js';
 import type { SymbolKind } from './index.js';
 import type { ScannedFile } from './scanner.js';
+import { SOURCE_MAX_BYTES } from './source/index.js';
 
 /**
  * The shared symbol index built by the Rust engine (`hoi4-engine index-files`, ADR 0085). The
@@ -151,6 +152,9 @@ function frame(requests: readonly EngineIndexFileRequest[], inline: boolean): Fr
       owned,
       shadowed,
     };
+    // The index skips a file past the parsing ceiling on its size alone; its bytes stay here.
+    if (file.bytes.length > SOURCE_MAX_BYTES)
+      return { ...common, oversizedBytes: file.bytes.length };
     if (!inline && path.isAbsolute(file.absolutePath))
       return { ...common, path: file.absolutePath, sha256: file.sha256 };
     parts.push(file.bytes);
