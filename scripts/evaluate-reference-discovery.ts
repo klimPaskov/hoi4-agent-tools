@@ -14,6 +14,7 @@ import {
   testCases,
   validationCases,
 } from './reference-discovery-cases.js';
+import { commonBlindCases, commonDevCases } from './reference-common-cases.js';
 
 /**
  * Measures held-out documentation discovery against a real offline wiki and installed game.
@@ -33,10 +34,14 @@ const cases =
         ? testCases
         : process.argv[4] === '--fresh'
           ? freshCases
-          : discoveryCases;
+          : process.argv[4] === '--common-dev'
+            ? commonDevCases
+            : process.argv[4] === '--common-blind'
+              ? commonBlindCases
+              : discoveryCases;
 if (modRoot === undefined || gameRoot === undefined) {
   process.stderr.write(
-    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test|--fresh]\n',
+    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test|--fresh|--common-dev|--common-blind]\n',
   );
   process.exit(2);
 }

@@ -26,6 +26,7 @@ import {
   type ContinuousFocusPalettePlan,
   type FocusNodePlan,
   type FocusReferenceCatalog,
+  referenceCatalogSet,
   type FocusReferenceKind,
   type FocusTreePlan,
 } from './model.js';
@@ -115,9 +116,7 @@ function referenceSet(
   catalog: FocusReferenceCatalog | undefined,
   kind: FocusReferenceKind,
 ): ReadonlySet<string> | undefined {
-  const values = catalog?.[kind];
-  if (values === undefined) return undefined;
-  return values instanceof Set ? values : new Set(values);
+  return referenceCatalogSet(catalog?.[kind]);
 }
 
 function referenceSymbolKind(kind: FocusReferenceKind): SymbolKind {

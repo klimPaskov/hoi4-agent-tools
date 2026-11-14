@@ -24,7 +24,7 @@ In every other case a missing or unreadable file stops startup with `CONFIG_READ
 The automatic configuration works like this:
 
 - Starting from the server's working directory and moving up through its parents, the server takes the first folder that looks like a mod: it has `descriptor.mod`, a standard `common/` subfolder such as `common/national_focus`, or a standard content folder such as `events/` or `localisation/` with matching files.
-  The search stops at a game installation (a folder with `hoi4.exe`, `run_hoi4` or `steam_appid.txt`), and startup fails with `AUTO_MOD_ROOT_NOT_FOUND` when nothing is found.
+  The search stops at a game installation (a folder with `hoi4.exe`, `run_hoi4` or `steam_appid.txt`), and, when nothing is found, the server still starts with no workspace: the documentation tools (`hoi4.reference_search`, `hoi4.reference_read`, `hoi4.reference_context`) answer from the game and the fetched docs pack, and every mod tool answers `WORKSPACE_CONTEXT_NOT_FOUND`.
 - That folder becomes the only workspace, with the ID `auto_<folder name>`.
 - The game folder is the first existing folder among `HOI4_GAME_ROOT` and the standard Steam locations on Windows, Linux and macOS.
 - Server state and generated files use the default storage locations below.
