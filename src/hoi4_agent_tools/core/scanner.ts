@@ -1,4 +1,4 @@
-import { open, realpath, stat, type FileHandle } from 'node:fs/promises';
+import { open, readdir, realpath, stat, type FileHandle } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -173,8 +173,89 @@ function hiddenByReplacePath(
     );
 }
 
+/** What one walk of the installed game found, kept while the game's version files stay the same. */
+interface GameInventory {
+  fingerprint: string;
+  /** Every match of the patterns, including those a mod's replace_path hid. */
+  enumerated: number;
+  files: ScannedFile[];
+  bytes: number;
+}
+
+const GAME_INVENTORY_MAX_BYTES = 96 * 1024 * 1024;
+const GAME_INVENTORY_MAX_ENTRIES = 3;
+/** Files the game rewrites with every patch. A game folder without the first is always walked. */
+const GAME_VERSION_FILES = [
+  'hoi4_rev.txt',
+  'hoi4_branch.txt',
+  'clausewitz_rev.txt',
+  'checksum_manifest.txt',
+] as const;
+
+/**
+ * The state of the installed game as its version files and top-level folders show it, or
+ * undefined when the folder does not name its version and so cannot vouch for itself.
+ * HOI4_AGENT_FULL_GAME_SCAN set to any value turns the shortcut off, for a modder who edits the
+ * game's files in place without a patch.
+ */
+async function gameFingerprint(
+  rootPath: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
+  if (process.env.HOI4_AGENT_FULL_GAME_SCAN !== undefined) return undefined;
+  const parts: string[] = [];
+  try {
+    for (const name of GAME_VERSION_FILES) {
+      signal?.throwIfAborted();
+      const metadata = await stat(path.join(rootPath, name)).catch(() => undefined);
+      if (name === GAME_VERSION_FILES[0] && metadata === undefined) return undefined;
+      parts.push(
+        metadata === undefined
+          ? `${name}:-`
+          : `${name}:${metadata.size}:${metadata.mtimeMs}:${metadata.ctimeMs}`,
+      );
+    }
+    parts.push(`.:${(await stat(rootPath)).mtimeMs}`);
+    const folders = (await readdir(rootPath, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort(compareCodeUnits);
+    for (const name of folders) {
+      signal?.throwIfAborted();
+      const metadata = await stat(path.join(rootPath, name)).catch(() => undefined);
+      parts.push(`${name}:${metadata?.mtimeMs ?? '-'}`);
+    }
+  } catch (error) {
+    if (signal?.aborted === true) throw error;
+    return undefined;
+  }
+  return parts.join('|');
+}
+
+/** The scan a game inventory answers: the root, the patterns and what mods hide from the game. */
+function gameInventoryKey(
+  workspace: ResolvedWorkspace,
+  root: ResolvedRoot,
+  options: ScanOptions,
+): string {
+  const hidden = workspace.roots
+    .filter(
+      (owner) =>
+        (owner.kind === 'mod' || owner.kind === 'dependency') && owner.loadOrder > root.loadOrder,
+    )
+    .flatMap((owner) => owner.replacePaths.map((replacePath) => normalizeRelative(replacePath)))
+    .sort(compareCodeUnits);
+  return JSON.stringify([
+    path.resolve(root.path),
+    [...options.patterns].sort(compareCodeUnits),
+    [...(options.ignore ?? ['**/.hoi4-agent/**'])].sort(compareCodeUnits),
+    hidden,
+  ]);
+}
+
 export class WorkspaceScanner {
   readonly #sourceCache = new Map<string, CachedSourceBytes>();
+  readonly #gameInventories = new Map<string, GameInventory>();
   #sourceCacheBytes = 0;
   readonly #sourceCacheMaxBytes: number;
 
@@ -206,10 +287,23 @@ export class WorkspaceScanner {
     }
   }
 
+  private rememberGameInventory(key: string, inventory: GameInventory): void {
+    this.#gameInventories.delete(key);
+    // The buffers are shared with the source cache, so the limit keeps this to a few focused scans.
+    if (inventory.bytes > GAME_INVENTORY_MAX_BYTES) return;
+    this.#gameInventories.set(key, inventory);
+    while (this.#gameInventories.size > GAME_INVENTORY_MAX_ENTRIES) {
+      const oldest = this.#gameInventories.keys().next().value;
+      if (oldest === undefined) break;
+      this.#gameInventories.delete(oldest);
+    }
+  }
+
   /** Release retained source buffers after an idle MCP analysis batch. */
   public clearCaches(): void {
     this.#sourceCache.clear();
     this.#sourceCacheBytes = 0;
+    this.#gameInventories.clear();
   }
 
   /** Cache accounting used by lifecycle and regression tests. */
@@ -262,8 +356,43 @@ export class WorkspaceScanner {
     let enumeratedFiles = 0;
     for (const root of roots) {
       options.signal?.throwIfAborted();
-      // Re-enumerate every root: installing content or changing load order can
-      // invalidate a vanilla inventory just as it can a mod inventory.
+      // The installed game is walked file by file once. While its version files and top-level
+      // folders stay as they were, the next scan with the same patterns takes that inventory
+      // instead of opening, resolving and checking 1,400 files again. A game folder that does not
+      // name its version, or any other kind of root, is always walked.
+      const inventoryKey =
+        root.kind === 'game' ? gameInventoryKey(workspace, root, options) : undefined;
+      const fingerprint =
+        inventoryKey === undefined ? undefined : await gameFingerprint(root.path, options.signal);
+      const known =
+        inventoryKey === undefined || fingerprint === undefined
+          ? undefined
+          : this.#gameInventories.get(inventoryKey);
+      if (known !== undefined && known.fingerprint === fingerprint) {
+        enumeratedFiles += known.enumerated;
+        if (enumeratedFiles > maxFiles) {
+          throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit', {
+            files: enumeratedFiles,
+            limit: maxFiles,
+          });
+        }
+        if (totalBytes + known.bytes > maxBytes) {
+          throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit', {
+            bytes: totalBytes + known.bytes,
+            limit: maxBytes,
+          });
+        }
+        totalBytes += known.bytes;
+        for (const file of known.files) {
+          const { shadowedBy: _shadowedBy, ...fresh } = file;
+          result.push(fresh);
+        }
+        continue;
+      }
+      const resultBefore = result.length;
+      const enumeratedBefore = enumeratedFiles;
+      // Re-enumerate every other root: installing content or changing load order can
+      // invalidate a mod inventory.
       const matches = iterateFiles(options.patterns, {
         cwd: root.path,
         ignore: options.ignore ?? ['**/.hoi4-agent/**'],
@@ -404,6 +533,14 @@ export class WorkspaceScanner {
         } finally {
           await Promise.all(opened.map(({ handle }) => handle.close()));
         }
+      }
+      if (inventoryKey !== undefined && fingerprint !== undefined) {
+        this.rememberGameInventory(inventoryKey, {
+          fingerprint,
+          enumerated: enumeratedFiles - enumeratedBefore,
+          files: result.slice(resultBefore).map((file) => ({ ...file })),
+          bytes: result.slice(resultBefore).reduce((sum, file) => sum + file.bytes.length, 0),
+        });
       }
     }
     options.signal?.throwIfAborted();

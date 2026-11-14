@@ -1,4 +1,7 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { z } from 'zod/v4';
 import { compareCodeUnits } from '../core/canonical.js';
 import { locateEngineBinary } from '../core/engine-client.js';
@@ -78,17 +81,31 @@ export function engineProvinceRaster(
     payload: bitmap.bytes.length,
   })}\n`;
   const script = /\.(?:c|m)?js$/iu.test(located.path);
-  const child = spawnSync(
-    script ? process.execPath : located.path,
-    script ? [located.path, 'map-provinces'] : ['map-provinces'],
-    {
-      input: Buffer.concat([Buffer.from(header, 'utf8'), bitmap.bytes]),
-      maxBuffer: bitmap.width * bitmap.height * 4 + RESPONSE_JSON_MAX_BYTES,
-      timeout: MAP_PROVINCES_TIMEOUT_MS,
-      windowsHide: true,
-      shell: false,
-    },
-  );
+  // The frames go through files, not the child's pipes: a synchronous call that wrote hundreds of
+  // kilobytes to stdin and read as much from stdout hung until its timeout on macOS runners.
+  const directory = mkdtempSync(path.join(tmpdir(), 'hoi4-map-provinces-'));
+  const inputPath = path.join(directory, 'request');
+  const outputPath = path.join(directory, 'answer');
+  let child: SpawnSyncReturns<Buffer>;
+  let stdout: Buffer;
+  try {
+    writeFileSync(inputPath, Buffer.concat([Buffer.from(header, 'utf8'), bitmap.bytes]));
+    const args = ['map-provinces', '--input', inputPath, '--output', outputPath];
+    child = spawnSync(
+      script ? process.execPath : located.path,
+      script ? [located.path, ...args] : args,
+      {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        maxBuffer: RESPONSE_JSON_MAX_BYTES,
+        timeout: MAP_PROVINCES_TIMEOUT_MS,
+        windowsHide: true,
+        shell: false,
+      },
+    );
+    stdout = existsSync(outputPath) ? readFileSync(outputPath) : Buffer.alloc(0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
   const unavailable = (message: string): ServiceError =>
     new ServiceError('ENGINE_UNAVAILABLE', message, { reason: 'invalid_output' });
   if (child.error !== undefined)
@@ -99,7 +116,6 @@ export function engineProvinceRaster(
         reason: 'spawn_failed',
       },
     );
-  const stdout = child.stdout;
   const newline = stdout.indexOf(0x0a);
   if (newline < 0)
     throw unavailable(
