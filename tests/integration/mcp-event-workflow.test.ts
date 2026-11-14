@@ -203,6 +203,7 @@ agent.2.a: "Finish"
       code: 'EVENT_INSPECTED_PARTIAL',
       data: { summary: { trace: { truncated: true } } },
     });
+    expect(cut.diagnostics.map(({ code }) => code)).toContain('EVENT_TRACE_TRUNCATED');
 
     const rendered = resultOf(
       await client.callTool({
