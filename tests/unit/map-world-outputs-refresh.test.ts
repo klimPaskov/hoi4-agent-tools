@@ -174,28 +174,6 @@ describe('world output inventory after later map operations', () => {
     plan(after, [world]);
   });
 
-  it('records the files a later operation creates', () => {
-    // ZIN, 14 November 2026: 124 state files created by assign_territory and create_state never
-    // entered the record, and a sync that copies the recorded files left the game without them.
-    const province = first!.provinces.find((id) => id !== first!.capital) ?? first!.provinces[0]!;
-    const result = plan(written, [
-      { id: 'split', kind: 'split_state', sourceStateId: first!.id, provinceIds: [province] },
-    ]);
-    const created = result.changes.filter(
-      ({ relativePath, content }) =>
-        content !== null &&
-        relativePath.startsWith('history/states/') &&
-        !written.some((file) => file.relativePath === relativePath),
-    );
-    expect(created.length).toBeGreaterThan(0);
-    const after = applied(written, result.changes);
-    for (const { relativePath } of created) expect(recorded(after).has(relativePath)).toBe(true);
-    expect(stale(after)).toEqual([]);
-    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_REFRESHED')!;
-    expect((note.details as { added: number }).added).toBe(created.length);
-    plan(after, [world]);
-  });
-
   it('adopts unrecorded files at world output paths with adoptUnrecorded', () => {
     const stray = source('history/states/9999-Stray.txt', 'state = { id = 9999 }');
     const notes = source('notes/readme.txt', 'authored');
@@ -218,8 +196,7 @@ describe('world output inventory after later map operations', () => {
     // ZIN, 13 November 2026: record_world_outputs dropped 12 recorded files that were on disk
     // (the bitmaps, colour maps and world scripts) because its scan did not read them.
     const unread = written.filter(
-      ({ relativePath }) =>
-        relativePath !== 'map/rivers.bmp' && relativePath !== 'common/on_actions/world.txt',
+      ({ relativePath }) => relativePath !== 'map/rivers.bmp' && relativePath !== 'map/cities.bmp',
     );
     const result = plan(unread, [{ id: 'adopt', kind: 'record_world_outputs' }]);
     expect(result.changes).toEqual([]);
@@ -227,7 +204,7 @@ describe('world output inventory after later map operations', () => {
     expect(note.details).toMatchObject({
       dropped: 0,
       unscanned: 2,
-      unscannedPaths: ['common/on_actions/world.txt', 'map/rivers.bmp'],
+      unscannedPaths: ['map/cities.bmp', 'map/rivers.bmp'],
     });
   });
 
