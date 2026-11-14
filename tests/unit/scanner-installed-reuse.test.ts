@@ -79,6 +79,24 @@ describe('scanning the installed game again', () => {
     );
   });
 
+  it('does not trust a retained game file that a caller wrote into', async () => {
+    const { resolver } = await fixture();
+    const scanner = new WorkspaceScanner();
+    const first = await scan(scanner, resolver);
+    const game = first.find(({ relativePath }) => relativePath.endsWith('game_ideas.txt'))!;
+    const original = game.bytes.toString('utf8');
+    game.bytes.fill(0);
+    tracking.readFiles.length = 0;
+
+    const second = await scan(scanner, resolver);
+    expect(tracking.readFiles).toContain('game_ideas.txt');
+    expect(
+      second
+        .find(({ relativePath }) => relativePath.endsWith('game_ideas.txt'))!
+        .bytes.toString('utf8'),
+    ).toBe(original);
+  });
+
   it('reads a game file again after a write that keeps its size and nearly its mtime', async () => {
     const { resolver, gameFile } = await fixture();
     const scanner = new WorkspaceScanner();

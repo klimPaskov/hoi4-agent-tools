@@ -328,11 +328,16 @@ export class WorkspaceScanner {
               group.map(async (source) => {
                 // The installed game changes only when the game updates, and a file's identity
                 // moves with every write, so an unchanged game file keeps its bytes and hash
-                // instead of being read and hashed again on every call. Mod files are always read.
+                // instead of being read from disk again on every call. Mod files are always read.
+                // The retained buffer is shared with earlier results, so it must still match its
+                // hash: a caller that wrote into one must not change what a later scan returns.
                 const retained = installedRoot(root.kind)
                   ? this.#sourceCache.get(this.cacheKey(source.absolutePath))
                   : undefined;
-                if (retained?.identity === fileIdentity(source.metadata)) {
+                if (
+                  retained?.identity === fileIdentity(source.metadata) &&
+                  sha256Bytes(retained.bytes) === retained.sha256
+                ) {
                   await verifySource(root, source);
                   options.signal?.throwIfAborted();
                   return { bytes: retained.bytes, sha256: retained.sha256 };
