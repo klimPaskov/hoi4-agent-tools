@@ -20,7 +20,6 @@ import {
   rollupRepeatedSoftDiagnostics,
 } from '../core/diagnostic-rollup.js';
 import { CoreEngine } from '../core/engine.js';
-import { SymbolIndex } from '../core/index.js';
 import { RenderBudget } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -930,7 +929,7 @@ export class AgentNudger {
       states: workspace.registration.roots.states,
       localisation: workspace.registration.roots.localisation,
     };
-    const selectorSnapshot = await this.engine.scan(
+    const selectorSnapshot = await this.engine.scanFiles(
       workspaceId,
       { patterns: defaultMapPatterns(sourceRoots) },
       principal,
@@ -943,20 +942,20 @@ export class AgentNudger {
         ? BORDER_BITMAP_SELECTORS
         : PROVINCE_BITMAP_SELECTORS,
     );
-    const contentSnapshot = await this.engine.scan(
+    const contentSnapshot = await this.engine.scanFiles(
       workspaceId,
       { patterns: [...sourceTextPatterns(sourceRoots), ...bitmapPatterns] },
       principal,
       signal,
     );
-    const locatorSnapshot = await this.engine.scan(
+    const locatorSnapshot = await this.engine.scanFiles(
       workspaceId,
       { patterns: ['**/*.asset'], rootKinds: ['mod', 'fixture'] },
       principal,
       signal,
     );
     const externalScriptSnapshot = includeExternalScriptReferences
-      ? await this.engine.scan(
+      ? await this.engine.scanFiles(
           workspaceId,
           {
             patterns: [...MAP_REFERENCE_SCRIPT_PATTERNS],
@@ -966,7 +965,7 @@ export class AgentNudger {
         )
       : undefined;
     const worldContextSnapshot = includeWorldContext
-      ? await this.engine.scan(
+      ? await this.engine.scanFiles(
           workspaceId,
           {
             patterns: [
@@ -982,7 +981,7 @@ export class AgentNudger {
         )
       : undefined;
     const generatedOutputsSnapshot = includeWorldContext
-      ? await this.engine.scan(
+      ? await this.engine.scanFiles(
           workspaceId,
           {
             rootKinds: ['mod'],
@@ -1004,7 +1003,7 @@ export class AgentNudger {
       : undefined;
     // Appearance validation reads the bitmaps and colour maps the mod itself ships.
     const appearanceSnapshot = includeAppearance
-      ? await this.engine.scan(
+      ? await this.engine.scanFiles(
           workspaceId,
           {
             rootKinds: ['mod', 'fixture'],
@@ -1030,7 +1029,7 @@ export class AgentNudger {
       : undefined;
     // Scripts that may name a continent, read when a new world drops the inherited continents.
     const continentSnapshot = includeContinentReferences
-      ? await this.engine.scan(
+      ? await this.engine.scanFiles(
           workspaceId,
           { patterns: [...CONTINENT_REFERENCE_SCRIPT_PATTERNS] },
           principal,
@@ -1074,7 +1073,7 @@ export class AgentNudger {
       workspaceId,
       revision,
       files,
-      index: MapWorkspaceIndex.build(files, sourceRoots, SymbolIndex.build(files)),
+      index: MapWorkspaceIndex.build(files, sourceRoots),
     };
   }
 

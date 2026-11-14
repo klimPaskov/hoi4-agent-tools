@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
-import { SymbolIndex } from '../../src/hoi4_agent_tools/core/index.js';
 import { SOURCE_TOKEN_LIMIT } from '../../src/hoi4_agent_tools/core/source/index.js';
 import { TransactionManager } from '../../src/hoi4_agent_tools/core/transactions.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
@@ -805,15 +804,11 @@ describe('Agent Nudger map model and operations', () => {
       scannedState(`history/states/${index + 1}-STATE.txt`, index + 1, 0, 'mod'),
     );
     expect(() =>
-      MapWorkspaceIndex.build(
-        files,
-        {
-          map: ['map'],
-          states: ['history/states'],
-          localisation: ['localisation', 'localisation_synced'],
-        },
-        SymbolIndex.build([]),
-      ),
+      MapWorkspaceIndex.build(files, {
+        map: ['map'],
+        states: ['history/states'],
+        localisation: ['localisation', 'localisation_synced'],
+      }),
     ).toThrowError(expect.objectContaining({ code: 'MAP_MODEL_BUDGET_BLOCKED' }));
   });
 

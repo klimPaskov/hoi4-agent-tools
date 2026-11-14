@@ -804,6 +804,23 @@
           "excludes": "error"
         }
       ]
+    },
+    {
+      "id": "vanilla.map.full-inspect",
+      "surface": "map",
+      "corpus": "vanilla",
+      "title": "A full map inspection validates the vanilla map and finds Brandenburg",
+      "evidence": "history/states/64-Brandenburg.txt.",
+      "tool": "hoi4.map_inspect",
+      "arguments": {
+        "query": "Brandenburg"
+      },
+      "expect": [
+        {
+          "path": "**",
+          "includes": 64
+        }
+      ]
     }
   ]
 }

@@ -491,3 +491,28 @@ describe('assign_territory seeds in water', () => {
     expect(index.definitionsById.get(nearest)?.type).toBe('land');
   });
 });
+
+describe('assign_territory with undefined tags', () => {
+  it('warns for each country tag no country_tags file declares', () => {
+    // ZIN map lane, 13 November 2026: new realms are assigned before their country files exist,
+    // and nothing said the game would not know their owners.
+    const result = assign({
+      countries: countries((position) => (position === 0 ? { tag: 'AAA' } : {})),
+    });
+    expect(result.blockers).toEqual([]);
+    const warned = result.diagnostics.filter(({ code }) => code === 'MAP_TERRITORY_TAG_UNDEFINED');
+    expect(warned.map(({ details }) => details?.tag)).toEqual(TAGS.slice(1));
+    expect(warned.every(({ severity }) => severity === 'warning')).toBe(true);
+    const declared = assign({
+      countries: countries((position) => ({
+        tag: ['AAA', 'BBB', 'CCC', 'DDD', 'AAA'][position],
+      })).slice(0, 4),
+    });
+    const strict = assign({ strictTags: true });
+    expect(strict.blockers.map(({ code }) => code)).toEqual(['MAP_TERRITORY_TAG_UNDEFINED']);
+    expect(strict.changes).toEqual([]);
+    expect(declared.diagnostics.some(({ code }) => code === 'MAP_TERRITORY_TAG_UNDEFINED')).toBe(
+      false,
+    );
+  });
+});

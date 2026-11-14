@@ -1004,6 +1004,12 @@ const territoryOperation = z
       .boolean()
       .optional()
       .describe('Growth never crosses a group boundary, so a people keeps its own countries.'),
+    strictTags: z
+      .boolean()
+      .optional()
+      .describe(
+        'Refuse the operation when a country or overlord tag is not declared in common/country_tags; by default that is a warning (MAP_TERRITORY_TAG_UNDEFINED).',
+      ),
   })
   .strict();
 const repartitionOperation = z
