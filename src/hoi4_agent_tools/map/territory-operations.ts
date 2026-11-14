@@ -41,6 +41,7 @@ import {
   type IslandPolicy,
   type TerritoryCountry,
   type TerritoryNote,
+  type TerritoryOptions,
   type TerritoryResult,
   type TerritoryStats,
 } from './territory.js';
@@ -83,6 +84,8 @@ export interface AssignTerritoryCountry {
   regions?: number[];
   /** Grow this country inside the territory of its overlord. */
   overlord?: string;
+  /** Own exactly the seeds and forced land, never growing. */
+  fixed?: boolean;
   /** Relabel the finished territory to another listed country, keeping this tag as a core. */
   mergeInto?: string;
   /** Extra states (or provinces' states) this country holds a core on. */
@@ -119,6 +122,12 @@ export interface AssignTerritoryOperation extends MapOperationBase {
   borderTargets?: BorderTargetsInput;
   /** Thresholds of the natural lands that `landIds` and `{ land }` seeds name. */
   landOptions?: Omit<NaturalLandsOptions, 'signal'>;
+  /** Culture or people group of provinces, by province id. */
+  groups?: Record<string, string>;
+  /** Extra cost of growing across a group boundary; default 2 (three times the cost). */
+  groupPenalty?: number;
+  /** Growth never crosses a group boundary. */
+  groupHard?: boolean;
   /** Refuse instead of warning when a tag gets land that no country_tags file declares. */
   strictTags?: boolean;
 }
@@ -386,6 +395,36 @@ function buildAtomModel(
   };
 }
 
+/** The land province nearest the centre of a water province, searched within 256 pixels. */
+function nearestLandProvince(world: TerritoryWorld, province: number): number | undefined {
+  const raster = world.index.raster;
+  if (raster === undefined) return undefined;
+  const { width, height, provinceIds } = raster;
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (let pixel = 0; pixel < provinceIds.length; pixel += 1)
+    if (provinceIds[pixel] === province) {
+      sumX += pixel % width;
+      sumY += Math.floor(pixel / width);
+      count += 1;
+    }
+  if (count === 0) return undefined;
+  const cx = Math.round(sumX / count);
+  const cy = Math.round(sumY / count);
+  for (let radius = 1; radius <= 256; radius += 1)
+    for (let dy = -radius; dy <= radius; dy += 1)
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const y = cy + dy;
+        if (y < 0 || y >= height) continue;
+        const x = (((cx + dx) % width) + width) % width;
+        const id = provinceIds[y * width + x]!;
+        if (isLandProvince(world.table, id)) return id;
+      }
+  return undefined;
+}
+
 function resolveProvince(
   world: TerritoryWorld,
   model: AtomModel,
@@ -397,12 +436,16 @@ function resolveProvince(
     refuse('MAP_TERRITORY_PROVINCE_UNKNOWN', `${label}: province ${province} does not exist`, {
       province,
     });
-  if (!isLandProvince(table, province))
+  if (!isLandProvince(table, province)) {
+    const nearest = nearestLandProvince(world, province);
     refuse(
       'MAP_TERRITORY_SEED_IN_WATER',
-      `${label}: province ${province} is not land (sea and lake provinces cannot be owned)`,
-      { province },
+      `${label}: province ${province} is not land (sea and lake provinces cannot be owned)${
+        nearest === undefined ? '' : `; the nearest land province is ${nearest}`
+      }`,
+      { province, ...(nearest === undefined ? {} : { nearestLandProvince: nearest }) },
     );
+  }
   const atom = model.atoms.atomOfProvince[province]!;
   if (atom < 0)
     refuse(
@@ -680,6 +723,42 @@ function growInRequestTerms(
   }
 }
 
+/**
+ * The culture groups of `assign_territory` on the atoms: a province atom takes its province's
+ * group, a state atom the group most of its land provinces have (the lowest name on a tie).
+ */
+function atomGroups(
+  world: TerritoryWorld,
+  model: AtomModel,
+  operation: AssignTerritoryOperation,
+): Pick<TerritoryOptions, 'groups' | 'groupPenalty' | 'groupHard'> {
+  const input = operation.groups;
+  if (input === undefined || Object.keys(input).length === 0) return {};
+  const names = [...new Set(Object.values(input))].sort();
+  const code = new Map(names.map((name, position) => [name, position]));
+  const votes = new Map<number, Map<number, number>>();
+  for (const [key, name] of Object.entries(input)) {
+    const province = Number(key);
+    if (!Number.isInteger(province) || !world.index.definitionsById.has(province))
+      refuse('MAP_TERRITORY_PROVINCE_UNKNOWN', `groups: province ${key} does not exist`, {
+        province: key,
+      });
+    const atom = model.atoms.atomOfProvince[province] ?? -1;
+    if (atom < 0) continue;
+    const tally = votes.get(atom) ?? new Map<number, number>();
+    tally.set(code.get(name)!, (tally.get(code.get(name)!) ?? 0) + 1);
+    votes.set(atom, tally);
+  }
+  const groups = new Int32Array(model.atoms.count).fill(-1);
+  for (const [atom, tally] of votes)
+    groups[atom] = [...tally].sort(([a, x], [b, y]) => y - x || a - b)[0]![0];
+  return {
+    groups,
+    ...(operation.groupPenalty === undefined ? {} : { groupPenalty: operation.groupPenalty }),
+    ...(operation.groupHard === true ? { groupHard: true } : {}),
+  };
+}
+
 function limited(values: readonly number[], limit = 1_000): number[] {
   return values.slice(0, limit);
 }
@@ -736,6 +815,7 @@ export function* applyAssignTerritory(
       homeRegions: country.regions ?? [],
     };
     if (country.overlord !== undefined) entry.overlord = country.overlord;
+    if (country.fixed === true) entry.fixed = true;
     if (country.mergeInto !== undefined) entry.mergeInto = country.mergeInto;
     countries.push(entry);
     yield;
@@ -761,6 +841,7 @@ export function* applyAssignTerritory(
         ? {}
         : { maxShareChange: operation.smoothing.maxShareChange }),
     },
+    ...atomGroups(world, model, operation),
     ...(signal === undefined ? {} : { signal }),
   } as const;
   const result: TerritoryResult = growInRequestTerms(model, countries, options);

@@ -961,6 +961,12 @@ const territoryCountrySchema = z
       .optional()
       .describe('Strategic regions this country prefers to grow in.'),
     overlord: tagSchema.optional().describe('Grow this country inside its overlord.'),
+    fixed: z
+      .boolean()
+      .optional()
+      .describe(
+        'The country owns exactly its seeds and forced land and never grows, for a realm whose land is already settled.',
+      ),
     mergeInto: tagSchema
       .optional()
       .describe(
@@ -1036,6 +1042,23 @@ const territoryOperation = z
       .describe(
         'Thresholds of the natural lands that landIds and { land } seeds name; use the same options as the hoi4.map_inspect call that listed them.',
       ),
+    groups: z
+      .record(z.string().regex(/^\d{1,6}$/u), z.string().min(1).max(64))
+      .refine((value) => Object.keys(value).length <= 65_000, 'At most 65,000 provinces')
+      .optional()
+      .describe(
+        'Culture or people group of provinces, { provinceId: group }. Growth across a group boundary costs like a ridge (groupPenalty), or never happens with groupHard. A state atom takes the group of most of its provinces.',
+      ),
+    groupPenalty: z
+      .number()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe('A step across a group boundary costs 1 + groupPenalty times more; default 2.'),
+    groupHard: z
+      .boolean()
+      .optional()
+      .describe('Growth never crosses a group boundary, so a people keeps its own countries.'),
     strictTags: z
       .boolean()
       .optional()
