@@ -128,6 +128,18 @@ export interface ScanOptions {
 interface CachedSourceBytes {
   sha256: string;
   bytes: Buffer;
+  /** The file's identity when read, kept only for installed game files. */
+  identity?: string;
+}
+
+/** Roots that hold the installed game, which only a game update changes. */
+function installedRoot(kind: RootKind): boolean {
+  return kind === 'game' || kind === 'dlc';
+}
+
+/** Device, file number, size and both change times: any write to the file moves one of them. */
+function fileIdentity(metadata: Stats): string {
+  return `${metadata.dev}:${metadata.ino}:${metadata.size}:${metadata.mtimeMs}:${metadata.ctimeMs}`;
 }
 
 function normalizeRelative(value: string): string {
@@ -314,6 +326,22 @@ export class WorkspaceScanner {
             }
             const reads = await Promise.allSettled(
               group.map(async (source) => {
+                // The installed game changes only when the game updates, and a file's identity
+                // moves with every write, so an unchanged game file keeps its bytes and hash
+                // instead of being read from disk again on every call. Mod files are always read.
+                // The retained buffer is shared with earlier results, so it must still match its
+                // hash: a caller that wrote into one must not change what a later scan returns.
+                const retained = installedRoot(root.kind)
+                  ? this.#sourceCache.get(this.cacheKey(source.absolutePath))
+                  : undefined;
+                if (
+                  retained?.identity === fileIdentity(source.metadata) &&
+                  sha256Bytes(retained.bytes) === retained.sha256
+                ) {
+                  await verifySource(root, source);
+                  options.signal?.throwIfAborted();
+                  return { bytes: retained.bytes, sha256: retained.sha256 };
+                }
                 let bytes: Buffer;
                 try {
                   bytes = await readBoundedFile(
@@ -338,7 +366,7 @@ export class WorkspaceScanner {
                   );
                 await verifySource(root, source);
                 options.signal?.throwIfAborted();
-                return bytes;
+                return { bytes, sha256: undefined };
               }),
             );
             const readFailure = reads.find((entry) => entry.status === 'rejected');
@@ -347,14 +375,18 @@ export class WorkspaceScanner {
               if (read.status !== 'fulfilled') continue;
               const source = group[index]!;
               const cacheKey = this.cacheKey(source.absolutePath);
-              const observed = read.value;
-              const sha256 = sha256Bytes(observed);
+              const observed = read.value.bytes;
+              const sha256 = read.value.sha256 ?? sha256Bytes(observed);
               const cached = this.#sourceCache.get(cacheKey);
               const bytes =
                 cached?.sha256 === sha256 && cached.bytes.equals(observed)
                   ? cached.bytes
                   : observed;
-              this.retainSource(cacheKey, { sha256, bytes });
+              this.retainSource(cacheKey, {
+                sha256,
+                bytes,
+                ...(installedRoot(root.kind) ? { identity: fileIdentity(source.metadata) } : {}),
+              });
               totalBytes += bytes.length;
               result.push({
                 absolutePath: source.absolutePath,
