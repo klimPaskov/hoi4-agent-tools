@@ -1,4 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { locateEngineBinary } from './engine-client.js';
@@ -20,7 +22,7 @@ import type { ScannedFile } from './scanner.js';
 
 export const INDEX_FILES_REQUEST_SCHEMA = 'hoi4-index-files-request/1';
 const INDEX_FILES_TIMEOUT_MS = 300_000;
-const OUTPUT_MAX_BYTES = 2 * 1024 * 1024 * 1024 - 1;
+const STDERR_MAX_BYTES = 1024 * 1024;
 
 /** Start line, column and UTF-16 offset, then the end's; the path and symbol are added here. */
 type Loc = [number, number, number, number, number, number];
@@ -207,17 +209,34 @@ function runSync({ header, payload }: Frame): unknown {
   if (!('path' in located))
     throw new ServiceError('ENGINE_UNAVAILABLE', located.message, { reason: located.reason });
   const script = /\.(?:c|m)?js$/iu.test(located.path);
-  const child = spawnSync(
-    script ? process.execPath : located.path,
-    script ? [located.path, 'index-files'] : ['index-files'],
-    {
-      input: Buffer.concat([Buffer.from(`${JSON.stringify(header)}\n`, 'utf8'), payload]),
-      maxBuffer: OUTPUT_MAX_BYTES,
-      timeout: INDEX_FILES_TIMEOUT_MS,
-      windowsHide: true,
-      shell: false,
-    },
-  );
+  // The frames go through files, as for the map raster: a synchronous call that moved large
+  // frames through the child's pipes hung until its timeout on macOS runners.
+  const directory = mkdtempSync(path.join(tmpdir(), 'hoi4-index-files-'));
+  const inputPath = path.join(directory, 'request');
+  const outputPath = path.join(directory, 'answer');
+  let child: SpawnSyncReturns<Buffer>;
+  let output: Buffer;
+  try {
+    writeFileSync(
+      inputPath,
+      Buffer.concat([Buffer.from(`${JSON.stringify(header)}\n`, 'utf8'), payload]),
+    );
+    const args = ['index-files', '--input', inputPath, '--output', outputPath];
+    child = spawnSync(
+      script ? process.execPath : located.path,
+      script ? [located.path, ...args] : args,
+      {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        maxBuffer: STDERR_MAX_BYTES,
+        timeout: INDEX_FILES_TIMEOUT_MS,
+        windowsHide: true,
+        shell: false,
+      },
+    );
+    output = existsSync(outputPath) ? readFileSync(outputPath) : Buffer.alloc(0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
   if (child.error !== undefined)
     throw new ServiceError(
       'ENGINE_UNAVAILABLE',
@@ -228,7 +247,7 @@ function runSync({ header, payload }: Frame): unknown {
     );
   let line: unknown;
   try {
-    line = JSON.parse(child.stdout.toString('utf8'));
+    line = JSON.parse(output.toString('utf8'));
   } catch {
     throw new ServiceError(
       'ENGINE_UNAVAILABLE',
