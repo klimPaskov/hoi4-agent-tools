@@ -5625,6 +5625,124 @@ function renumberStates(
  * adjacent sea province, or the harbour's land province), else the province under its map
  * coordinates. A line neither places is reported.
  */
+/**
+ * Give every state this request created or reshaped the state-level building positions it lacks
+ * (issue 193): a split, a created state or a province-unit regrouping has none of its own, and
+ * the game reports a missing air base, rocket site or gun emplacement for it. A building type
+ * counts as state-level when every state of the map before the request had a line for it; only
+ * lines of those types that a changed state lacks are added, as `regenerate_map_positions` with
+ * mode `missing` places them. Existing lines are never moved or removed.
+ */
+function fillStateBuildingPositions(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operationId: string,
+): Diagnostic[] {
+  const typesOf = (on: MapWorkspaceIndex): Map<number, Set<string>> => {
+    const byState = new Map<number, Set<string>>();
+    for (const { stateId, building } of on.buildingPositions) {
+      const set = byState.get(stateId) ?? new Set<string>();
+      set.add(building);
+      byState.set(stateId, set);
+    }
+    return byState;
+  };
+  const baseTypes = typesOf(base);
+  const landStates = base.states.filter(({ provinces }) => provinces.length > 0);
+  if (landStates.length === 0) return [];
+  const required = [...(baseTypes.get(landStates[0]!.id) ?? [])].filter((building) =>
+    landStates.every(({ id }) => baseTypes.get(id)?.has(building) === true),
+  );
+  if (required.length === 0) return [];
+  const before = new Map(
+    base.states.map(({ id, provinces }) => [id, [...provinces].sort((a, b) => a - b).join(',')]),
+  );
+  const index = currentIndex(base, changes);
+  const types = typesOf(index);
+  const touched = index.states
+    .filter(
+      ({ id, provinces }) =>
+        provinces.length > 0 &&
+        before.get(id) !== [...provinces].sort((a, b) => a - b).join(',') &&
+        required.some((building) => types.get(id)?.has(building) !== true),
+    )
+    .map(({ id }) => id)
+    .sort((a, b) => a - b);
+  if (touched.length === 0) return [];
+  const document = index.buildingPositions[0]?.document;
+  if (document === undefined) return [];
+  let planned: ReturnType<typeof planMapPositions>;
+  try {
+    planned = planMapPositions(index, {
+      positions: ['buildings'],
+      stateIds: touched,
+      mode: 'missing',
+    });
+  } catch (error) {
+    if (!(error instanceof ServiceError)) throw error;
+    return [
+      {
+        code: 'MAP_STATE_BUILDING_POSITIONS_UNAVAILABLE',
+        severity: 'warning',
+        category: 'map',
+        operationId,
+        message: `The building positions of the ${touched.length} state(s) this request created or reshaped could not be filled in (${error.code}); run regenerate_map_positions with positions ["buildings"] and mode "missing" for them`,
+        details: { reason: error.code, stateIds: touched.slice(0, 200) },
+      },
+    ];
+  }
+  // Keep only the new lines of required types for the changed states, appended to the file.
+  const relativePath = document.file.relativePath;
+  const current =
+    changes.get(normalizeRelative(relativePath))?.content ??
+    index.sourceFiles.find(
+      (file) => file.shadowedBy === undefined && file.relativePath === relativePath,
+    )?.bytes;
+  if (current === undefined) return [];
+  const text = Buffer.from(current).toString('utf8');
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  const existing = new Set(text.split(/\r?\n/u).map((line) => line.trim()));
+  const wanted = new Set(required);
+  const touchedIds = new Set(touched);
+  const added: string[] = [];
+  for (const file of planned) {
+    if (file.relativePath !== relativePath) continue;
+    for (const line of file.content.toString('utf8').split(/\r?\n/u)) {
+      const trimmed = line.trim();
+      if (trimmed === '' || existing.has(trimmed)) continue;
+      const [state, building] = trimmed.split(';');
+      if (!touchedIds.has(Number(state)) || !wanted.has(building ?? '')) continue;
+      existing.add(trimmed);
+      added.push(trimmed);
+    }
+  }
+  if (added.length === 0) return [];
+  const separator = text.length === 0 || text.endsWith('\n') ? '' : newline;
+  const tail = text.endsWith('\n') ? newline : '';
+  addChange(
+    changes,
+    relativePath,
+    Buffer.from(`${text}${separator}${added.join(newline)}${tail}`, 'utf8'),
+    operationId,
+    'text/plain',
+  );
+  return [
+    {
+      code: 'MAP_STATE_BUILDING_POSITIONS_ADDED',
+      severity: 'info',
+      category: 'map',
+      operationId,
+      message: `Added ${added.length} missing state building position line(s) for the ${touched.length} state(s) this request created or reshaped`,
+      details: {
+        lines: added.length,
+        states: touched.length,
+        stateIds: touched.slice(0, 200),
+        buildings: required,
+      },
+    },
+  ];
+}
+
 function reassignOrphanBuildingPositions(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -6780,6 +6898,7 @@ function* planMapOperationSteps(
           requested.add(operation.toId);
       }
       diagnostics.push(...reassignOrphanBuildingPositions(base, changes, lastOperation.id));
+      diagnostics.push(...fillStateBuildingPositions(base, changes, lastOperation.id));
       const closed = closeStateIdHoles(base, changes, lastOperation.id, requested);
       diagnostics.push(...closed.diagnostics);
       // Reports name the ids the states have after the write.
