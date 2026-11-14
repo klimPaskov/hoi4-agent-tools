@@ -80,8 +80,8 @@ export function jobAnalysisCheckpoints(context: JobExecutionContext): AnalysisCh
       context.signal.throwIfAborted();
       // The state is the analysis's own in-memory value. Canonical JSON already refuses what
       // JSON cannot hold, so only the identity fields are checked here: a deep z.json() pass
-      // over a large frontier cost more than the analysis itself (25 s of a 141 s Chaos Redux
-      // event query). `load` still validates the whole envelope it reads back from disk.
+      // over a large frontier cost more than the analysis itself (25 s of a 141 s event query on a
+      // large mod). `load` still validates the whole envelope it reads back from disk.
       saveIdentitySchema.parse({ key, sourceRevision });
       const content = canonicalJson({ version: 1, key, sourceRevision, state });
       const stateHash = sha256Bytes(content);

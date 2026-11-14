@@ -111,7 +111,7 @@ function semanticStateAccess(access: EventStateAccess): unknown {
  * Edges and state accesses share their condition objects: every effect inside an option
  * carries the option's guards. Hashing each condition once and naming it by its digest keeps
  * the hash a function of the same semantic content while the bytes hashed stay proportional
- * to the distinct conditions. On Chaos Redux the inline form hashed about 3 GB per graph.
+ * to the distinct conditions. On a large mod the inline form hashed about 3 GB per graph.
  */
 const conditionDigests = new WeakMap<EventCondition, string>();
 
