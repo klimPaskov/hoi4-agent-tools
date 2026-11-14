@@ -74,6 +74,39 @@ function isFile(candidate: string): boolean {
   }
 }
 
+/**
+ * Every platform a release ships `hoi4-engine` for (ADR 0074), as `<process.platform>-<process.arch>`.
+ * Other platforms, such as macOS on Intel (`darwin-x64`), get no bundled binary.
+ */
+export const ENGINE_BUNDLE_PLATFORMS = [
+  'darwin-arm64',
+  'linux-arm64',
+  'linux-x64',
+  'win32-x64',
+] as const;
+export type EngineBundlePlatform = (typeof ENGINE_BUNDLE_PLATFORMS)[number];
+
+const PLATFORM_NAMES: Readonly<Record<EngineBundlePlatform, string>> = {
+  'darwin-arm64': 'macOS on Apple silicon',
+  'linux-arm64': 'Linux arm64',
+  'linux-x64': 'Linux x64',
+  'win32-x64': 'Windows x64',
+};
+
+/**
+ * What a tool answers when no engine binary is found: what is missing and how to get one. A
+ * platform the release does not ship for needs a local build; a shipped platform whose binary is
+ * missing needs a reinstall.
+ */
+export function missingEngineMessage(platform: string, arch: string): string {
+  const target = `${platform}-${arch}`;
+  const supported = ENGINE_BUNDLE_PLATFORMS.map((name) => PLATFORM_NAMES[name]).join(', ');
+  const build = `build it from the repository's engine/ folder (cargo build --release -p hoi4-engine-cli) and set ${ENGINE_BINARY_ENV} to the binary's absolute path`;
+  return (ENGINE_BUNDLE_PLATFORMS as readonly string[]).includes(target)
+    ? `The hoi4-engine binary for ${target} is missing from this installation. Reinstall hoi4-agent-tools (npm install --global hoi4-agent-tools), or ${build}.`
+    : `hoi4-agent-tools ships the hoi4-engine binary for ${supported}, not for ${target}. To use the tools that need it here, ${build}.`;
+}
+
 export const ENGINE_BUNDLE_MANIFEST_SCHEMA = 'hoi4-engine-bundle/1';
 
 /** `engine/bin/manifest.json`: the SHA-256 and size of every bundled binary, keyed by `<platform>-<arch>`. */
@@ -195,7 +228,7 @@ export function locateEngineBinary(
   }
   return {
     reason: 'binary_not_found',
-    message: `No hoi4-engine binary for ${process.platform}-${process.arch} is installed with this package and ${ENGINE_BINARY_ENV} is not set`,
+    message: missingEngineMessage(process.platform, process.arch),
   };
 }
 
