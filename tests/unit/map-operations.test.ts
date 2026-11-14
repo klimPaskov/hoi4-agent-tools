@@ -3397,9 +3397,11 @@ describe('Agent Nudger map model and operations', () => {
     });
     expect(result.plan.blockers).toEqual([]);
     expect(result.transaction.validation.passed).toBe(true);
+    // The new state also gets its state-level building lines (issue 193).
     expect(result.transaction.files.map(({ relativePath }) => relativePath)).toEqual([
       'history/states/1-ONE.txt',
       'history/states/3-AGENT_STATE.txt',
+      'map/buildings.txt',
     ]);
     expect(await readFile(sourcePath)).toEqual(original);
     await expect(
