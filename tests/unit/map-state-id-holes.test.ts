@@ -1,0 +1,233 @@
+import { describe, expect, it } from 'vitest';
+import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
+import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
+import type { ProposedFileChange } from '../../src/hoi4_agent_tools/core/transactions.js';
+import { MapWorkspaceIndex } from '../../src/hoi4_agent_tools/map/model.js';
+import { planMapOperations, type MapOperation } from '../../src/hoi4_agent_tools/map/operations.js';
+
+/**
+ * Issue 182: the game needs every state id from 1 to the highest, and a merge or a territory edit
+ * that removes a state used to leave its id empty ("Missing State ID", then a crash at setup).
+ */
+
+function source(relativePath: string, content: Uint8Array | string): ScannedFile {
+  const bytes = Buffer.from(content);
+  return {
+    relativePath,
+    absolutePath: `/synthetic/${relativePath}`,
+    displayPath: `mod:${relativePath}`,
+    rootKind: 'mod',
+    loadOrder: 1,
+    modifiedMs: 0,
+    size: bytes.length,
+    bytes,
+    sha256: sha256Bytes(bytes),
+  };
+}
+
+function applied(before: readonly ScannedFile[], changes: readonly ProposedFileChange[]) {
+  const files = new Map(before.map((file) => [file.relativePath, file]));
+  for (const change of changes)
+    if (change.content === null) files.delete(change.relativePath);
+    else files.set(change.relativePath, source(change.relativePath, change.content));
+  return [...files.values()];
+}
+
+function plan(files: readonly ScannedFile[], operations: readonly MapOperation[]) {
+  const result = planMapOperations(MapWorkspaceIndex.build([...files]), operations);
+  expect(result.blockers).toEqual([]);
+  return result;
+}
+
+/** The text with a line break at its end, so an appended line starts on its own. */
+function withFinalNewline(text: string): string {
+  return text === '' || text.endsWith('\n') ? text : `${text}\n`;
+}
+
+function stateIds(files: readonly ScannedFile[]): number[] {
+  return MapWorkspaceIndex.build([...files])
+    .states.map(({ id }) => id)
+    .sort((a, b) => a - b);
+}
+
+const world: MapOperation = {
+  id: 'world',
+  kind: 'create_world',
+  width: 256,
+  height: 256,
+  seed: 2,
+  rivers: 0,
+  provincesPerState: 3,
+  countries: [
+    { tag: 'AAA', name: 'Aster' },
+    { tag: 'BBB', name: 'Boreal' },
+  ],
+} as MapOperation;
+
+describe('state ids stay contiguous after a write', () => {
+  const written = applied([], plan([], [world]).changes);
+  const ids = stateIds(written);
+  const highest = ids.at(-1)!;
+  const index = MapWorkspaceIndex.build(written);
+
+  /** Two states of one owner and one strategic region, so merge_states accepts them. */
+  function mergeablePair(): { source: number; target: number } {
+    for (const state of index.states) {
+      if (state.id === highest) continue;
+      const region = index.regions.find(({ provinces }) => provinces.includes(state.provinces[0]!));
+      const partner = index.states.find(
+        (other) =>
+          other.id !== state.id &&
+          other.id !== highest &&
+          other.owner === state.owner &&
+          region?.provinces.includes(other.provinces[0]!) === true,
+      );
+      if (partner !== undefined) return { source: state.id, target: partner.id };
+    }
+    throw new Error('the synthetic world has no mergeable pair');
+  }
+
+  it('moves the highest state into the id a merge leaves, with its script references', () => {
+    expect(ids).toEqual(Array.from({ length: highest }, (_, n) => n + 1));
+    const { source: merged, target } = mergeablePair();
+    // A mod script that names the highest state by id must follow it to its new id.
+    const script = `my_effect = { ${highest} = { add_manpower = 1 } set_capital = { state = ${highest} } }\n`;
+    const withScript = [...written, source('common/scripted_effects/mine.txt', script)];
+    const result = plan(withScript, [
+      { id: 'merge', kind: 'merge_states', sourceStateIds: [merged], targetStateId: target },
+    ] as MapOperation[]);
+    const after = applied(withScript, result.changes);
+    expect(stateIds(after)).toEqual(Array.from({ length: highest - 1 }, (_, n) => n + 1));
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_STATE_IDS_COMPACTED')!;
+    expect(note.details).toMatchObject({ moves: [{ from: highest, to: merged }], moveCount: 1 });
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain('MAP_STATE_ID_GAP');
+    const rewritten = after.find(
+      ({ relativePath }) => relativePath === 'common/scripted_effects/mine.txt',
+    )!;
+    expect(rewritten.bytes.toString('utf8')).toContain(`state = ${merged}`);
+    // The world record lists exactly the state files left after the write.
+    const record = JSON.parse(
+      after
+        .find(({ relativePath }) => relativePath === '.hoi4-agent-world.json')!
+        .bytes.toString('utf8'),
+    ) as { files: Array<{ relativePath: string; sha256: string }> };
+    const recordedStates = record.files
+      .map(({ relativePath }) => relativePath)
+      .filter((path) => path.startsWith('history/states/'))
+      .sort();
+    const stateFiles = after
+      .map(({ relativePath }) => relativePath)
+      .filter((path) => path.startsWith('history/states/'))
+      .sort();
+    expect(recordedStates).toEqual(stateFiles);
+    const hashes = new Map(record.files.map(({ relativePath, sha256 }) => [relativePath, sha256]));
+    for (const file of after.filter(({ relativePath }) =>
+      relativePath.startsWith('history/states/'),
+    ))
+      expect(hashes.get(file.relativePath), file.relativePath).toBe(file.sha256);
+  });
+
+  it('moves a building position off a merged-away state to the state holding its province', () => {
+    // ZIN K128: merges left floating_harbour lines on the deleted state ids.
+    const { source: merged, target } = mergeablePair();
+    const mergedState = index.states.find(({ id }) => id === merged)!;
+    const province = mergedState.provinces[0]!;
+    const buildings = written.find(({ relativePath }) => relativePath === 'map/buildings.txt');
+    const harbour = `${merged};floating_harbour;10.00;9.50;10.00;0.00;${province}\n`;
+    const withHarbour = [
+      ...written.filter(({ relativePath }) => relativePath !== 'map/buildings.txt'),
+      source(
+        'map/buildings.txt',
+        `${withFinalNewline(buildings?.bytes.toString('utf8') ?? '')}${harbour}`,
+      ),
+    ];
+    const result = plan(withHarbour, [
+      { id: 'merge', kind: 'merge_states', sourceStateIds: [merged], targetStateId: target },
+    ] as MapOperation[]);
+    const after = applied(withHarbour, result.changes);
+    const finalIds = new Set(stateIds(after));
+    const lines = after
+      .find(({ relativePath }) => relativePath === 'map/buildings.txt')!
+      .bytes.toString('utf8')
+      .split(/\r?\n/u)
+      .filter((line) => line.trim() !== '');
+    // Every line names a state that exists after the write.
+    for (const line of lines) expect(finalIds.has(Number(line.split(';')[0])), line).toBe(true);
+    // The harbour now names the state that holds its province (the merge target, possibly renumbered).
+    const harbourLine = lines.find((line) => line.includes('floating_harbour'))!;
+    const owner = MapWorkspaceIndex.build([...after]).statesByProvince.get(province)![0]!.id;
+    expect(Number(harbourLine.split(';')[0])).toBe(owner);
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain(
+      'MAP_BUILDING_POSITION_STATE_MISSING',
+    );
+    expect(
+      result.diagnostics.find(({ code }) => code === 'MAP_BUILDING_POSITIONS_REASSIGNED')?.details,
+    ).toMatchObject({
+      moves: [expect.objectContaining({ building: 'floating_harbour', from: merged })],
+    });
+  });
+
+  it('refuses a named state id that would leave holes, which crash the game', () => {
+    // Linux run, 14 November 2026: state-id holes crash the game during history setup (SIGSEGV).
+    const firstState = index.states.find(({ id }) => id === 1)!;
+    const operation = (stateId: number) =>
+      ({
+        id: 'explicit',
+        kind: 'create_state',
+        sourceStateId: 1,
+        stateId,
+        provinceIds: [firstState.provinces[0]!],
+        name: 'ASKED',
+        localisation: {
+          method: 'upsert',
+          language: 'l_english',
+          value: 'Asked',
+          file: 'localisation/english/world_l_english.yml',
+        },
+      }) as MapOperation;
+    const refused = planMapOperations(MapWorkspaceIndex.build([...written]), [
+      operation(highest + 5),
+    ]);
+    expect(refused.blockers).toEqual([
+      expect.objectContaining({
+        code: 'MAP_STATE_ID_GAP',
+        details: expect.objectContaining({ holeCount: 4 }),
+      }),
+    ]);
+    // A request with a blocker is refused whole: the service writes none of its changes.
+    // The next free id is accepted and kept as named.
+    const accepted = plan(written, [operation(highest + 1)]);
+    expect(stateIds(applied(written, accepted.changes))).toContain(highest + 1);
+  });
+
+  it('reports a hole the mod already had without moving untouched states', () => {
+    // A mod whose state file was deleted by hand before the call: that gap is old.
+    const { source: merged, target } = mergeablePair();
+    const old = ids.find((id) => ![merged, target, highest].includes(id))!;
+    const oldFile = index.states.find(({ id }) => id === old)!.file.relativePath;
+    const withHole = written.filter(({ relativePath }) => relativePath !== oldFile);
+    // An edit that changes no state id says nothing about ids.
+    const edit = plan(withHole, [
+      {
+        id: 'edit',
+        kind: 'update_states',
+        updates: [{ stateId: target, changes: { manpower: 7 } }],
+      },
+    ] as MapOperation[]);
+    expect(edit.diagnostics.map(({ code }) => code)).not.toContain('MAP_STATE_IDS_COMPACTED');
+    expect(edit.diagnostics.map(({ code }) => code)).not.toContain('MAP_STATE_ID_GAP');
+    // A merge closes only the hole it makes, and reports the old one with the fix route.
+    const result = plan(withHole, [
+      { id: 'merge', kind: 'merge_states', sourceStateIds: [merged], targetStateId: target },
+    ] as MapOperation[]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_STATE_IDS_COMPACTED')!;
+    expect(note.details).toMatchObject({ moves: [{ from: highest, to: merged }] });
+    const gap = result.diagnostics.find(({ code }) => code === 'MAP_STATE_ID_GAP')!;
+    expect(gap.severity).toBe('warning');
+    expect(gap.details).toMatchObject({ holes: [old], holeCount: 1 });
+    expect(gap.message).toContain('renumber_map_entity');
+    const after = stateIds(applied(withHole, result.changes));
+    expect(after).not.toContain(old);
+    expect(after.at(-1)).toBe(highest - 1);
+  });
+});
