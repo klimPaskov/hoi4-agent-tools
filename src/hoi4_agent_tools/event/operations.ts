@@ -1,4 +1,5 @@
 import { compareCodeUnits, type JsonValue } from '../core/canonical.js';
+import type { Diagnostic } from '../core/diagnostics.js';
 import { helperExpansionValidation } from '../core/helper-expansion.js';
 import { publicArtifactLink } from '../core/artifacts.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
@@ -171,6 +172,62 @@ function answerPaths(inspected: {
   );
 }
 
+/**
+ * What a partial event answer is missing, as inline information, so an agent knows whether to
+ * raise a limit, trace from the boundary, or accept that callers reached only through scripted
+ * effects may be absent (ADR 0086: a partial result says what is missing).
+ */
+export function eventPartialReasons(inspected: {
+  graph: EventGraphSnapshot;
+  helperExpansion?: { complete: boolean } | undefined;
+  summary?: Record<string, JsonValue> | undefined;
+}): Diagnostic[] {
+  const { graph, summary } = inspected;
+  const reasons: Array<{ code: string; message: string; details?: Record<string, JsonValue> }> = [];
+  if (inspected.helperExpansion?.complete === false)
+    reasons.push({
+      code: 'EVENT_HELPER_EXPANSION_INCOMPLETE',
+      message:
+        'Helper expansion stopped at its depth or size limit; continue it with mode helper_expansion from a helper on its boundary',
+    });
+  if (graph.skippedSourceCount > 0)
+    reasons.push({
+      code: 'EVENT_SOURCES_SKIPPED',
+      message: `${graph.skippedSourceCount} event source file(s) were skipped as over a size limit, so events they define are missing from this answer`,
+      details: { skippedSources: graph.skippedSourceCount },
+    });
+  const trace = summary?.trace;
+  const cut =
+    typeof trace === 'object' &&
+    trace !== null &&
+    !Array.isArray(trace) &&
+    (trace.truncated === true ||
+      (typeof trace.boundaryNodes === 'number' && trace.boundaryNodes > 0));
+  if (cut)
+    reasons.push({
+      code: 'EVENT_TRACE_TRUNCATED',
+      message:
+        'The trace stopped at its limits and continues beyond its boundary nodes; raise maxDepth or maxNodes, or trace again from a node on the boundary',
+    });
+  else if (
+    graph.analysisMode === 'focused' &&
+    graph.skippedSourceCount === 0 &&
+    inspected.helperExpansion === undefined
+  )
+    reasons.push({
+      code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED',
+      message:
+        'This large workspace defers the workspace-wide helper projections and state links, so callers and state links that exist only inside scripted effects may be missing from this answer',
+    });
+  return reasons.map(({ code, message, details }) => ({
+    category: 'configuration',
+    code,
+    severity: 'info',
+    message,
+    ...(details === undefined ? {} : { details }),
+  }));
+}
+
 /** Transport-independent event inspection and its complete bounded result contract. */
 export async function inspectEvents(viewer: EventChainViewer, input: EventInspectInput) {
   const inspected = await viewer.inspect(input);
@@ -196,6 +253,8 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
     },
   });
   result.code = eventAnswerComplete(inspected) ? 'EVENT_INSPECTED' : 'EVENT_INSPECTED_PARTIAL';
+  if (result.code === 'EVENT_INSPECTED_PARTIAL')
+    result.diagnostics.push(...eventPartialReasons(inspected));
   setInlineFilesScanned(result, inspected.graph.filesScanned);
   result.artifacts = inspected.artifacts.map(publicArtifactLink);
   if (inspected.graphSnapshotOmitted === true)

@@ -22,6 +22,8 @@ A result describes whether the answer to the question that was asked is complete
 
 On the event tools `validation.passed` for a focused trace or path counts only the blocking diagnostics located in the files of the events it covers. Those elsewhere in the workspace are counted apart, named in the check message and kept in the linked evidence, so a clean trace is not failed by an unrelated broken file. Every other event answer still counts the whole workspace.
 
+A partial `event_inspect` result says what is missing, as inline information: `EVENT_TRACE_TRUNCATED` (a trace that stopped at its limits), `EVENT_SOURCES_SKIPPED` (with the count), `EVENT_HELPER_EXPANSION_INCOMPLETE`, or `EVENT_FOCUSED_ANALYSIS_DEFERRED` (a large workspace that defers the workspace-wide helper projections and state links, so callers and state links that exist only inside scripted effects may be missing). The `roots` and `state_flow` modes stay partial on a large workspace for that last reason, because their answers do depend on those passes.
+
 ## Not yet applied
 
 The other tools tie `_PARTIAL` to a whole-workspace flag: `event_render` and `event_compare`, `tech_inspect`, `tech_render`, `tech_compare`, `gui_inspect`, `decision_inspect`, `impact_inspect`, the probability tools and `mod_index`. Each needs the same question asked of it: is the requested answer complete, and what is missing if not. They follow one at a time, each with a test that a focused complete answer is not partial and that a truncated one still is.
