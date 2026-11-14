@@ -1,4 +1,5 @@
-import { cp, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { replaceSharedResidentEngine } from '../../src/hoi4_agent_tools/core/resident-engine.js';
 import { statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -478,25 +479,39 @@ async function findFiles(root: string, accept: (name: string) => boolean): Promi
   return found;
 }
 
-describe('hoi4.focus_render game view without the engine', () => {
-  it('refuses view "game" with FOCUS_GAME_VIEW_UNAVAILABLE and keeps the full render', async () => {
-    const { client, mod } = await fixture();
-    await rewrite(client, { plan: treePlan(baseFocuses), createIfMissing: true });
+describe('hoi4.focus_render without the engine', () => {
+  // The focus tools build the shared index on the engine (ADR 0085), so without one every view
+  // answers ENGINE_UNAVAILABLE and names what is missing, instead of a partial render.
+  it('answers ENGINE_UNAVAILABLE for the game view and the full render', async () => {
+    // A server keeps its resident engine and its index once they ran, so the tree written with
+    // the engine is copied into a fresh server's mod before the engine goes away.
+    const written = await fixture();
+    await rewrite(written.client, { plan: treePlan(baseFocuses), createIfMissing: true });
+    const source = await readFile(written.sourcePath);
+    const { client, mod, sourcePath } = await fixture();
+    await mkdir(path.dirname(sourcePath), { recursive: true });
+    await writeFile(sourcePath, source);
     const restore = withEnvironment({
       HOI4_ENGINE: path.join(mod, 'no-such-engine', 'hoi4-engine.exe'),
     });
+    // The resident engine is shared by the test process; drop the one the rewrite started.
+    replaceSharedResidentEngine(undefined);
     try {
-      const game = await client.callTool({
-        name: 'hoi4.focus_render',
-        arguments: { workspaceId: 'engine', relativePath, treeId, view: 'game', inline: false },
-      });
-      expect(game.isError).toBe(true);
-      expect(JSON.stringify(game.structuredContent)).toContain('FOCUS_GAME_VIEW_UNAVAILABLE');
-      const full = await client.callTool({
-        name: 'hoi4.focus_render',
-        arguments: { workspaceId: 'engine', relativePath, treeId, inline: false },
-      });
-      expect(full.isError).not.toBe(true);
+      for (const view of ['game', undefined] as const) {
+        const result = await client.callTool({
+          name: 'hoi4.focus_render',
+          arguments: {
+            workspaceId: 'engine',
+            relativePath,
+            treeId,
+            inline: false,
+            ...(view === undefined ? {} : { view }),
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect(JSON.stringify(result.structuredContent)).toContain('ENGINE_UNAVAILABLE');
+        expect(JSON.stringify(result.structuredContent)).toContain('HOI4_ENGINE');
+      }
     } finally {
       restore();
     }
@@ -504,7 +519,7 @@ describe('hoi4.focus_render game view without the engine', () => {
 });
 
 describe('hoi4.focus_rewrite engine refusals', () => {
-  it('refuses with FOCUS_ENGINE_UNAVAILABLE and writes nothing when the engine is missing', async () => {
+  it('refuses with ENGINE_UNAVAILABLE and writes nothing when the engine is missing', async () => {
     const { client, mod } = await fixture();
     const restore = withEnvironment({
       HOI4_ENGINE: path.join(mod, 'no-such-engine', 'hoi4-engine.exe'),
@@ -516,9 +531,10 @@ describe('hoi4.focus_rewrite engine refusals', () => {
         layoutMode: 'engine',
       });
       expect(result.isError).toBe(true);
+      // The shared index needs the engine before the layout does (ADR 0085).
       expect(result.structuredContent).toMatchObject({
         status: 'error',
-        code: 'FOCUS_ENGINE_UNAVAILABLE',
+        code: 'ENGINE_UNAVAILABLE',
       });
       expect(JSON.stringify(result.structuredContent)).toContain('HOI4_ENGINE');
     } finally {
@@ -531,7 +547,12 @@ describe('hoi4.focus_rewrite engine refusals', () => {
     const { client, mod } = await fixture();
     const fake = await writeFakeEngine();
     cleanup.push(fake.cleanup);
-    const restore = withEnvironment({ HOI4_ENGINE: fake.path, FAKE_ENGINE_MODE: 'blocked' });
+    // The fake answers the layout; the shared index (ADR 0085) goes to the real engine.
+    const restore = withEnvironment({
+      HOI4_ENGINE: fake.path,
+      FAKE_ENGINE_MODE: 'blocked',
+      FAKE_ENGINE_REAL: engineBinary,
+    });
     try {
       const result = await rewrite(client, {
         plan: treePlan(baseFocuses),

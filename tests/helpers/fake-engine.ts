@@ -4,10 +4,18 @@ import path from 'node:path';
 
 /**
  * A test double for hoi4-engine. FAKE_ENGINE_MODE picks the behaviour; the request arrives on
- * stdin. The engine client runs a .mjs engine under the current Node, without a shell.
+ * stdin. The engine client runs a .mjs engine under the current Node, without a shell. With
+ * FAKE_ENGINE_REAL naming a real engine, every command other than \`focus-layout\` (the shared
+ * index of ADR 0085, the resident engine) goes to that engine.
  */
 const FAKE_ENGINE_SOURCE = `import process from 'node:process';
+import { spawn } from 'node:child_process';
 
+const real = process.env.FAKE_ENGINE_REAL;
+if (process.argv[2] !== 'focus-layout' && real !== undefined && real !== '') {
+  const child = spawn(real, process.argv.slice(2), { stdio: 'inherit', windowsHide: true });
+  child.on('exit', (code) => process.exit(code ?? 1));
+} else {
 const mode = process.env.FAKE_ENGINE_MODE ?? 'valid';
 const hash = 'a'.repeat(64);
 
@@ -98,6 +106,7 @@ process.stdin.on('end', () => {
     process.exit(70);
   }
 });
+}
 `;
 
 /** Writes the fake engine into a new temporary directory; call the returned cleanup when done. */
