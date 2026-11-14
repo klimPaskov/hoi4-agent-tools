@@ -42,6 +42,7 @@ USAGE:
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
+    hoi4-engine map-provinces
     hoi4-engine index-files
     hoi4-engine serve
     hoi4-engine --version
@@ -656,6 +657,37 @@ fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) 
     Ok(ExitCode::from(code))
 }
 
+/// `map-provinces`: one frame on stdin (a `hoi4-map-provinces-request/1` JSON line, then the
+/// bitmap bytes its `payload` field counts) and one frame on stdout, as `serve` answers the
+/// `map.provinces` op: the JSON result line, then the province ids as little-endian i32.
+fn cmd_map_provinces(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&[])?;
+    let mut input = Vec::new();
+    std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut input).map_err(|e| format!("cannot read stdin: {e}"))?;
+    let newline = input.iter().position(|byte| *byte == b'\n').ok_or("map-provinces reads a JSON line and then the bitmap bytes")?;
+    let header: serde_json::Value = serde_json::from_slice(&input[..newline]).map_err(|e| format!("invalid map-provinces header: {e}"))?;
+    let payload = &input[newline + 1..];
+    if header["payload"].as_u64() != Some(payload.len() as u64) {
+        return Err(format!("the header counts {} payload bytes but {} followed", header["payload"], payload.len()));
+    }
+    let mut out = std::io::stdout().lock();
+    match hoi4_engine::map_provinces::respond(&header, payload) {
+        Ok((result, ids)) => {
+            let mut line = serde_json::to_vec(&serde_json::json!({ "ok": true, "result": result, "payload": ids.len() })).map_err(|e| e.to_string())?;
+            line.push(b'\n');
+            out.write_all(&line).and_then(|()| out.write_all(&ids)).map_err(|e| e.to_string())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(error) => {
+            eprintln!("hoi4-engine: map-provinces: {}", error["message"].as_str().unwrap_or("invalid request"));
+            let mut line = serde_json::to_vec(&serde_json::json!({ "ok": false, "error": error })).map_err(|e| e.to_string())?;
+            line.push(b'\n');
+            out.write_all(&line).map_err(|e| e.to_string())?;
+            Ok(ExitCode::from(1))
+        }
+    }
+}
+
 /// `index-files`: one frame on stdin (a `hoi4-index-files-request/1` JSON line, then the bytes of
 /// the files that exist only in the server's memory, as its `payload` field counts) and one JSON
 /// line on stdout (`{"ok":true,"result":<hoi4-index-files/1>}`), as `serve` answers the
@@ -719,6 +751,7 @@ fn main() -> ExitCode {
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),
+        Some("map-provinces") => cmd_map_provinces(&args),
         Some("index-files") => cmd_index_files(&args),
         Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {

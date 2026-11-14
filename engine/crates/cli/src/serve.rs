@@ -105,11 +105,15 @@ fn focus_render(request: &Value) -> Response {
 
 fn handle(request: &Value, payload: &[u8]) -> Response {
     match request["op"].as_str() {
-        Some("hello") => {
-            Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "index.files"] }))
-        }
+        Some("hello") => Response::ok(
+            json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "map.provinces", "index.files"] }),
+        ),
         Some("texture.decode") => texture_decode(request, payload),
         Some("focus.render") => focus_render(request),
+        Some("map.provinces") => match hoi4_engine::map_provinces::respond(request, payload) {
+            Ok((result, ids)) => Response { result: Ok(result), payload: ids },
+            Err(error) => Response { result: Err(error), payload: Vec::new() },
+        },
         Some("index.files") => match hoi4_engine::symbol_index::records::respond(request, payload) {
             // The answer can be far larger than a header line may be, so it travels as the payload.
             Ok(result) => Response { result: Ok(json!({ "format": "json" })), payload: result },

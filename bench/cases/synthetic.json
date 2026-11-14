@@ -805,6 +805,24 @@
           "includes": "synthetic_no_such_mod"
         }
       ]
+    },
+    {
+      "id": "synthetic.localisation.audit-undefined-desc",
+      "surface": "localisation",
+      "corpus": "synthetic",
+      "title": "A literal \"undefined\" event description is found",
+      "evidence": "bench/fixtures/synthetic/events/bench_regressions.txt: bench_regress.2 has desc = undefined, and no language defines a key named undefined. Moved from the ZIN corpus, which fixed its own case.",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "audit"
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].key",
+          "includes": "undefined",
+          "note": "The synthetic corpus merges every fixture workspace, which leaves other keys undefined too, so only the listing is checked."
+        }
+      ]
     }
   ]
 }

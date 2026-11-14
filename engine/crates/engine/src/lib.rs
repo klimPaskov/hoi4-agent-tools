@@ -19,6 +19,7 @@ pub mod imagehdr;
 pub mod index;
 pub mod lints;
 pub mod localisation;
+pub mod map_provinces;
 pub mod mod_index;
 pub mod overrides;
 pub mod repair;
