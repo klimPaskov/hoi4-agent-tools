@@ -783,21 +783,30 @@ export class ReferenceToolService {
         };
       }
     };
-    const [errorLog, engineCheck, localisation, assets] = await Promise.all([
-      timed('error_log', () => this.healthErrorLog(workspace, signal)),
+    // Each engine audit loads the game and the mod on its own and uses every core, so they run
+    // one after the other, the quick ones first: four at once took 128 s on a mod with eight
+    // thousand files, where one at a time they take 43 s. The whole-mod check runs beside that
+    // chain, and the script check, which is single threaded on this side, beside both.
+    const early = (async () => {
+      const errorLog = await timed('error_log', () => this.healthErrorLog(workspace, signal));
+      const localisation = await timed('localisation', () => healthLocalisation(workspace, signal));
+      const assets = await timed('assets', () => healthAssets(workspace, signal));
+      return { errorLog, localisation, assets };
+    })();
+    // The files the quick audits name are validated first; the script check scans while they run.
+    const named = early.then(
+      ({ errorLog, localisation, assets }) =>
+        new Set(
+          [...errorLog.findings, ...localisation.findings, ...assets.findings].flatMap(
+            ({ path: file }) => (file === undefined ? [] : [file]),
+          ),
+        ),
+    );
+    const [engineCheck, script, { errorLog, localisation, assets }] = await Promise.all([
       timed('engine_check', () => healthEngineCheck(workspace, signal)),
-      timed('localisation', () => healthLocalisation(workspace, signal)),
-      timed('assets', () => healthAssets(workspace, signal)),
+      timed('script', () => this.healthScript(workspaceId, workspace, named, principal, signal)),
+      early,
     ]);
-    // The files the other audits name are validated first.
-    const named = new Set(
-      [...errorLog.findings, ...engineCheck.findings].flatMap(({ path: file }) =>
-        file === undefined ? [] : [file],
-      ),
-    );
-    const script = await timed('script', () =>
-      this.healthScript(workspaceId, workspace, named, principal, signal),
-    );
     return rankProblems([errorLog, engineCheck, script, localisation, assets], request.limit);
   }
 
@@ -858,7 +867,7 @@ export class ReferenceToolService {
   private async healthScript(
     workspaceId: string,
     workspace: ResolvedWorkspace,
-    named: ReadonlySet<string>,
+    namedLater: Promise<ReadonlySet<string>>,
     principal?: string,
     signal?: AbortSignal,
   ): Promise<Omit<CheckRun, 'check' | 'ms'>> {
@@ -867,6 +876,18 @@ export class ReferenceToolService {
       caseSensitive: false,
       ...(signal === undefined ? {} : { signal }),
     });
+    // One scan serves every file: each call to the engine's scan re-checks every file of the
+    // workspace for changes, which costs about a second on a mod with eight thousand files.
+    const scanned =
+      files.length === 0
+        ? undefined
+        : await this.engine.scan(
+            workspaceId,
+            { patterns: [...fileCheckPatterns] },
+            principal,
+            signal,
+          );
+    const named = await namedLater;
     const modified = new Map<string, number>();
     for (const file of files)
       modified.set(
@@ -879,18 +900,22 @@ export class ReferenceToolService {
         modified.get(right)! - modified.get(left)! ||
         (left < right ? -1 : 1),
     );
+    // The budget counts checking files, not the scan before the first one.
     const deadline = performance.now() + HEALTH_SCRIPT_BUDGET_MS;
     const findings: HealthFinding[] = [];
     let checked = 0;
     for (const file of ordered.slice(0, HEALTH_SCRIPT_MAX_FILES)) {
       if (performance.now() > deadline) break;
       signal?.throwIfAborted();
+      // Let the engine audits running beside this one deliver their output between files.
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const validated = await this.validateScript(
         workspaceId,
         workspace,
         scriptValidateRequestSchema.parse({ path: file, limit: 32 }),
         principal,
         signal,
+        scanned,
       );
       checked += 1;
       for (const finding of validated.findings)
@@ -909,7 +934,7 @@ export class ReferenceToolService {
       ...(checked === files.length
         ? {}
         : {
-            note: `Checked ${checked} of ${files.length} script files within the time budget: files other audits named first, then the newest`,
+            note: `Checked ${checked} of ${files.length} script files, ${performance.now() > deadline ? 'within the time budget' : `the most one call checks (${HEALTH_SCRIPT_MAX_FILES})`}: files other audits named first, then the newest. hoi4.script_validate checks any other file`,
           }),
     };
   }
@@ -1026,6 +1051,8 @@ export class ReferenceToolService {
     request: z.infer<typeof scriptValidateRequestSchema>,
     principal?: string,
     signal?: AbortSignal,
+    /** A scan of the file check patterns the caller already holds, for a call that checks many files. */
+    scanned?: ScanSnapshot,
   ) {
     if (request.closure === true) return checkClosure(this.engine, workspaceId, principal, signal);
     // Every file check of the supported families shares one scan, so checking files across
@@ -1069,7 +1096,7 @@ export class ReferenceToolService {
         checked.unresolvedCount;
       return misses(trigger) < misses(effect) ? trigger : effect;
     }
-    let snapshot = await scan([]);
+    let snapshot = scanned ?? (await scan([]));
     let file;
     try {
       file = selectFile(snapshot, request.path);
