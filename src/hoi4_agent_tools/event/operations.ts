@@ -73,11 +73,26 @@ export function eventGraphCounts(graph: EventGraphSnapshot, artifacts: number) {
   };
 }
 
-export function eventGraphValidation(graph: EventGraphSnapshot) {
+/**
+ * `answerPaths` names the source files the answer stands on, for a focused trace or path. Blocking
+ * diagnostics in other files of the workspace do not make that answer fail; they are counted apart
+ * and stay in the linked evidence. Without it, every blocking diagnostic of the workspace counts.
+ */
+export function eventGraphValidation(graph: EventGraphSnapshot, answerPaths?: ReadonlySet<string>) {
   const counts = eventGraphCounts(graph, 0);
+  const blockingHere =
+    answerPaths === undefined
+      ? counts.blockingDiagnostics
+      : eventDiagnostics(graph).filter(
+          ({ severity, location }) =>
+            (severity === 'error' || severity === 'blocker') &&
+            location !== undefined &&
+            answerPaths.has(location.path),
+        ).length;
+  const blockingElsewhere = counts.blockingDiagnostics - blockingHere;
   const analysisBoundaryPassed =
     graph.complete || (graph.analysisMode === 'focused' && graph.skippedSourceCount === 0);
-  const passed = analysisBoundaryPassed && counts.blockingDiagnostics === 0;
+  const passed = analysisBoundaryPassed && blockingHere === 0;
   return {
     passed,
     checks: [
@@ -85,22 +100,24 @@ export function eventGraphValidation(graph: EventGraphSnapshot) {
         id: 'event-analysis',
         passed,
         message:
-          counts.blockingDiagnostics > 0
-            ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
-            : graph.complete
-              ? 'The event-chain analysis is complete and has no blocking diagnostics'
-              : graph.analysisMode === 'focused' && graph.skippedSourceCount === 0
-                ? 'Whole-workspace helper projections and lifecycle passes were deferred; the requested event analysis retains direct source evidence'
-                : graph.analysisMode === 'focused'
-                  ? `${graph.skippedSourceCount} event-analysis source(s) were skipped; linked evidence records the partial boundary`
-                  : graph.issues.some(
-                        ({ code }) =>
-                          code === 'EVENT_HELPER_DEPTH_LIMIT' ||
-                          code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
-                          code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
-                      )
-                    ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
-                    : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
+          blockingHere > 0
+            ? `${blockingHere} blocking event-chain diagnostics${answerPaths === undefined ? '' : ' in the files of this answer'}; full evidence is linked`
+            : answerPaths !== undefined && blockingElsewhere > 0
+              ? `No blocking diagnostics in the files of this answer; ${blockingElsewhere} elsewhere in the workspace are in the linked evidence`
+              : graph.complete
+                ? 'The event-chain analysis is complete and has no blocking diagnostics'
+                : graph.analysisMode === 'focused' && graph.skippedSourceCount === 0
+                  ? 'Whole-workspace helper projections and lifecycle passes were deferred; the requested event analysis retains direct source evidence'
+                  : graph.analysisMode === 'focused'
+                    ? `${graph.skippedSourceCount} event-analysis source(s) were skipped; linked evidence records the partial boundary`
+                    : graph.issues.some(
+                          ({ code }) =>
+                            code === 'EVENT_HELPER_DEPTH_LIMIT' ||
+                            code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
+                            code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+                        )
+                      ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
+                      : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
       },
     ],
   };
@@ -128,6 +145,30 @@ function eventAnswerComplete(inspected: {
   if (typeof trace === 'object' && trace !== null && !Array.isArray(trace))
     return trace.truncated === false && trace.boundaryNodes === 0;
   return summary.found === true && summary.unresolvedAssumptions === 0;
+}
+
+/** The source files of a focused trace or path, or undefined for any other answer. */
+function answerPaths(inspected: {
+  graph: EventGraphSnapshot;
+  report: unknown;
+}): ReadonlySet<string> | undefined {
+  if (inspected.graph.analysisMode !== 'focused') return undefined;
+  interface Located {
+    location?: { path: string };
+    sourcePath?: string;
+  }
+  const report = inspected.report as {
+    trace?: { nodes?: Located[] };
+    explanation?: { steps?: Array<{ node: Located }> };
+  } | null;
+  const nodes = report?.trace?.nodes ?? report?.explanation?.steps?.map(({ node }) => node);
+  if (nodes === undefined) return undefined;
+  return new Set(
+    nodes.flatMap((node) => {
+      const path = node.location?.path ?? node.sourcePath;
+      return path === undefined ? [] : [path];
+    }),
+  );
 }
 
 /** Transport-independent event inspection and its complete bounded result contract. */
@@ -166,7 +207,7 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
         'The workspace graph is too large to retain as a snapshot artifact; the scan report is linked, and comparisons use revisions held by this server',
       details: { maximumBytes: EVENT_GRAPH_SNAPSHOT_MAX_BYTES },
     });
-  result.validation = eventGraphValidation(inspected.graph);
+  result.validation = eventGraphValidation(inspected.graph, answerPaths(inspected));
   if (inspected.helperExpansion !== undefined)
     result.validation = helperExpansionValidation(inspected.helperExpansion);
   return result;
