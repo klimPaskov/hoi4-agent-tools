@@ -64,23 +64,35 @@ export function landDistanceField(
       distance[pixel] = 0;
       queue[tail++] = pixel;
     }
+  // No closure per pixel: on the game's 11.5 million pixels it was most of this function's time.
   while (head < tail) {
     const pixel = queue[head++]!;
     const next = distance[pixel]! + 1;
     if (next >= limit) continue;
     const x = pixel % width;
-    const visit = (other: number): void => {
-      if (distance[other] === limit && kind[other] !== LAND) {
-        distance[other] = next;
-        queue[tail++] = other;
-      }
-    };
-    if (x > 0) visit(pixel - 1);
-    if (x < width - 1) visit(pixel + 1);
-    if (pixel >= width) visit(pixel - width);
-    if (pixel < total - width) visit(pixel + width);
+    if (x > 0) tail = reachWater(kind, distance, queue, tail, pixel - 1, next, limit);
+    if (x < width - 1) tail = reachWater(kind, distance, queue, tail, pixel + 1, next, limit);
+    if (pixel >= width) tail = reachWater(kind, distance, queue, tail, pixel - width, next, limit);
+    if (pixel < total - width)
+      tail = reachWater(kind, distance, queue, tail, pixel + width, next, limit);
   }
   return distance;
+}
+
+/** Give an unreached water pixel its distance and queue it; returns the new queue end. */
+function reachWater(
+  kind: Uint8Array,
+  distance: Uint8Array,
+  queue: Int32Array,
+  tail: number,
+  other: number,
+  next: number,
+  limit: number,
+): number {
+  if (distance[other] !== limit || kind[other] === LAND) return tail;
+  distance[other] = next;
+  queue[tail] = other;
+  return tail + 1;
 }
 
 export interface LakeNote {

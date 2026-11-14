@@ -1006,6 +1006,12 @@ const territoryOperation = z
       .describe(
         'Measure and judge the border quality only here: the owners, stateIds and box of the region being redrawn.',
       ),
+    strictTags: z
+      .boolean()
+      .optional()
+      .describe(
+        'Refuse the operation when a country or overlord tag is not declared in common/country_tags; by default that is a warning (MAP_TERRITORY_TAG_UNDEFINED).',
+      ),
   })
   .strict();
 const repartitionOperation = z

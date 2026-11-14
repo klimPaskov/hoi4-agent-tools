@@ -399,14 +399,14 @@ Nothing is lost or duplicated: for any split, merge or move, the sums of manpowe
 }
 ```
 
-| Field of a country      | Meaning                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1).                                                                             |
-| `seeds`                 | `{ state }`, `{ province }` or a pixel `{ x, y }` of the province map; the first is the capital. A seed in the sea is refused.                         |
-| `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds }`: land the country always or never owns. `regionIds` are strategic regions.                                      |
-| `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                          |
-| `overlord`, `mergeInto` | A subject is grown inside its overlord's territory. `mergeInto` relabels the finished territory to another listed country and keeps its tag as a core. |
-| `cores`, `claims`       | Extra states the country holds a core on or claims.                                                                                                    |
+| Field of a country      | Meaning                                                                                                                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1). A tag no `common/country_tags` file declares is assigned with a warning (`MAP_TERRITORY_TAG_UNDEFINED`), or refused with top-level `strictTags: true`. |
+| `seeds`                 | `{ state }`, `{ province }` or a pixel `{ x, y }` of the province map; the first is the capital. A seed in the sea is refused.                                                                                                    |
+| `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds }`: land the country always or never owns. `regionIds` are strategic regions.                                                                                                                 |
+| `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                                                                                                     |
+| `overlord`, `mergeInto` | A subject is grown inside its overlord's territory. `mergeInto` relabels the finished territory to another listed country and keeps its tag as a core.                                                                            |
+| `cores`, `claims`       | Extra states the country holds a core on or claims.                                                                                                                                                                               |
 
 Top-level fields: `unit` (`state`, the default, assigns whole states; `province` assigns provinces and regroups the states a border cuts), `scope` (`stateIds`, `regionIds`, `owners`: only these states take part), `unowned` (land nobody owns), `barriers` (`natural` or `none`, which grows on distance alone), `rules.connectedMainland` (default true) and `rules.islandPolicy` (`one-owner`, `nearest` or `unowned` for landmasses without a seed), `smoothing` (`passes` 0 to 20, `maxShareChange`), `shareTolerance` (default 0.15), `seed` (the same seed gives the same borders), `ownership` (`controller`: `owner` or `keep`; `cores`: `keep`, `owner` or `add-owner`; `claims`: `keep` or `clear`; `unowned`: `clear` or `keep`), `stateSize` (province unit: fragments below `min` provinces join a neighbour of the same owner and strategic region), `remapReferences` (`refuse` or `override`, as for `merge_states`), `borderQuality`, `borderTargets` and `borderQualityScope`.
 
