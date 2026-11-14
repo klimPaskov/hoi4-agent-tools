@@ -531,3 +531,47 @@ describe('border naturalness runs and edge cases', () => {
     expect(layer.barrier.alignment).toBe(1);
   });
 });
+
+describe('border quality in a scope', () => {
+  // A border along the meandering river (1-2) and a ruler line at x = 180 (2-3).
+  const world = (scope?: (x: number, y: number) => boolean): BorderQualityInput => {
+    const input = build({
+      width: 256,
+      height: 128,
+      provinceAt: (x, y) => (isSeaStrip(x, 256) ? SEA : x <= meanderX(y) ? 1 : x < 180 ? 2 : 3),
+      kinds: SEA_KINDS,
+      rivers: isRiver,
+    });
+    if (scope === undefined) return input;
+    const mask = new Uint8Array(256 * 128);
+    for (let y = 0; y < 128; y += 1)
+      for (let x = 0; x < 256; x += 1) if (scope(x, y)) mask[y * 256 + x] = 1;
+    return { ...input, scope: mask };
+  };
+
+  it('measures only the borders with a side inside the scope', async () => {
+    // ZIN map lane, 13 November 2026: one region of a redrawn map is measured before and after.
+    const whole = (await measureBorderNaturalness(world())).report;
+    const west = (await measureBorderNaturalness(world((x) => x < 130))).report;
+    const east = (await measureBorderNaturalness(world((x) => x >= 130))).report;
+    expect(whole.scopePixels).toBeUndefined();
+    expect(west.scopePixels).toBe(130 * 128);
+    const share = (report: typeof whole) => report.layers[0]!.natural.share!;
+    expect(share(west)).toBeGreaterThan(0.95);
+    expect(share(east)).toBe(0);
+    expect(share(whole)).toBeGreaterThan(share(east));
+    expect(share(whole)).toBeLessThan(share(west));
+    expect(west.layers[0]!.borderEdges + east.layers[0]!.borderEdges).toBe(
+      whole.layers[0]!.borderEdges,
+    );
+    // A border pixel pair with one side inside counts: the scope edge at x = 179 still sees 2-3.
+    const edge = (await measureBorderNaturalness(world((x) => x === 179))).report;
+    expect(edge.layers[0]!.borderEdges).toBe(128);
+  });
+
+  it('refuses a scope of the wrong size', async () => {
+    await expect(
+      measureBorderNaturalness({ ...world(), scope: new Uint8Array(10) }),
+    ).rejects.toMatchObject({ code: 'MAP_BORDER_QUALITY_INPUT_INVALID' });
+  });
+});
