@@ -154,6 +154,8 @@ export interface SectionTerms {
   role: 'trigger' | 'effect' | 'on_action' | 'variable' | 'other' | undefined;
   /** The first word of a command name, which says whether it grants or takes away. */
   verb: string | undefined;
+  /** The little words of a command name (`with`, `by`, `of`), which the content words drop. */
+  connectors: string[];
 }
 
 export function sectionTerms(
@@ -183,8 +185,27 @@ export function sectionTerms(
     role: commandRole(title, heading.trim()),
     verb:
       commandRole(title, heading.trim()) === undefined ? undefined : heading.trim().split('_')[0],
+    connectors:
+      commandRole(title, heading.trim()) === undefined
+        ? []
+        : [
+            ...new Set(
+              heading
+                .trim()
+                .split('_')
+                .slice(1)
+                .filter((part) => connectorWords.has(part)),
+            ),
+          ],
   };
 }
+
+/**
+ * Command names carry relations in little words: `has_war_with`, `is_owned_by`,
+ * `num_of_factories`. A question that says "at war with" names them, and the content words
+ * of the question alone cannot tell `has_war_with` from `has_annex_war_goal`.
+ */
+const connectorWords = new Set(['with', 'by', 'of', 'from', 'to', 'in', 'on', 'for', 'against']);
 
 function commandRole(title: string, heading: string): SectionTerms['role'] {
   if (!/^[a-z][a-z0-9_]*$/u.test(heading)) return undefined;
@@ -213,6 +234,8 @@ export interface QueryPlan {
   /** Adjacent query words, rewarded when a section uses them as a phrase. */
   pairs: Array<{ pair: string; idf: number }>;
   normalized: string;
+  /** Every word of the question, the little ones included. */
+  spoken: Set<string>;
   identifiers: Set<string>;
   wants: {
     console: boolean;
@@ -273,10 +296,53 @@ function questionIntent(normalized: string): Omit<QueryPlan['wants'], 'console' 
   };
 }
 
+/**
+ * Words players use for what the scripts call something else: a "national spirit" is an idea, a
+ * "vassal" a puppet, a state "with access to the sea" is coastal. Each question word adds the
+ * script words beside it, at a lower weight than the words the question itself uses.
+ */
+const scriptWords = new Map<string, readonly string[]>(
+  Object.entries({
+    sea: ['coast', 'coastal', 'naval'],
+    ocean: ['sea', 'naval', 'coastal'],
+    temporary: ['timed', 'days', 'duration'],
+    temporarily: ['timed', 'days', 'duration'],
+    hide: ['visible', 'hidden'],
+    hiding: ['visible', 'hidden'],
+    invisible: ['visible', 'hidden'],
+    fighting: ['war'],
+    fight: ['war'],
+    vassal: ['puppet', 'subject'],
+    vassals: ['puppet', 'subject'],
+    spirit: ['idea'],
+    owner: ['owned', 'controller'],
+    ownership: ['owned'],
+    random: ['chance'],
+    randomly: ['chance'],
+    percent: ['chance'],
+    monthly: ['month'],
+    yearly: ['year'],
+    daily: ['day'],
+    tech: ['technology'],
+    free: ['release', 'independent'],
+    independence: ['release', 'puppet'],
+    conquer: ['occupied', 'control'],
+    capture: ['occupied', 'control'],
+    ally: ['faction', 'alliance'],
+    allies: ['faction', 'alliance'],
+    requirement: ['trigger', 'allow'],
+    unlock: ['available', 'allow'],
+  }).map(([word, words]) => [stemTerm(word), words.map((entry) => stemTerm(entry))]),
+);
+/** What an added script word counts for next to a word the question itself uses. */
+const scriptWordWeight = 0.7;
+
 /** Script names abbreviate counts as `num_`, as in `num_divisions` or `num_of_factories`. */
 const countWords = new Set(['count', 'number', 'amount', 'many', 'much']);
 
 const headingWeight = 4;
+/** What a command name's little word is worth when the question says it and names every other word. */
+const connectorBonus = 3;
 const titleWeight = 0.5;
 const bodyWeight = 1;
 const saturation = 1.2;
@@ -323,6 +389,10 @@ export class RankingIndex {
       if (this.#documentFrequency.has(joined) && !weights.has(joined)) weights.set(joined, 1);
     }
     if (words.some((word) => countWords.has(word)) && !weights.has('num')) weights.set('num', 0.6);
+    for (const word of words)
+      for (const added of scriptWords.get(stemTerm(word)) ?? [])
+        if (this.#documentFrequency.has(added) && !weights.has(added))
+          weights.set(added, scriptWordWeight);
     const terms = [...weights].map(([term, weight]) => ({ term, idf: this.idf(term), weight }));
     const plain = sequence.filter((term) => !term.includes('_'));
     const pairs = [...new Set(plain.slice(1).map((term, index) => `${plain[index]} ${term}`))].map(
@@ -335,6 +405,7 @@ export class RankingIndex {
       terms,
       pairs,
       normalized,
+      spoken: new Set(normalized.replace(/'s\b/gu, '').match(tokenPattern) ?? []),
       identifiers: new Set(terms.map(({ term }) => term).filter((term) => term.includes('_'))),
       wants: {
         ...questionIntent(normalized),
@@ -377,8 +448,15 @@ export class RankingIndex {
       return undefined;
     const headingText = heading.trim().toLowerCase();
     // An exact heading is the answer; authority, not incidental wording, orders duplicates.
-    if (headingText === plan.normalized) return 1000;
-    else if (plan.identifiers.has(headingText)) score += 40;
+    // A console command, a define or a variable of the same name answers only a question that
+    // asks for one, so a trigger or an effect of that name stays ahead of it.
+    if (headingText === plan.normalized) {
+      const unwanted =
+        (entry.specialty === 'console' && !plan.wants.console) ||
+        (entry.specialty === 'define' && !plan.wants.define) ||
+        (entry.role === 'variable' && !plan.wants.variable);
+      return unwanted ? 600 : 1000;
+    } else if (plan.identifiers.has(headingText)) score += 40;
     // A short heading whose every word the question names is usually the topic itself.
     const direction = verbDirection(entry.verb);
     if (entry.headingWords.length > 0) {
@@ -389,6 +467,17 @@ export class RankingIndex {
       const covered = entry.headingWords.filter((word) => queryTerms.has(word));
       const fraction = covered.length / entry.headingWords.length;
       score += fraction * fraction * covered.reduce((sum, word) => sum + this.idf(word), 0) * 0.6;
+    }
+    // A little word of the command's name that the question also says ("at war with" for
+    // `has_war_with`) is worth more than the content words the commands share.
+    if (entry.connectors.length > 0 && entry.headingWords.length > 0) {
+      const covered = entry.headingWords.filter((word) =>
+        plan.terms.some(({ term }) => term === word),
+      );
+      if (covered.length === entry.headingWords.length) {
+        const said = entry.connectors.filter((word) => plan.spoken.has(word)).length;
+        score += said * connectorBonus;
+      }
     }
     if (entry.navigation) score *= 0.25;
     if (entry.specialty === 'console' && !plan.wants.console) score *= 0.7;

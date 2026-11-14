@@ -163,6 +163,14 @@ export class CoreEngine {
   readonly #scanCache = new Map<string, FileScanSnapshot>();
   readonly #scanFlights = new Map<string, ScanFlight>();
   readonly #scanGenerations = new Map<string, number>();
+  /**
+   * The newest completed index of each workspace. After an edit or with another file pattern no
+   * scan of the same request is left to start from, and the segment cache holds too few records
+   * to index the installed game again cheaply, so this index supplies every unchanged file's
+   * records. They are addressed by the file's content hash, so an older index can never supply
+   * a wrong one.
+   */
+  readonly #latestIndexes = new Map<string, SymbolIndex>();
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
   #recovery: Promise<void> | undefined;
@@ -398,10 +406,12 @@ export class CoreEngine {
           );
           // The previous revision of the same request still holds every unchanged file's
           // records, so only edited files are parsed and indexed again.
-          const previous = (
-            [...this.#scanCache].filter(([key]) => key.startsWith(`${requestKey}:`)).at(-1)?.[1] as
-              ScanSnapshot | undefined
-          )?.index;
+          const previous =
+            (
+              [...this.#scanCache]
+                .filter(([key]) => key.startsWith(`${requestKey}:`))
+                .at(-1)?.[1] as ScanSnapshot | undefined
+            )?.index ?? this.#latestIndexes.get(workspaceId);
           const index = await SymbolIndex.buildAsync(
             files,
             controller.signal,
@@ -415,6 +425,7 @@ export class CoreEngine {
             this.indexSegments,
             controller.signal,
           );
+          this.#latestIndexes.set(workspaceId, index);
           const documentedEffects = await installedEffectCommands(workspace.gameRoot);
           const snapshot = {
             workspaceId,
@@ -504,6 +515,7 @@ export class CoreEngine {
   /** Drop completed scan buffers without invalidating revisions or interrupting active scans. */
   releaseScanCaches(): void {
     this.#scanCache.clear();
+    this.#latestIndexes.clear();
     this.indexSegments.clear();
     sourceDocuments.clear();
     this.scanner.clearCaches();
