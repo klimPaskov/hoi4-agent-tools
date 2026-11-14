@@ -1,0 +1,12 @@
+ideas = {
+	country = {
+		bench_first_spirit = {
+			picture = bench_first_spirit
+			modifier = { stability_factor = 0.1 }
+		}
+
+		bench_second_spirit = {
+			picture = bench_second_spirit
+		}
+	}
+}

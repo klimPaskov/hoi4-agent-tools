@@ -88,6 +88,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.idea-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.idea-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.idea-write-replace-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.idea-write-unknown-category": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.localisation-write-preview": {
       "inline": true,
       "passed": true
