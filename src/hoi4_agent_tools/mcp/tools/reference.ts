@@ -140,7 +140,7 @@ export const referenceTools = [
     name: 'hoi4.mod_index',
     title: 'Explore mod content and find free IDs',
     description:
-      'Summarize the content in a mod or find a free event ID across the mod, game and dependencies. Use overview for descriptors, folders and definitions, or next_id with a namespace or prefix. Example: {"mode":"next_id","kind":"event","namespace":"my_mod"}. Returns a compact summary; the first call indexes the mod, which takes seconds on a large one.',
+      'Summarize the content in a mod or find a free event ID across the mod, game and dependencies. Use overview for descriptors, folders and definitions (the 50 busiest namespaces; pass a namespace or prefix to list those starting with it), or next_id with a namespace or prefix. Example: {"mode":"next_id","kind":"event","namespace":"my_mod"}. Returns a compact summary; the first call indexes the mod, which takes seconds on a large one.',
     inputSchema: modIndexRequestSchema,
     outputSchema: strictOperationResultSchema(modIndexDataSchema),
     annotations: readOnly,

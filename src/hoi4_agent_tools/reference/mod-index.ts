@@ -24,8 +24,11 @@ import {
 type Input = z.infer<typeof modIndexRequestSchema>;
 type Output = z.infer<typeof modIndexDataSchema>;
 
-const MAX_NAMESPACES = 200;
-const MAX_FOLDERS = 60;
+// An overview answers inline in about 8 KB (issue 66): the busiest namespaces and folders, with a
+// prefix filter for the rest. A namespace line is about 80 bytes and a folder line about 60.
+const MAX_NAMESPACES = 50;
+const MAX_FILTERED_NAMESPACES = 100;
+const MAX_FOLDERS = 25;
 /** A cold index of the game, its DLC and a large mod. */
 const MOD_INDEX_TIMEOUT_MS = 180_000;
 const MOD_INDEX_REQUEST_SCHEMA = 'hoi4-mod-index-request/1';
@@ -152,9 +155,18 @@ export async function modIndex(
     principal,
     signal,
   );
-  const allNamespaces = [...(answer.namespaces ?? [])].sort((left, right) =>
-    left.namespace.localeCompare(right.namespace, 'en'),
+  // `namespace` or `prefix` narrows the list to the namespaces that start with it.
+  const filter = input.prefix ?? input.namespace;
+  const matching = (answer.namespaces ?? []).filter(
+    ({ namespace }) => filter === undefined || namespace.startsWith(filter),
   );
+  const shownNamespaces = [...matching]
+    .sort(
+      (left, right) =>
+        right.events - left.events || left.namespace.localeCompare(right.namespace, 'en'),
+    )
+    .slice(0, filter === undefined ? MAX_NAMESPACES : MAX_FILTERED_NAMESPACES)
+    .sort((left, right) => left.namespace.localeCompare(right.namespace, 'en'));
   const modRoot = engine.resolver
     .get(workspaceId, principal)
     .roots.find(({ kind }) => kind === 'mod')?.path;
@@ -171,7 +183,7 @@ export async function modIndex(
     folders: [...(answer.folders ?? [])]
       .sort((left, right) => right.files - left.files || left.folder.localeCompare(right.folder))
       .slice(0, MAX_FOLDERS),
-    namespaces: allNamespaces.slice(0, MAX_NAMESPACES),
-    omittedNamespaces: Math.max(0, allNamespaces.length - MAX_NAMESPACES),
+    namespaces: shownNamespaces,
+    omittedNamespaces: matching.length - shownNamespaces.length,
   };
 }
