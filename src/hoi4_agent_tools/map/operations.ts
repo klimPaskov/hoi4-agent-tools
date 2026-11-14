@@ -5288,11 +5288,16 @@ function renameLocalisationKeys(
   changes: Map<string, MutableChange>,
   keys: ReadonlyMap<string, string>,
   operationId: string,
+  /**
+   * Keys whose entity no longer exists (the state a merge removed): a rename may take them over,
+   * and their entries in the mod's files are removed.
+   */
+  orphaned: ReadonlySet<string> = new Set(),
 ): void {
   if (keys.size === 0) return;
   for (const [from, to] of keys) {
     const destination = index.localisationEntries.filter(({ entry }) => entry.key === to);
-    if (destination.length > 0 && !keys.has(to))
+    if (destination.length > 0 && !keys.has(to) && !orphaned.has(to))
       throw new ServiceError(
         'MAP_LOCALISATION_KEY_COLLISION',
         `Localisation key ${to} already exists`,
@@ -5305,6 +5310,24 @@ function renameLocalisationKeys(
   >();
   for (const { file, document, entry } of index.localisationEntries) {
     if (file.rootKind !== 'mod') continue;
+    if (orphaned.has(entry.key) && !keys.has(entry.key)) {
+      // The orphaned entry goes, with its line break, so the renamed key is the only one.
+      requireSafeLocalisationDocument(document, file.relativePath);
+      const group = documents.get(file.relativePath) ?? { document, replacements: [] };
+      const breakLength = document.text.startsWith('\r\n', entry.end)
+        ? 2
+        : document.text.startsWith('\n', entry.end)
+          ? 1
+          : 0;
+      group.replacements.push({
+        start: entry.start,
+        end: entry.end + breakLength,
+        text: '',
+        description: 'Remove the localisation of a state that no longer exists',
+      });
+      documents.set(file.relativePath, group);
+      continue;
+    }
     const replacementKey = keys.get(entry.key);
     if (replacementKey === undefined) continue;
     requireSafeLocalisationDocument(document, file.relativePath);
@@ -5494,32 +5517,14 @@ function applyRenumberMapEntity(
       index.states.map(({ id }) => id),
       operation,
     );
-    const localisationKeys = new Map<string, string>();
-    for (const [fromId, toId] of mapping) {
-      const state = required(
-        index.statesById.get(fromId),
-        'MAP_ENTITY_ID_NOT_FOUND',
-        `State ${fromId} does not exist`,
-      );
-      const data = cloneState(state);
-      data.id = toId;
-      const standardName = state.name === `STATE_${fromId}`;
-      if (standardName) {
-        data.name = `STATE_${toId}`;
-        localisationKeys.set(state.name, data.name);
-      }
-      commitState(
-        changes,
-        state,
-        data,
-        { id: true, ...(standardName ? { name: true } : {}) },
-        operation.id,
-      );
-    }
-    remapBuildingPositionStateIds(index, changes, mapping, operation.id);
-    remapExternalScriptReferences(index, changes, mapping, operation.entity, operation.id);
-    if (operation.renameLocalisation ?? true)
-      renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
+    renumberStates(
+      base,
+      changes,
+      index,
+      mapping,
+      operation.id,
+      operation.renameLocalisation ?? true,
+    );
     return;
   }
   const mapping = renumberMapping(
@@ -5555,6 +5560,133 @@ function applyRenumberMapEntity(
   remapExternalScriptReferences(index, changes, mapping, operation.entity, operation.id);
   if (operation.renameLocalisation ?? true)
     renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
+}
+
+/**
+ * Give states new ids by `mapping` in one pass: their files, building positions, script references
+ * and `STATE_<id>` localisation keys. renumber_map_entity and the closing of state-id holes use it.
+ */
+function renumberStates(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  index: MapWorkspaceIndex,
+  mapping: ReadonlyMap<number, number>,
+  operationId: string,
+  renameLocalisation: boolean,
+  /** The target ids belong to states that no longer exist; their `STATE_<id>` keys are taken over. */
+  intoHoles = false,
+): void {
+  const localisationKeys = new Map<string, string>();
+  for (const [fromId, toId] of mapping) {
+    const state = required(
+      index.statesById.get(fromId),
+      'MAP_ENTITY_ID_NOT_FOUND',
+      `State ${fromId} does not exist`,
+    );
+    const data = cloneState(state);
+    data.id = toId;
+    const standardName = state.name === `STATE_${fromId}`;
+    if (standardName) {
+      data.name = `STATE_${toId}`;
+      localisationKeys.set(state.name, data.name);
+    }
+    commitState(
+      changes,
+      state,
+      data,
+      { id: true, ...(standardName ? { name: true } : {}) },
+      operationId,
+    );
+  }
+  remapBuildingPositionStateIds(index, changes, mapping, operationId);
+  remapExternalScriptReferences(index, changes, mapping, 'state', operationId);
+  if (renameLocalisation)
+    renameLocalisationKeys(
+      currentIndex(base, changes),
+      changes,
+      localisationKeys,
+      operationId,
+      intoHoles ? new Set([...mapping.values()].map((id) => `STATE_${id}`)) : new Set(),
+    );
+}
+
+/** The ids missing from 1 up to the highest id. */
+function idHoles(ids: Iterable<number>): number[] {
+  const present = new Set(ids);
+  const highest = Math.max(0, ...present);
+  const holes: number[] = [];
+  for (let id = 1; id < highest; id += 1) if (!present.has(id)) holes.push(id);
+  return holes;
+}
+
+/**
+ * The game needs every state id from 1 to the highest; a missing one crashes it at setup ("Missing
+ * State ID"). When a request's operations leave holes the mod did not have before (a merge source,
+ * a state assign_territory dissolved), the highest states move into them, with their references,
+ * in the same write. Holes the mod already had are reported, not moved, since closing them renumbers
+ * states the request did not touch.
+ */
+function closeStateIdHoles(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operationId: string,
+  /** State ids the request asked for by name; those states stay where they were asked to go. */
+  requested: ReadonlySet<number>,
+): { diagnostics: Diagnostic[]; mapping: ReadonlyMap<number, number> } {
+  const before = base.states.map(({ id }) => id);
+  const index = currentIndex(base, changes);
+  const after = index.states.map(({ id }) => id);
+  const sameStates =
+    before.length === after.length && new Set([...before, ...after]).size === before.length;
+  if (sameStates) return { diagnostics: [], mapping: new Map() };
+  const existing = new Set(idHoles(before));
+  const holes = idHoles(after);
+  const created = holes.filter((id) => !existing.has(id));
+  const diagnostics: Diagnostic[] = [];
+  const mapping = new Map<number, number>();
+  const movable = after.filter((id) => !requested.has(id)).sort((a, b) => b - a);
+  for (const hole of created) {
+    const highest = movable[0];
+    if (highest === undefined || highest < hole) break;
+    movable.shift();
+    mapping.set(highest, hole);
+  }
+  if (mapping.size > 0) {
+    try {
+      renumberStates(base, changes, index, mapping, operationId, true, true);
+    } catch (error) {
+      const cause = error instanceof ServiceError ? error : undefined;
+      throw new ServiceError(
+        'MAP_STATE_ID_GAP',
+        `The write would leave state ids ${created.join(', ')} without a state, which crashes the game, and moving the highest states into them failed: ${
+          cause?.message ?? (error instanceof Error ? error.message : String(error))
+        }`,
+        { holes: created, ...(cause === undefined ? {} : { cause: cause.code }) },
+      );
+    }
+    diagnostics.push({
+      code: 'MAP_STATE_IDS_COMPACTED',
+      severity: 'info',
+      category: 'map',
+      operationId,
+      message: `The write left ${mapping.size} state id(s) without a state; the highest states moved into them, with their references and localisation, so every id from 1 to the highest exists`,
+      details: {
+        moves: [...mapping].map(([from, to]) => ({ from, to })).slice(0, 500),
+        moveCount: mapping.size,
+      },
+    });
+  }
+  const remaining = idHoles(currentIndex(base, changes).states.map(({ id }) => id));
+  if (remaining.length > 0)
+    diagnostics.push({
+      code: 'MAP_STATE_ID_GAP',
+      severity: 'warning',
+      category: 'map',
+      operationId,
+      message: `State ids ${remaining.slice(0, 50).join(', ')}${remaining.length > 50 ? ', ...' : ''} have no state; the game needs every id from 1 to the highest. Close each with renumber_map_entity (entity state, the highest id into the hole)`,
+      details: { holes: remaining.slice(0, 500), holeCount: remaining.length },
+    });
+  return { diagnostics, mapping };
 }
 
 /** Folders a new world replaces in the base game. */
@@ -6513,6 +6645,54 @@ function* planMapOperationSteps(
         message: blocker.message,
         operationId: blocker.operationId,
         ...(blocker.details === undefined ? {} : { details: blocker.details }),
+      });
+    }
+  }
+  // A write never leaves a state id without a state (issue 182): close the holes this request made.
+  const lastOperation = operations.at(-1);
+  if (blockers.length === 0 && lastOperation !== undefined) {
+    try {
+      const requested = new Set<number>();
+      for (const operation of operations) {
+        if ('stateId' in operation && typeof operation.stateId === 'number')
+          requested.add(operation.stateId);
+        if (operation.kind === 'renumber_map_entity' && operation.entity === 'state')
+          requested.add(operation.toId);
+      }
+      const closed = closeStateIdHoles(base, changes, lastOperation.id, requested);
+      diagnostics.push(...closed.diagnostics);
+      // Reports name the ids the states have after the write.
+      const moved = (id: number) => closed.mapping.get(id) ?? id;
+      for (const report of territory) {
+        report.states.created = report.states.created.map(moved);
+        report.states.changed = report.states.changed.map(moved);
+      }
+      for (const allocation of allocations)
+        if (allocation.kind === 'state-id' && typeof allocation.allocated === 'number')
+          allocation.allocated = moved(allocation.allocated);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const serviceError =
+        error instanceof ServiceError
+          ? error
+          : new ServiceError(
+              'MAP_STATE_ID_GAP',
+              error instanceof Error ? error.message : String(error),
+            );
+      blockers.push({
+        code: serviceError.code,
+        message: serviceError.message,
+        operationId: lastOperation.id,
+        ...(Object.keys(serviceError.details).length === 0
+          ? {}
+          : { details: serviceError.details }),
+      });
+      diagnostics.push({
+        code: serviceError.code,
+        severity: 'blocker',
+        category: 'map',
+        message: serviceError.message,
+        operationId: lastOperation.id,
       });
     }
   }
