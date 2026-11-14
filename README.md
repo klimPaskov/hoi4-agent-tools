@@ -42,6 +42,7 @@ You describe what you want; the agent picks the right tools.
 ## Quick start
 
 1. Install [Node.js](https://nodejs.org/) 22 (22.19 or later) or 24, and keep Hearts of Iron IV installed for vanilla files, artwork and fonts.
+   The package ships its analysis engine for Windows x64, Linux x64 and arm64, and macOS on Apple silicon. On another platform, such as an Intel Mac, the tools that need the engine say so and how to build it; set `HOI4_ENGINE` to that build.
 2. Install the server:
 
    ```bash

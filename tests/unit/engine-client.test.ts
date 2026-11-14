@@ -5,8 +5,10 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   ENGINE_BUNDLE_MANIFEST_SCHEMA,
+  ENGINE_BUNDLE_PLATFORMS,
   engineBundleManifestPath,
   locateEngineBinary,
+  missingEngineMessage,
   packagedEngineBinaryPath,
   runFocusLayoutEngine,
   type FocusLayoutEngineRequest,
@@ -150,6 +152,24 @@ describe('engine client', () => {
     });
     if (result.available) return;
     expect(result.message).toContain('HOI4_ENGINE');
+    expect(result.message).toBe(missingEngineMessage(process.platform, process.arch));
+  });
+
+  it('names what is missing and how to get it on a platform the release does not ship for', () => {
+    // macOS on Intel has no bundled binary: the answer names the shipped platforms and the build.
+    const intelMac = missingEngineMessage('darwin', 'x64');
+    expect(intelMac).toBe(
+      "hoi4-agent-tools ships the hoi4-engine binary for macOS on Apple silicon, Linux arm64, Linux x64, Windows x64, not for darwin-x64. To use the tools that need it here, build it from the repository's engine/ folder (cargo build --release -p hoi4-engine-cli) and set HOI4_ENGINE to the binary's absolute path.",
+    );
+    // A shipped platform whose binary is gone points to a reinstall first.
+    const windows = missingEngineMessage('win32', 'x64');
+    expect(windows).toContain('missing from this installation');
+    expect(windows).toContain('npm install --global hoi4-agent-tools');
+    expect(windows).toContain('HOI4_ENGINE');
+    for (const platform of ENGINE_BUNDLE_PLATFORMS) {
+      const [os, arch] = platform.split('-') as [string, string];
+      expect(missingEngineMessage(os, arch), platform).toContain('Reinstall hoi4-agent-tools');
+    }
   });
 
   /** A package root holding a bundled binary for this platform and, optionally, its manifest. */
