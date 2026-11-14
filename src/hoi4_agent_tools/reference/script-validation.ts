@@ -613,7 +613,9 @@ export async function validateScript(
           status: other === undefined ? 'unresolved' : 'error',
           message:
             other === undefined
-              ? 'Not documented as a native command in the selected source; inspect scripted helpers or declare the scope binding'
+              ? `Not documented as a native command in the selected source; inspect scripted helpers or declare the scope binding${
+                  suggestions.length === 0 ? '' : `. Did you mean ${suggestions.join(', ')}?`
+                }`
               : `Documented as a ${kind === 'effect' ? 'trigger' : 'effect'}, not a ${kind}`,
           suggestions,
           ...(other === undefined ? {} : { reference: other.reference }),

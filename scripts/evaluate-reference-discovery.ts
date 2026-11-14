@@ -7,6 +7,7 @@ import { WorkspaceResolver } from '../src/hoi4_agent_tools/core/workspace.js';
 import { ReferenceService } from '../src/hoi4_agent_tools/reference/service.js';
 import { referenceSearchRequestSchema } from '../src/hoi4_agent_tools/schemas/reference.js';
 import {
+  type DiscoveryCase,
   discoveryCases,
   documentKey,
   freshCases,
@@ -15,6 +16,7 @@ import {
   validationCases,
 } from './reference-discovery-cases.js';
 import { commonBlindCases, commonDevCases } from './reference-common-cases.js';
+import { commonBlind2Cases } from './reference-common-blind2-cases.js';
 
 /**
  * Measures held-out documentation discovery against a real offline wiki and installed game.
@@ -38,10 +40,12 @@ const cases =
             ? commonDevCases
             : process.argv[4] === '--common-blind'
               ? commonBlindCases
-              : discoveryCases;
+              : process.argv[4] === '--common-blind2'
+                ? commonBlind2Cases
+                : discoveryCases;
 if (modRoot === undefined || gameRoot === undefined) {
   process.stderr.write(
-    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test|--fresh|--common-dev|--common-blind]\n',
+    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test|--fresh|--common-dev|--common-blind|--common-blind2]\n',
   );
   process.exit(2);
 }
@@ -76,18 +80,38 @@ interface DiscoveryRow {
   ms: number;
   top: string[];
 }
+const byCommand = process.env.EVAL_BY_COMMAND !== undefined;
+/** The command names that the answer patterns of a case point at (`^## name$` or a table row). */
+function commandNames(answers: DiscoveryCase['answers']): Set<string> {
+  const names = new Set<string>();
+  for (const { line } of answers) {
+    const name = (/^\^## ([a-z][a-z0-9_]*)\$$/u.exec(line.source) ??
+      /^\^\\\| ([a-z][a-z0-9_]*) \\\|$/u.exec(line.source))?.[1];
+    if (name !== undefined) names.add(name);
+  }
+  return names;
+}
 const rows: DiscoveryRow[] = [];
 const missingAnswers: string[] = [];
 for (const item of cases) {
   const started = performance.now();
   const response = await service.search(
     workspace,
-    referenceSearchRequestSchema.parse({ workspaceId: 'evaluation', query: item.query, limit: 5 }),
+    referenceSearchRequestSchema.parse({
+      workspaceId: 'evaluation',
+      query: item.query,
+      limit: Number(process.env.EVAL_LIMIT ?? 5),
+    }),
   );
   const ms = Math.round(performance.now() - started);
   let answerRank: number | null = null;
   let landingRank: number | null = null;
   for (const [index, result] of response.results.entries()) {
+    // A command is documented in the game files and again in the wiki tables. With EVAL_BY_COMMAND
+    // set, a result that is the same command under any of those files answers the question, not only
+    // the file the author happened to list.
+    if (byCommand && commandNames(item.answers).has(result.heading.trim()))
+      answerRank ??= index + 1;
     const answers = item.answers.filter(
       ({ file }) => documentKey(path.basename(result.path)) === file,
     );

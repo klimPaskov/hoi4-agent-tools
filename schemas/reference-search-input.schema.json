@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.16.0/schemas/reference-search-input.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.17.0/schemas/reference-search-input.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -22,7 +22,7 @@
       }
     },
     "limit": {
-      "default": 6,
+      "default": 10,
       "type": "integer",
       "minimum": 1,
       "maximum": 12

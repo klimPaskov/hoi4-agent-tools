@@ -111,7 +111,85 @@ function labelsFor(
  * province, state, strategic-region and country groupings the workspace defines, and the height,
  * river and terrain bitmaps when they are present and the size of the province map.
  */
-export function borderQualityInputFromIndex(index: MapWorkspaceIndex): BorderQualityIndexInput {
+/**
+ * Where a border quality measurement looks: the provinces of the states these countries own or of
+ * these states (either list adds provinces), cut to a pixel box. Every part is optional; an empty
+ * scope measures the whole map.
+ */
+export interface BorderQualityScope {
+  owners?: readonly string[] | undefined;
+  stateIds?: readonly number[] | undefined;
+  box?: { x: number; y: number; width: number; height: number } | undefined;
+}
+
+export function borderQualityScopeIsEmpty(scope: BorderQualityScope | undefined): boolean {
+  return (
+    scope === undefined ||
+    ((scope.owners ?? []).length === 0 &&
+      (scope.stateIds ?? []).length === 0 &&
+      scope.box === undefined)
+  );
+}
+
+/** The pixel mask of a scope over the province raster, refused when it selects no pixel. */
+export function borderQualityScopeMask(
+  index: MapWorkspaceIndex,
+  scope: BorderQualityScope,
+): Uint8Array {
+  const raster = index.raster;
+  if (raster === undefined)
+    throw new ServiceError(
+      'MAP_BORDER_QUALITY_RASTER_MISSING',
+      'Border naturalness needs a valid province bitmap and definitions',
+    );
+  const { width, height, provinceIds } = raster;
+  const byProvince =
+    (scope.owners ?? []).length > 0 || (scope.stateIds ?? []).length > 0
+      ? (() => {
+          let highest = 0;
+          for (const definition of index.definitions) highest = Math.max(highest, definition.id);
+          const selected = new Uint8Array(highest + 1);
+          const owners = new Set(scope.owners ?? []);
+          const stateIds = new Set(scope.stateIds ?? []);
+          for (const state of index.states)
+            if (stateIds.has(state.id) || (state.owner !== undefined && owners.has(state.owner)))
+              for (const province of state.provinces)
+                if (province >= 0 && province < selected.length) selected[province] = 1;
+          return selected;
+        })()
+      : undefined;
+  const box = scope.box;
+  const x0 = box === undefined ? 0 : Math.max(0, box.x);
+  const y0 = box === undefined ? 0 : Math.max(0, box.y);
+  const x1 = box === undefined ? width : Math.min(width, box.x + box.width);
+  const y1 = box === undefined ? height : Math.min(height, box.y + box.height);
+  const mask = new Uint8Array(width * height);
+  let pixels = 0;
+  for (let y = y0; y < y1; y += 1)
+    for (let x = x0; x < x1; x += 1) {
+      const pixel = y * width + x;
+      const id = provinceIds[pixel]!;
+      if (byProvince !== undefined && (id < 0 || byProvince[id] !== 1)) continue;
+      mask[pixel] = 1;
+      pixels += 1;
+    }
+  if (pixels === 0)
+    throw new ServiceError(
+      'MAP_BORDER_QUALITY_SCOPE_EMPTY',
+      'The border quality scope selects no pixel of the province map: check its owners, stateIds and box',
+      {
+        ...(scope.owners === undefined ? {} : { owners: scope.owners.slice(0, 20) }),
+        ...(scope.stateIds === undefined ? {} : { stateIds: scope.stateIds.slice(0, 20) }),
+        ...(box === undefined ? {} : { box }),
+      },
+    );
+  return mask;
+}
+
+export function borderQualityInputFromIndex(
+  index: MapWorkspaceIndex,
+  scope?: BorderQualityScope,
+): BorderQualityIndexInput {
   const raster = index.raster;
   if (raster === undefined)
     throw new ServiceError(
@@ -189,6 +267,7 @@ export function borderQualityInputFromIndex(index: MapWorkspaceIndex): BorderQua
       provinceKinds: kinds,
       layers,
       features,
+      ...(borderQualityScopeIsEmpty(scope) ? {} : { scope: borderQualityScopeMask(index, scope!) }),
     },
     skipped,
   };
@@ -198,8 +277,9 @@ export function borderQualityInputFromIndex(index: MapWorkspaceIndex): BorderQua
 export async function measureIndexBorderNaturalness(
   index: MapWorkspaceIndex,
   options: BorderQualityOptions = {},
+  scope?: BorderQualityScope,
 ): Promise<BorderQualityResult & { skipped: BorderQualityIndexInput['skipped'] }> {
-  const { input, skipped } = borderQualityInputFromIndex(index);
+  const { input, skipped } = borderQualityInputFromIndex(index, scope);
   const result = await measureBorderNaturalness(input, options);
   return { ...result, skipped };
 }
@@ -208,6 +288,8 @@ export async function measureIndexBorderNaturalness(
 export interface BorderQualitySummary {
   inputs: BorderQualityReport['inputs'];
   skippedInputs: { input: string; reason: string }[];
+  /** Pixels inside the measured scope, when one was given. */
+  scopePixels?: number;
   layers: {
     layer: string;
     status: string;
@@ -242,6 +324,7 @@ export function summarizeBorderQuality(
   return {
     inputs: report.inputs,
     skippedInputs: skipped,
+    ...(report.scopePixels === undefined ? {} : { scopePixels: report.scopePixels }),
     layers: report.layers.map((layer) => ({
       layer: layer.layer,
       status: layer.status,
