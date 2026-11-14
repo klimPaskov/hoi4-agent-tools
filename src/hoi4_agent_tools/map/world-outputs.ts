@@ -53,51 +53,62 @@ export function reconcileWorldOutputs(
 export function refreshWorldOutputs(
   sources: readonly ScannedFile[],
   proposed: readonly ProposedFileChange[],
-  adoptAll = false,
+  roots: WorldOutputRoots,
+  options: { adoptAll?: boolean; adoptUnrecorded?: boolean } = {},
 ): ManagedOutputRefresh | undefined {
+  const permits = worldOutputPermits(roots);
   return refreshManagedOutputs({
     manifestPath: WORLD_OUTPUT_MANIFEST,
     sources,
     proposed,
-    ...(adoptAll ? { adoptAll: true } : {}),
+    // New files join the record where the world keeps its map outputs; country files stay out,
+    // since a workspace may own its countries (ADR 0069).
+    addable: (name) => permits(name) && !isWorldCountryOutput(name),
+    ...(options.adoptAll === true ? { adoptAll: true } : {}),
+    ...(options.adoptUnrecorded === true ? { adoptUnrecorded: true } : {}),
   });
 }
 
-export function planWorldOutputs(
-  sources: readonly ScannedFile[],
-  proposed: readonly ProposedFileChange[],
-  operationId: string,
-  mapRoot: string,
-  stateRoots: readonly string[],
-  localisationRoots: readonly string[],
-  options: WorldOutputOptions = {},
-): ManagedOutputPlan {
-  const mapFiles = new Set([
-    'provinces.bmp',
-    'definition.csv',
-    'default.map',
-    'continent.txt',
-    'adjacencies.csv',
-    'adjacency_rules.txt',
-    'positions.txt',
-    'ambient_object.txt',
-    'heightmap.bmp',
-    'terrain.bmp',
-    'rivers.bmp',
-    'trees.bmp',
-    'cities.bmp',
-    'world_normal.bmp',
-    'buildings.txt',
-    'unitstacks.txt',
-    'weatherpositions.txt',
-    'supply_nodes.txt',
-    'railways.txt',
-  ]);
-  const permitsPath = (name: string): boolean => {
+/** Where a world's outputs live: the map folder and the state and localisation roots. */
+export interface WorldOutputRoots {
+  mapRoot: string;
+  stateRoots: readonly string[];
+  localisationRoots: readonly string[];
+}
+
+const WORLD_MAP_FILES = new Set([
+  'provinces.bmp',
+  'definition.csv',
+  'default.map',
+  'continent.txt',
+  'adjacencies.csv',
+  'adjacency_rules.txt',
+  'positions.txt',
+  'ambient_object.txt',
+  'heightmap.bmp',
+  'terrain.bmp',
+  'rivers.bmp',
+  'trees.bmp',
+  'cities.bmp',
+  'world_normal.bmp',
+  'buildings.txt',
+  'unitstacks.txt',
+  'weatherpositions.txt',
+  'supply_nodes.txt',
+  'railways.txt',
+]);
+
+/** The paths a generated world records as its outputs. */
+export function worldOutputPermits({
+  mapRoot,
+  stateRoots,
+  localisationRoots,
+}: WorldOutputRoots): (name: string) => boolean {
+  return (name: string): boolean => {
     const dir = path.posix.dirname(name),
       file = path.posix.basename(name);
     return (
-      (dir === mapRoot && mapFiles.has(file)) ||
+      (dir === mapRoot && WORLD_MAP_FILES.has(file)) ||
       (dir === `${mapRoot}/terrain` && /^colormap_[a-z0-9_]+\.dds$/u.test(file)) ||
       (dir === `${mapRoot}/strategicregions` && /^\d+.*\.txt$/u.test(file)) ||
       (stateRoots.includes(dir) && /^\d+.*\.txt$/u.test(file)) ||
@@ -114,6 +125,18 @@ export function planWorldOutputs(
       )
     );
   };
+}
+
+export function planWorldOutputs(
+  sources: readonly ScannedFile[],
+  proposed: readonly ProposedFileChange[],
+  operationId: string,
+  mapRoot: string,
+  stateRoots: readonly string[],
+  localisationRoots: readonly string[],
+  options: WorldOutputOptions = {},
+): ManagedOutputPlan {
+  const permitsPath = worldOutputPermits({ mapRoot, stateRoots, localisationRoots });
   return planManagedOutputs({
     manifestPath: WORLD_OUTPUT_MANIFEST,
     sources,

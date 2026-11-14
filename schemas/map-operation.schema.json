@@ -1181,6 +1181,10 @@
           "type": "string",
           "const": "record_world_outputs",
           "description": "Adopt the current bytes of every output the world inventory (.hoi4-agent-world.json) records, so the next create_world overwrites them instead of refusing them as edited (MANAGED_OUTPUT_EDITED). Recorded files that are gone are dropped. Reports MAP_WORLD_OUTPUTS_RECORDED."
+        },
+        "adoptUnrecorded": {
+          "description": "Also add the files of the mod at world output paths (state files, strategic regions, map files, world localisation) that the record lacks, for example ones earlier operations created.",
+          "$ref": "#/$defs/__schema288"
         }
       },
       "required": [
@@ -1212,7 +1216,7 @@
         "mode": {
           "default": "connect",
           "description": "connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.",
-          "$ref": "#/$defs/__schema288"
+          "$ref": "#/$defs/__schema289"
         },
         "railwayLevel": {
           "default": 1,
@@ -1243,22 +1247,22 @@
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema289"
-        },
-        "entity": {
           "$ref": "#/$defs/__schema290"
         },
-        "fromId": {
+        "entity": {
           "$ref": "#/$defs/__schema291"
         },
-        "toId": {
+        "fromId": {
           "$ref": "#/$defs/__schema292"
         },
-        "collision": {
+        "toId": {
           "$ref": "#/$defs/__schema293"
         },
-        "renameLocalisation": {
+        "collision": {
           "$ref": "#/$defs/__schema294"
+        },
+        "renameLocalisation": {
+          "$ref": "#/$defs/__schema295"
         }
       },
       "required": [
@@ -1511,7 +1515,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -1592,7 +1596,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -1634,7 +1638,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -1715,7 +1719,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -1757,7 +1761,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -1830,7 +1834,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema295"
+              "$ref": "#/$defs/__schema296"
             }
           },
           "required": [
@@ -6091,17 +6095,20 @@
       ]
     },
     "__schema288": {
+      "type": "boolean"
+    },
+    "__schema289": {
       "type": "string",
       "enum": [
         "connect",
         "replace"
       ]
     },
-    "__schema289": {
+    "__schema290": {
       "type": "string",
       "const": "renumber_map_entity"
     },
-    "__schema290": {
+    "__schema291": {
       "type": "string",
       "enum": [
         "province",
@@ -6109,17 +6116,17 @@
         "strategic-region"
       ]
     },
-    "__schema291": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 9007199254740991
-    },
     "__schema292": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
     "__schema293": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema294": {
       "default": "swap",
       "type": "string",
       "enum": [
@@ -6127,11 +6134,11 @@
         "reject"
       ]
     },
-    "__schema294": {
+    "__schema295": {
       "default": true,
       "type": "boolean"
     },
-    "__schema295": {
+    "__schema296": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991

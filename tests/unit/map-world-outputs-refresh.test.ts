@@ -148,6 +148,44 @@ describe('world output inventory after later map operations', () => {
     plan(after, [world]);
   });
 
+  it('records the files a later operation creates', () => {
+    // ZIN, 14 November 2026: 124 state files created by assign_territory and create_state never
+    // entered the record, and a sync that copies the recorded files left the game without them.
+    const province = first!.provinces.find((id) => id !== first!.capital) ?? first!.provinces[0]!;
+    const result = plan(written, [
+      { id: 'split', kind: 'split_state', sourceStateId: first!.id, provinceIds: [province] },
+    ]);
+    const created = result.changes.filter(
+      ({ relativePath, content }) =>
+        content !== null &&
+        relativePath.startsWith('history/states/') &&
+        !written.some((file) => file.relativePath === relativePath),
+    );
+    expect(created.length).toBeGreaterThan(0);
+    const after = applied(written, result.changes);
+    for (const { relativePath } of created) expect(recorded(after).has(relativePath)).toBe(true);
+    expect(stale(after)).toEqual([]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_REFRESHED')!;
+    expect((note.details as { added: number }).added).toBe(created.length);
+    plan(after, [world]);
+  });
+
+  it('adopts unrecorded files at world output paths with adoptUnrecorded', () => {
+    const stray = source('history/states/9999-Stray.txt', 'state = { id = 9999 }');
+    const notes = source('notes/readme.txt', 'authored');
+    const before = [...written, stray, notes];
+    const plain = plan(before, [{ id: 'adopt', kind: 'record_world_outputs' }]);
+    expect(plain.changes).toEqual([]);
+    const result = plan(before, [
+      { id: 'adopt', kind: 'record_world_outputs', adoptUnrecorded: true },
+    ]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_RECORDED')!;
+    expect(note.details).toMatchObject({ added: 1, addedPaths: [stray.relativePath] });
+    const after = applied(before, result.changes);
+    expect(recorded(after).has(stray.relativePath)).toBe(true);
+    expect(recorded(after).has(notes.relativePath)).toBe(false);
+  });
+
   it('refuses record_world_outputs in a mod without a world inventory', () => {
     const result = planMapOperations(MapWorkspaceIndex.build([]), [
       { id: 'adopt', kind: 'record_world_outputs' },

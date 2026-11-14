@@ -1391,6 +1391,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe(
           'Adopt the current bytes of every output the world inventory (.hoi4-agent-world.json) records, so the next create_world overwrites them instead of refusing them as edited (MANAGED_OUTPUT_EDITED). Recorded files that are gone are dropped. Reports MAP_WORLD_OUTPUTS_RECORDED.',
         ),
+      adoptUnrecorded: z
+        .boolean()
+        .optional()
+        .describe(
+          'Also add the files of the mod at world output paths (state files, strategic regions, map files, world localisation) that the record lacks, for example ones earlier operations created.',
+        ),
     })
     .strict(),
   z
