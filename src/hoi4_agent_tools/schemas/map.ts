@@ -866,74 +866,16 @@ const stateChangesSchema = z
 
 export const naturalLandOptionsSchema = z
   .object({
-    minProvinces: z
-      .number()
-      .int()
-      .min(1)
-      .max(10_000)
-      .optional()
-      .describe(
-        'Lands smaller than this many provinces merge across their weakest line. Default 6.',
-      ),
-    minBasinProvinces: z
-      .number()
-      .int()
-      .min(1)
-      .max(10_000)
-      .optional()
-      .describe(
-        'Drainage basins smaller than this merge over their lowest pass. Default minProvinces.',
-      ),
-    maxBasinProvinces: z
-      .number()
-      .int()
-      .min(2)
-      .max(100_000)
-      .optional()
-      .describe(
-        'Split basins larger than this at branch points of their drainage tree; at least twice minBasinProvinces. Default none.',
-      ),
-    riverMajorIndex: z
-      .number()
-      .int()
-      .min(0)
-      .max(11)
-      .optional()
-      .describe('rivers.bmp width index from which a river is major. Default 6.'),
-    riverShare: z
-      .number()
-      .gt(0)
-      .max(1)
-      .optional()
-      .describe(
-        'Share of the pixel edges of a border that must touch a major river pixel for the border to follow the river. Default 0.4.',
-      ),
-    crestExcess: z
-      .number()
-      .gt(0)
-      .max(255)
-      .optional()
-      .describe(
-        'Mean heightmap value along a border minus the mean of the higher province that makes the border a crest. Default 3.5.',
-      ),
-    splitRangesAtCrests: z
-      .boolean()
-      .optional()
-      .describe(
-        'Let crests between two hills or mountain provinces cut a range apart. Default false.',
-      ),
+    minProvinces: z.number().int().min(1).max(10_000).optional(),
+    minBasinProvinces: z.number().int().min(1).max(10_000).optional(),
+    maxBasinProvinces: z.number().int().min(2).max(100_000).optional(),
+    riverMajorIndex: z.number().int().min(0).max(11).optional(),
+    riverShare: z.number().gt(0).max(1).optional(),
+    crestExcess: z.number().gt(0).max(255).optional(),
+    splitRangesAtCrests: z.boolean().optional(),
     terrainClasses: z
-      .record(
-        z
-          .string()
-          .regex(/^[A-Za-z0-9_]{1,64}$/u)
-          .describe('Provincial terrain category from definition.csv'),
-        z.enum(NATURAL_TERRAIN_CLASSES),
-      )
-      .optional()
-      .describe(
-        'Class of terrain categories over the defaults (forest and jungle forest; hills and mountain upland; marsh; desert; anything else open).',
-      ),
+      .record(z.string().regex(/^[A-Za-z0-9_]{1,64}$/u), z.enum(NATURAL_TERRAIN_CLASSES))
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {

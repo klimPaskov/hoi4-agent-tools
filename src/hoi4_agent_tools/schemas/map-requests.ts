@@ -123,12 +123,10 @@ export const mapInspectRequestSchema = z
     lands: z
       .boolean()
       .default(false)
-      .describe(
-        'Also cut the land provinces into natural lands: lines on major rivers, crests and terrain-class changes, drainage basins in open country, and small fragments merged across their weakest line. Inline counts and the first 50 lands; every land with its provinces, terrain shares and lines in the linked artifact. Full inspection only.',
-      ),
+      .describe('Also cut land into natural lands along rivers, crests, terrain edges and basins.'),
     landOptions: naturalLandOptionsSchema
       .optional()
-      .describe('Thresholds for lands; requires lands: true.'),
+      .describe('Natural lands thresholds (docs/map.md); needs lands.'),
     layer: mapLayerSchema
       .optional()
       .describe('Render this base layer; combine with overlays, tile or area.'),
