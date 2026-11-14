@@ -1,4 +1,4 @@
-# ADR 0085: What a result's completeness says
+# ADR 0086: What a result's completeness says
 
 Status: accepted (technical default, decision D-18, recorded on issue 66)
 
