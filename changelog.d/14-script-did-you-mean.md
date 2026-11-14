@@ -1,0 +1,1 @@
+- Say "Did you mean ...?" in the message of a script command the game does not document (`SCRIPT_COMMAND_UNRESOLVED`). The close documented names were already in `suggestions`, but an agent that reads only the diagnostics saw "Not documented as a native command" and no hint, so `add_poltical_power` gave no pointer to `add_political_power`.
