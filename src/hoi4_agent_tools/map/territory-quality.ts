@@ -312,3 +312,49 @@ export function territoryArtifactContent(
     skippedInputs: quality?.skippedInputs ?? [],
   };
 }
+
+export interface TerritoryAssignmentContent {
+  schemaVersion: 1;
+  /** Land provinces of each owner after the request, among the states the operations touched. */
+  owners: Record<string, number[]>;
+  /** Provinces of every state the operations changed or created; removed states are listed. */
+  states: Record<string, number[]>;
+  removedStates: number[];
+}
+
+/**
+ * The compact result of the territory operations as `map-territory-assignment.json`: who owns
+ * which provinces and which provinces make each new or changed state, without the whole map.
+ */
+export function territoryAssignmentContent(
+  reports: readonly TerritoryReport[],
+  finalIndex: MapOperationPlan['finalIndex'],
+): TerritoryAssignmentContent {
+  const touched = new Set<number>();
+  const removed = new Set<number>();
+  // The report lists are capped, so every state of an assigned country counts as well.
+  const tags = new Set<string>();
+  for (const report of reports) {
+    for (const id of [...report.states.changed, ...report.states.created]) touched.add(id);
+    for (const id of report.states.removed) removed.add(id);
+    for (const country of report.stats?.countries ?? []) tags.add(country.tag);
+  }
+  for (const state of finalIndex.states)
+    if (state.owner !== undefined && tags.has(state.owner)) touched.add(state.id);
+  const owners: Record<string, number[]> = {};
+  const states: Record<string, number[]> = {};
+  for (const state of [...finalIndex.states].sort((a, b) => a.id - b.id)) {
+    if (!touched.has(state.id)) continue;
+    const provinces = [...state.provinces].sort((a, b) => a - b);
+    states[String(state.id)] = provinces;
+    const tag = state.owner ?? '';
+    owners[tag] = [...(owners[tag] ?? []), ...provinces];
+  }
+  for (const list of Object.values(owners)) list.sort((a, b) => a - b);
+  return {
+    schemaVersion: 1,
+    owners,
+    states,
+    removedStates: [...removed].sort((a, b) => a - b),
+  };
+}

@@ -46,6 +46,8 @@ describe('border quality of a territory assignment', () => {
     expect(codes).toContain('MAP_BORDER_QUALITY_MEASURED');
     expect(codes).toContain('MAP_TERRITORY_ASSIGNED');
     expect(result.artifacts.map(({ name }) => name)).toContain('map-territory-report.json');
+    // The compact province-to-owner result (ZIN rev3: map-proposed.json was 22 MB).
+    expect(result.artifacts.map(({ name }) => name)).toContain('map-territory-assignment.json');
   });
 
   it('measures only inside a borderQualityScope and says so', async () => {
