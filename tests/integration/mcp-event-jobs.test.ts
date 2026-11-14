@@ -388,10 +388,9 @@ describe('production event inspection jobs', () => {
       expect(completed.result).toEqual(JSON.parse(JSON.stringify(foreground)));
       expect(completed.result).toMatchObject({
         structuredContent: {
-          code:
-            mode === 'trace' || mode === 'explain_path'
-              ? 'EVENT_INSPECTED_PARTIAL'
-              : 'EVENT_INSPECTED',
+          // A focused trace or path that answers its question is complete, whatever the
+          // whole-workspace passes it defers.
+          code: 'EVENT_INSPECTED',
           data: { mode, counts: { events: 1 } },
         },
       });

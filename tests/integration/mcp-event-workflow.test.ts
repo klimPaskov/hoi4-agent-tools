@@ -180,9 +180,28 @@ agent.2.a: "Finish"
     );
     expect(traced).toMatchObject({
       status: 'ok',
-      code: 'EVENT_INSPECTED_PARTIAL',
+      code: 'EVENT_INSPECTED',
       changedFiles: [],
       data: { mode: 'trace', boundary: { direction: 'downstream', maxDepth: 4 } },
+    });
+
+    // The same trace cut short by a node limit is partial, and says where it was cut.
+    const cut = resultOf(
+      await client.callTool({
+        name: 'hoi4.event_inspect',
+        arguments: {
+          workspaceId: 'event-workflow',
+          mode: 'trace',
+          selector: { kind: 'event', eventId: 'agent.1' },
+          direction: 'downstream',
+          maxNodes: 1,
+        },
+      }),
+    );
+    expect(cut).toMatchObject({
+      status: 'ok',
+      code: 'EVENT_INSPECTED_PARTIAL',
+      data: { summary: { trace: { truncated: true } } },
     });
 
     const rendered = resultOf(

@@ -89,3 +89,4 @@ Implementation rationale for contributors. For using the server, start with the 
 79. [References and the whole-mod closure on the shared engine](0083-references-and-closure-on-the-shared-engine.md)
 80. [The province raster on the shared engine](0084-map-raster-on-the-shared-engine.md)
 81. [The shared symbol index on the engine](0085-symbol-index-on-the-shared-engine.md)
+82. [What a result's completeness says](0086-result-completeness.md)
