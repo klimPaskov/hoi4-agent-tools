@@ -196,6 +196,38 @@ describe('MCP error privacy', () => {
     );
   });
 
+  it('keeps the first changed files and every count when a large write is truncated', () => {
+    // Issue 185: a map write that changed several hundred files answered changedFiles: [].
+    const result = emptyServiceResult('test', { payload: 'x'.repeat(MAX_TOOL_RESULT_BYTES + 1) });
+    const changed = Array.from(
+      { length: 600 },
+      (_, index) => `history/states/${index + 1}-AGENT_STATE.txt`,
+    );
+    result.changedFiles = changed;
+    result.proposedFiles = changed;
+    result.filesScanned = Array.from({ length: 3_000 }, (_, index) => `events/e${index}.txt`);
+    const bounded = toolResult(result).structuredContent as {
+      changedFiles: string[];
+      proposedFiles: string[];
+      diagnostics: Array<{ code: string; details?: Record<string, unknown> }>;
+    };
+    expect(bounded.changedFiles.length).toBeGreaterThan(50);
+    expect(bounded.changedFiles).toEqual(changed.slice(0, bounded.changedFiles.length));
+    expect(bounded.proposedFiles.length).toBeGreaterThan(0);
+    expect(bounded.diagnostics[0]).toMatchObject({
+      code: 'MCP_RESPONSE_TRUNCATED',
+      details: {
+        changedFilesTotal: 600,
+        changedFilesShown: bounded.changedFiles.length,
+        proposedFilesTotal: 600,
+        filesScannedTotal: 3_000,
+      },
+    });
+    expect(Buffer.byteLength(JSON.stringify(toolResult(result)), 'utf8')).toBeLessThanOrEqual(
+      MAX_TOOL_RESULT_BYTES,
+    );
+  });
+
   it('retains compact operation data when other inline evidence exceeds the wire budget', () => {
     const result = emptyServiceResult('test', { scenarioId: 'meter_history', variantCount: 5 });
     result.diagnostics = Array.from({ length: 20 }, (_, index) => ({
