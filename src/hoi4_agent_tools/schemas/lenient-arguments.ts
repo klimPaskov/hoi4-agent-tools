@@ -7,7 +7,8 @@
  * plain string or without its kind, a GUI scenario without an id, a decision inspection without
  * a scenario, a probability scenario set without ids or state, a scenario set sent as a bare
  * array, a namespace wildcard such as `chaosx.nr14.*`, a trace given `from` instead of `selector`,
- * and a script file check that also names the kind and scope its file already fixes.
+ * a script file check that also names the kind and scope its file already fixes, and a probability
+ * source given as a top-level `path`.
  */
 
 type JsonObject = Record<string, unknown>;
@@ -246,6 +247,11 @@ function normalizeProbabilityArguments(args: JsonObject): JsonObject {
       ? { path: result.source }
       : { identifier: result.source };
   if (typeof result.candidatePool === 'string') result.candidatePool = [result.candidatePool];
+  // The description says surfaces are found by path; a top-level `path` names the source file.
+  if (typeof result.path === 'string' && result.source === undefined) {
+    const { path, ...rest } = result;
+    return { ...rest, source: { path } };
+  }
   return result;
 }
 
