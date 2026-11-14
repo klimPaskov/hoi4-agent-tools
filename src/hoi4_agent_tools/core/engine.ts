@@ -154,6 +154,13 @@ export class CoreEngine {
   readonly #scanCache = new Map<string, FileScanSnapshot>();
   readonly #scanFlights = new Map<string, ScanFlight>();
   readonly #scanGenerations = new Map<string, number>();
+  /**
+   * The newest completed index of each workspace. After an edit or with another file pattern no
+   * scan of the same request is left to start from, and the segment cache holds too few records
+   * to index the installed game again cheaply, so this index supplies every unchanged file's
+   * records. They are addressed by the file's content hash, so an older index can never supply
+   * a wrong one.
+   */
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
   #recovery: Promise<void> | undefined;
