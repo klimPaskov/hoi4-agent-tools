@@ -711,7 +711,19 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
       ],
     });
     expectValidPlan(merged);
-    expect(merged.plan.finalIndex.statesById.has(2)).toBe(false);
+    // The merge leaves id 2 empty, and the game needs every id up to the highest (issue 182): the
+    // highest state, the mod's empty state 5, moves into it. That also ends the mod's older gap
+    // (3 and 4), since 2 is now the highest id.
+    expect(merged.plan.finalIndex.statesById.has(5)).toBe(false);
+    expect(merged.plan.finalIndex.statesById.get(2)).toMatchObject({
+      manpower: 50,
+      owner: 'CCC',
+      provinces: [],
+    });
+    expect(
+      merged.plan.diagnostics.find(({ code }) => code === 'MAP_STATE_IDS_COMPACTED')?.details,
+    ).toMatchObject({ moves: [{ from: 5, to: 2 }] });
+    expect(merged.plan.diagnostics.map(({ code }) => code)).not.toContain('MAP_STATE_ID_GAP');
     expect(merged.plan.finalIndex.statesById.get(1)).toMatchObject({
       manpower: 1500,
       owner: 'AAA',

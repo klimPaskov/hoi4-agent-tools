@@ -188,6 +188,27 @@ describe('stdio smoke: synthetic fixture', () => {
     ).toContain('smoke_localisation_key: "Smoke"');
   }, 300_000);
 
+  it('adds an idea to a temporary copy', async () => {
+    const ideasFile = path.join(rewriteGuiMod, 'common', 'ideas', 'smoke_ideas.txt');
+    await mkdir(path.dirname(ideasFile), { recursive: true });
+    await writeFile(ideasFile, 'ideas = {\n\tcountry = {\n\t}\n}\n');
+    const added = await server.call('hoi4.idea_write', 'add an idea and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      id: 'smoke_spirit',
+      category: 'country',
+      body: 'picture = smoke_spirit',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('IDEA_WRITE_APPLIED');
+    expect(await readFile(ideasFile, 'utf8')).toBe(
+      'ideas = {\n\tcountry = {\n\t\tsmoke_spirit = {\n\t\t\tpicture = smoke_spirit\n\t\t}\n\t}\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);

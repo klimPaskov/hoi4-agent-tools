@@ -17,3 +17,19 @@ export const MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT = 32;
 export const MAP_POLYGON_WORK_LIMIT = 50_000_000;
 
 export const MAP_SELECTED_OFFSET_BYTES = Uint32Array.BYTES_PER_ELEMENT;
+
+/** Kinds of natural land (`hoi4.map_inspect` with `lands`). */
+export const NATURAL_LAND_KINDS = [
+  'basin',
+  'range',
+  'forest',
+  'marsh',
+  'desert',
+  'plains',
+] as const;
+
+/** Terrain classes whose changes are natural-land lines. */
+export const NATURAL_TERRAIN_CLASSES = ['open', 'forest', 'upland', 'marsh', 'desert'] as const;
+
+/** Natural land ids: `L` and the smallest province id of the land. */
+export const NATURAL_LAND_ID_PATTERN = /^L\d{1,6}$/u;

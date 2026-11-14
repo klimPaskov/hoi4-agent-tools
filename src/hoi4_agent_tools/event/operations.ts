@@ -1,4 +1,5 @@
 import { compareCodeUnits, type JsonValue } from '../core/canonical.js';
+import type { Diagnostic } from '../core/diagnostics.js';
 import { helperExpansionValidation } from '../core/helper-expansion.js';
 import { publicArtifactLink } from '../core/artifacts.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
@@ -73,11 +74,26 @@ export function eventGraphCounts(graph: EventGraphSnapshot, artifacts: number) {
   };
 }
 
-export function eventGraphValidation(graph: EventGraphSnapshot) {
+/**
+ * `answerPaths` names the source files the answer stands on, for a focused trace or path. Blocking
+ * diagnostics in other files of the workspace do not make that answer fail; they are counted apart
+ * and stay in the linked evidence. Without it, every blocking diagnostic of the workspace counts.
+ */
+export function eventGraphValidation(graph: EventGraphSnapshot, answerPaths?: ReadonlySet<string>) {
   const counts = eventGraphCounts(graph, 0);
+  const blockingHere =
+    answerPaths === undefined
+      ? counts.blockingDiagnostics
+      : eventDiagnostics(graph).filter(
+          ({ severity, location }) =>
+            (severity === 'error' || severity === 'blocker') &&
+            location !== undefined &&
+            answerPaths.has(location.path),
+        ).length;
+  const blockingElsewhere = counts.blockingDiagnostics - blockingHere;
   const analysisBoundaryPassed =
     graph.complete || (graph.analysisMode === 'focused' && graph.skippedSourceCount === 0);
-  const passed = analysisBoundaryPassed && counts.blockingDiagnostics === 0;
+  const passed = analysisBoundaryPassed && blockingHere === 0;
   return {
     passed,
     checks: [
@@ -85,22 +101,24 @@ export function eventGraphValidation(graph: EventGraphSnapshot) {
         id: 'event-analysis',
         passed,
         message:
-          counts.blockingDiagnostics > 0
-            ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
-            : graph.complete
-              ? 'The event-chain analysis is complete and has no blocking diagnostics'
-              : graph.analysisMode === 'focused' && graph.skippedSourceCount === 0
-                ? 'Whole-workspace helper projections and lifecycle passes were deferred; the requested event analysis retains direct source evidence'
-                : graph.analysisMode === 'focused'
-                  ? `${graph.skippedSourceCount} event-analysis source(s) were skipped; linked evidence records the partial boundary`
-                  : graph.issues.some(
-                        ({ code }) =>
-                          code === 'EVENT_HELPER_DEPTH_LIMIT' ||
-                          code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
-                          code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
-                      )
-                    ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
-                    : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
+          blockingHere > 0
+            ? `${blockingHere} blocking event-chain diagnostics${answerPaths === undefined ? '' : ' in the files of this answer'}; full evidence is linked`
+            : answerPaths !== undefined && blockingElsewhere > 0
+              ? `No blocking diagnostics in the files of this answer; ${blockingElsewhere} elsewhere in the workspace are in the linked evidence`
+              : graph.complete
+                ? 'The event-chain analysis is complete and has no blocking diagnostics'
+                : graph.analysisMode === 'focused' && graph.skippedSourceCount === 0
+                  ? 'Whole-workspace helper projections and lifecycle passes were deferred; the requested event analysis retains direct source evidence'
+                  : graph.analysisMode === 'focused'
+                    ? `${graph.skippedSourceCount} event-analysis source(s) were skipped; linked evidence records the partial boundary`
+                    : graph.issues.some(
+                          ({ code }) =>
+                            code === 'EVENT_HELPER_DEPTH_LIMIT' ||
+                            code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
+                            code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+                        )
+                      ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
+                      : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
       },
     ],
   };
@@ -130,6 +148,86 @@ function eventAnswerComplete(inspected: {
   return summary.found === true && summary.unresolvedAssumptions === 0;
 }
 
+/** The source files of a focused trace or path, or undefined for any other answer. */
+function answerPaths(inspected: {
+  graph: EventGraphSnapshot;
+  report: unknown;
+}): ReadonlySet<string> | undefined {
+  if (inspected.graph.analysisMode !== 'focused') return undefined;
+  interface Located {
+    location?: { path: string };
+    sourcePath?: string;
+  }
+  const report = inspected.report as {
+    trace?: { nodes?: Located[] };
+    explanation?: { steps?: Array<{ node: Located }> };
+  } | null;
+  const nodes = report?.trace?.nodes ?? report?.explanation?.steps?.map(({ node }) => node);
+  if (nodes === undefined) return undefined;
+  return new Set(
+    nodes.flatMap((node) => {
+      const path = node.location?.path ?? node.sourcePath;
+      return path === undefined ? [] : [path];
+    }),
+  );
+}
+
+/**
+ * What a partial event answer is missing, as inline information, so an agent knows whether to
+ * raise a limit, trace from the boundary, or accept that callers reached only through scripted
+ * effects may be absent (ADR 0086: a partial result says what is missing).
+ */
+export function eventPartialReasons(inspected: {
+  graph: EventGraphSnapshot;
+  helperExpansion?: { complete: boolean } | undefined;
+  summary?: Record<string, JsonValue> | undefined;
+}): Diagnostic[] {
+  const { graph, summary } = inspected;
+  const reasons: Array<{ code: string; message: string; details?: Record<string, JsonValue> }> = [];
+  if (inspected.helperExpansion?.complete === false)
+    reasons.push({
+      code: 'EVENT_HELPER_EXPANSION_INCOMPLETE',
+      message:
+        'Helper expansion stopped at its depth or size limit; continue it with mode helper_expansion from a helper on its boundary',
+    });
+  if (graph.skippedSourceCount > 0)
+    reasons.push({
+      code: 'EVENT_SOURCES_SKIPPED',
+      message: `${graph.skippedSourceCount} event source file(s) were skipped as over a size limit, so events they define are missing from this answer`,
+      details: { skippedSources: graph.skippedSourceCount },
+    });
+  const trace = summary?.trace;
+  const cut =
+    typeof trace === 'object' &&
+    trace !== null &&
+    !Array.isArray(trace) &&
+    (trace.truncated === true ||
+      (typeof trace.boundaryNodes === 'number' && trace.boundaryNodes > 0));
+  if (cut)
+    reasons.push({
+      code: 'EVENT_TRACE_TRUNCATED',
+      message:
+        'The trace stopped at its limits and continues beyond its boundary nodes; raise maxDepth or maxNodes, or trace again from a node on the boundary',
+    });
+  else if (
+    graph.analysisMode === 'focused' &&
+    graph.skippedSourceCount === 0 &&
+    inspected.helperExpansion === undefined
+  )
+    reasons.push({
+      code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED',
+      message:
+        'This large workspace defers the workspace-wide helper projections and state links, so callers and state links that exist only inside scripted effects may be missing from this answer',
+    });
+  return reasons.map(({ code, message, details }) => ({
+    category: 'configuration',
+    code,
+    severity: 'info',
+    message,
+    ...(details === undefined ? {} : { details }),
+  }));
+}
+
 /** Transport-independent event inspection and its complete bounded result contract. */
 export async function inspectEvents(viewer: EventChainViewer, input: EventInspectInput) {
   const inspected = await viewer.inspect(input);
@@ -155,6 +253,8 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
     },
   });
   result.code = eventAnswerComplete(inspected) ? 'EVENT_INSPECTED' : 'EVENT_INSPECTED_PARTIAL';
+  if (result.code === 'EVENT_INSPECTED_PARTIAL')
+    result.diagnostics.push(...eventPartialReasons(inspected));
   setInlineFilesScanned(result, inspected.graph.filesScanned);
   result.artifacts = inspected.artifacts.map(publicArtifactLink);
   if (inspected.graphSnapshotOmitted === true)
@@ -166,7 +266,7 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
         'The workspace graph is too large to retain as a snapshot artifact; the scan report is linked, and comparisons use revisions held by this server',
       details: { maximumBytes: EVENT_GRAPH_SNAPSHOT_MAX_BYTES },
     });
-  result.validation = eventGraphValidation(inspected.graph);
+  result.validation = eventGraphValidation(inspected.graph, answerPaths(inspected));
   if (inspected.helperExpansion !== undefined)
     result.validation = helperExpansionValidation(inspected.helperExpansion);
   return result;

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
@@ -15,9 +15,9 @@ afterEach(async () => {
 });
 
 /** A mod with a scope mistake, a game with documentation, and a user folder with an error.log. */
-async function connect() {
+async function connect(prepare?: (engine: CoreEngine) => void, extraEventFiles = 0) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-health-'));
-  close.push(() => rm(root, { recursive: true, force: true }));
+  close.push(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
   const user = path.join(root, 'user');
   const mod = path.join(user, 'mod', 'health_mod');
   const game = path.join(root, 'game');
@@ -40,6 +40,11 @@ async function connect() {
       '',
     ].join('\n'),
   );
+  for (let index = 0; index < extraEventFiles; index += 1)
+    await writeFile(
+      path.join(mod, 'events', `health_extra_${index}.txt`),
+      `add_namespace = extra${index}\ncountry_event = {\n  id = extra${index}.1\n  is_triggered_only = yes\n  option = { name = extra${index}.1.a }\n}\n`,
+    );
   await writeFile(
     path.join(game, 'documentation', 'effects_documentation.md'),
     '# Effects\n## add_political_power\n* Supported Scopes: COUNTRY\nAdds power.\n',
@@ -64,7 +69,9 @@ async function connect() {
       gameUserRoot: user,
     }),
   );
-  const server = createMcpServer(new CoreEngine(resolver));
+  const engine = new CoreEngine(resolver);
+  prepare?.(engine);
+  const server = createMcpServer(engine);
   const client = new Client({ name: 'health-test', version: '1' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -143,5 +150,19 @@ describe('modder tools through a client', () => {
       next: { tool: 'hoi4.explain_error' },
     });
     expect(result.structuredContent).toMatchObject({ validation: { passed: false } });
+  });
+
+  it('checks every script file against one scan, not one scan per file', async () => {
+    let scan: { mock: { calls: unknown[] } } | undefined;
+    const client = await connect((engine) => {
+      scan = vi.spyOn(engine, 'scan');
+    }, 4);
+    const result = await client.callTool({
+      name: 'hoi4.mod_health',
+      arguments: { workspaceId: 'health', checks: ['script'] },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+    // Five event files are checked; each used to scan the workspace again to find its file.
+    expect(scan?.mock.calls.length).toBe(1);
   });
 });
