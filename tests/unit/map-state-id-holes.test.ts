@@ -39,6 +39,11 @@ function plan(files: readonly ScannedFile[], operations: readonly MapOperation[]
   return result;
 }
 
+/** The text with a line break at its end, so an appended line starts on its own. */
+function withFinalNewline(text: string): string {
+  return text === '' || text.endsWith('\n') ? text : `${text}\n`;
+}
+
 function stateIds(files: readonly ScannedFile[]): number[] {
   return MapWorkspaceIndex.build([...files])
     .states.map(({ id }) => id)
@@ -120,6 +125,46 @@ describe('state ids stay contiguous after a write', () => {
       relativePath.startsWith('history/states/'),
     ))
       expect(hashes.get(file.relativePath), file.relativePath).toBe(file.sha256);
+  });
+
+  it('moves a building position off a merged-away state to the state holding its province', () => {
+    // ZIN K128: merges left floating_harbour lines on the deleted state ids.
+    const { source: merged, target } = mergeablePair();
+    const mergedState = index.states.find(({ id }) => id === merged)!;
+    const province = mergedState.provinces[0]!;
+    const buildings = written.find(({ relativePath }) => relativePath === 'map/buildings.txt');
+    const harbour = `${merged};floating_harbour;10.00;9.50;10.00;0.00;${province}\n`;
+    const withHarbour = [
+      ...written.filter(({ relativePath }) => relativePath !== 'map/buildings.txt'),
+      source(
+        'map/buildings.txt',
+        `${withFinalNewline(buildings?.bytes.toString('utf8') ?? '')}${harbour}`,
+      ),
+    ];
+    const result = plan(withHarbour, [
+      { id: 'merge', kind: 'merge_states', sourceStateIds: [merged], targetStateId: target },
+    ] as MapOperation[]);
+    const after = applied(withHarbour, result.changes);
+    const finalIds = new Set(stateIds(after));
+    const lines = after
+      .find(({ relativePath }) => relativePath === 'map/buildings.txt')!
+      .bytes.toString('utf8')
+      .split(/\r?\n/u)
+      .filter((line) => line.trim() !== '');
+    // Every line names a state that exists after the write.
+    for (const line of lines) expect(finalIds.has(Number(line.split(';')[0])), line).toBe(true);
+    // The harbour now names the state that holds its province (the merge target, possibly renumbered).
+    const harbourLine = lines.find((line) => line.includes('floating_harbour'))!;
+    const owner = MapWorkspaceIndex.build([...after]).statesByProvince.get(province)![0]!.id;
+    expect(Number(harbourLine.split(';')[0])).toBe(owner);
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain(
+      'MAP_BUILDING_POSITION_STATE_MISSING',
+    );
+    expect(
+      result.diagnostics.find(({ code }) => code === 'MAP_BUILDING_POSITIONS_REASSIGNED')?.details,
+    ).toMatchObject({
+      moves: [expect.objectContaining({ building: 'floating_harbour', from: merged })],
+    });
   });
 
   it('refuses a named state id that would leave holes, which crash the game', () => {

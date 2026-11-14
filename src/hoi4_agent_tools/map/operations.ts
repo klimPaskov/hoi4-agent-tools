@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
+import { lookupMapCoordinate } from './catalog.js';
 import {
   canonicalJson,
   compareCodeUnits,
@@ -5617,6 +5618,88 @@ function renumberStates(
     );
 }
 
+/**
+ * Building positions (`map/buildings.txt`) whose state a request removed (a merge source, a state
+ * assign_territory dissolved) still named the deleted id: ZIN's K128 write left five floating
+ * harbours so. Each such line moves to the state that now holds its province: the last field (the
+ * adjacent sea province, or the harbour's land province), else the province under its map
+ * coordinates. A line neither places is reported.
+ */
+function reassignOrphanBuildingPositions(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operationId: string,
+): Diagnostic[] {
+  const before = new Set(base.states.map(({ id }) => id));
+  const index = currentIndex(base, changes);
+  const removed = (id: number) => before.has(id) && !index.statesById.has(id);
+  const orphans = index.buildingPositions.filter(({ stateId }) => removed(stateId));
+  if (orphans.length === 0) return [];
+  const stateOf = (record: BuildingPositionRecord): number | undefined => {
+    const byField = index.statesByProvince.get(record.adjacentSeaProvince)?.[0]?.id;
+    if (byField !== undefined) return byField;
+    if (index.raster === undefined) return undefined;
+    const lookup = lookupMapCoordinate(index, { kind: 'map', x: record.x, z: record.z });
+    return lookup.stateIds[0];
+  };
+  const unplaced: Array<{ line: number; building: string; stateId: number }> = [];
+  const moved: Array<{ line: number; building: string; from: number; to: number }> = [];
+  const documents = new Map(
+    orphans.map((record) => [record.document.file.relativePath, record.document]),
+  );
+  for (const [relativePath, document] of documents) {
+    const replacements: SourceReplacement[] = [];
+    for (const record of orphans.filter((candidate) => candidate.document === document)) {
+      const target = stateOf(record);
+      const line = document.lines[record.line - 1];
+      if (target === undefined || line === undefined) {
+        unplaced.push({ line: record.line, building: record.building, stateId: record.stateId });
+        continue;
+      }
+      moved.push({
+        line: record.line,
+        building: record.building,
+        from: record.stateId,
+        to: target,
+      });
+      replacements.push({
+        start: line.start,
+        end: line.end,
+        text: replaceDelimitedFields(line.text, new Map([[0, numberText(target)]])),
+        description: 'Move a building position off a removed state',
+      });
+    }
+    if (replacements.length > 0)
+      addChange(
+        changes,
+        relativePath,
+        applyTextRanges(document, replacements),
+        operationId,
+        'text/plain',
+      );
+  }
+  const diagnostics: Diagnostic[] = [];
+  if (moved.length > 0)
+    diagnostics.push({
+      code: 'MAP_BUILDING_POSITIONS_REASSIGNED',
+      severity: 'info',
+      category: 'map',
+      operationId,
+      message: `${moved.length} building position(s) named a state this write removed; each now names the state that holds its province`,
+      details: { moves: moved.slice(0, 200), moveCount: moved.length },
+    });
+  if (unplaced.length > 0)
+    diagnostics.push({
+      code: 'MAP_BUILDING_POSITION_STATE_MISSING',
+      severity: 'warning',
+      category: 'map',
+      operationId,
+      message: `${unplaced.length} building position(s) name a state this write removed, and no state holds their province; remove or move them`,
+      details: { lines: unplaced.slice(0, 200), lineCount: unplaced.length },
+    });
+  return diagnostics;
+}
+
 /** The ids missing from 1 up to the highest id. */
 function idHoles(ids: Iterable<number>): number[] {
   const present = new Set(ids);
@@ -6696,6 +6779,7 @@ function* planMapOperationSteps(
         if (operation.kind === 'renumber_map_entity' && operation.entity === 'state')
           requested.add(operation.toId);
       }
+      diagnostics.push(...reassignOrphanBuildingPositions(base, changes, lastOperation.id));
       const closed = closeStateIdHoles(base, changes, lastOperation.id, requested);
       diagnostics.push(...closed.diagnostics);
       // Reports name the ids the states have after the write.
