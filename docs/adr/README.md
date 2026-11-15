@@ -90,3 +90,4 @@ Implementation rationale for contributors. For using the server, start with the 
 80. [The province raster on the shared engine](0084-map-raster-on-the-shared-engine.md)
 81. [The shared symbol index on the engine](0085-symbol-index-on-the-shared-engine.md)
 82. [What a result's completeness says](0086-result-completeness.md)
+83. [Game-build manifests and a focus edit that answers before its check](0087-game-build-manifest-and-early-focus-answer.md)
