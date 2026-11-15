@@ -17,8 +17,16 @@ export interface BinaryDiff {
 export interface TextDiffOptions {
   /** Matrix threshold before the exact linear-memory patience algorithm is used. */
   maxMatrixCells?: number;
+  /**
+   * Unchanged lines kept around each change. Without it the diff is one hunk holding the whole file,
+   * which is what a transaction record wants; a preview of an edit to a large file wants hunks.
+   */
+  context?: number;
   signal?: AbortSignal;
 }
+
+/** Unchanged lines a source writer shows around each change in its preview. */
+export const DIFF_CONTEXT_LINES = 3;
 
 const defaultMaxMatrixCells = 16_000_000;
 
@@ -43,12 +51,51 @@ export function unifiedTextDiff(
   const oldLines = splitLines(oldText);
   const newLines = splitLines(newText);
   const rows = lcsDiff(oldLines, newLines, options);
+  if (options.context !== undefined)
+    return [`--- ${oldName}`, `+++ ${newName}`, ...diffHunks(rows, options.context)].join('\n');
   return [
     `--- ${oldName}`,
     `+++ ${newName}`,
     `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
     ...rows,
   ].join('\n');
+}
+
+/** The diff rows cut into hunks of changed rows with `context` unchanged rows on each side. */
+function diffHunks(rows: readonly string[], context: number): string[] {
+  // The old and new line counts consumed before each row.
+  const oldBefore: number[] = [];
+  const newBefore: number[] = [];
+  let oldCount = 0;
+  let newCount = 0;
+  const changed: number[] = [];
+  rows.forEach((row, index) => {
+    oldBefore.push(oldCount);
+    newBefore.push(newCount);
+    if (row.startsWith('-')) oldCount += 1;
+    else if (row.startsWith('+')) newCount += 1;
+    else {
+      oldCount += 1;
+      newCount += 1;
+    }
+    if (!row.startsWith(' ')) changed.push(index);
+  });
+  const groups: Array<{ start: number; end: number }> = [];
+  for (const index of changed) {
+    const start = Math.max(0, index - context);
+    const end = Math.min(rows.length - 1, index + context);
+    const last = groups.at(-1);
+    if (last !== undefined && start <= last.end + 1) last.end = end;
+    else groups.push({ start, end });
+  }
+  return groups.flatMap(({ start, end }) => {
+    const slice = rows.slice(start, end + 1);
+    const removed = slice.filter((row) => !row.startsWith('+')).length;
+    const added = slice.filter((row) => !row.startsWith('-')).length;
+    const oldStart = oldBefore[start]! + (removed > 0 ? 1 : 0);
+    const newStart = newBefore[start]! + (added > 0 ? 1 : 0);
+    return [`@@ -${oldStart},${removed} +${newStart},${added} @@`, ...slice];
+  });
 }
 
 function lcsDiff(oldLines: string[], newLines: string[], options: TextDiffOptions): string[] {

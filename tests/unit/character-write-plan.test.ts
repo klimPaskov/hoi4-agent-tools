@@ -190,3 +190,18 @@ describe('character_write plan: a new file', () => {
     );
   });
 });
+
+describe('character_write plan: the preview diff of a large file', () => {
+  it('shows the change with a few lines around it, not the whole file', () => {
+    const many = Array.from(
+      { length: 1500 },
+      (_, index) => `\tTST_p${index} = {\n\t\tname = TST_p${index}\n\t}\n`,
+    ).join('\n');
+    const large = `characters = {\n${many}}\n`;
+    const result = plan({ operation: 'add', id: 'TST_added', body: 'name = TST_added' }, large);
+    expect(result.diff).toContain('+\tTST_added = {');
+    // About a dozen rows, where the whole file is over 6,000 lines and 100 KB.
+    expect(result.diff.split('\n').length).toBeLessThan(20);
+    expect(result.diff.length).toBeLessThan(600);
+  });
+});
