@@ -1284,6 +1284,136 @@
           "includes": "EVENT_WRITE_NAMESPACE_MISSING"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.decision-write-add-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.decision_write",
+      "evidence": "bench/fixtures/synthetic/common/decisions/bench_regression_decisions.txt defines one decision, bench_regress_decision, in the category block bench_regress_category, next to the smoke mod decision files; apply is false, so the call writes nothing.",
+      "title": "An add previews one new decision at the end of its category block in the named file",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_new_decision",
+        "category": "bench_regress_category",
+        "body": "cost = 5",
+        "file": "common/decisions/bench_regression_decisions.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DECISION_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/decisions/bench_regression_decisions.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 1
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\tbench_new_decision = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.decision-write-remove-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.decision_write",
+      "evidence": "bench/fixtures/synthetic/common/decisions/bench_regression_decisions.txt defines one decision, bench_regress_decision, in the category block bench_regress_category, next to the smoke mod decision files; apply is false, so the call writes nothing.",
+      "title": "A remove previews the one decision found by its id",
+      "arguments": {
+        "operation": "remove",
+        "id": "bench_regress_decision"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DECISION_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/decisions/bench_regression_decisions.txt"
+        },
+        {
+          "path": "data.category",
+          "equals": "bench_regress_category"
+        },
+        {
+          "path": "data.diff",
+          "includes": "-\tbench_regress_decision = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.decision-write-create-file-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.decision_write",
+      "evidence": "bench/fixtures/synthetic/common/decisions/bench_regression_decisions.txt defines one decision, bench_regress_decision, in the category block bench_regress_category, next to the smoke mod decision files; apply is false, so the call writes nothing.",
+      "title": "createFile previews a new common/decisions file holding one category block and decision",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_fresh_decision",
+        "category": "bench_regress_category",
+        "body": "cost = 1",
+        "file": "common/decisions/bench_fresh.txt",
+        "createFile": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DECISION_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/decisions/bench_fresh.txt"
+        },
+        {
+          "path": "data.diff",
+          "includes": "+bench_regress_category = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.decision-write-unknown-category",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.decision_write",
+      "evidence": "bench/fixtures/synthetic/common/decisions/bench_regression_decisions.txt defines one decision, bench_regress_decision, in the category block bench_regress_category, next to the smoke mod decision files; apply is false, so the call writes nothing.",
+      "title": "An unknown category block is refused with the categories the file has",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_new_decision",
+        "category": "no_such_category",
+        "body": "cost = 5",
+        "file": "common/decisions/bench_regression_decisions.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "DECISION_WRITE_CATEGORY_NOT_FOUND"
+        }
+      ]
     }
   ]
 }

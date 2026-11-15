@@ -234,7 +234,7 @@ describe('local stdio transport', () => {
         result: { supportedVersions: ['2026-07-28'] },
       });
       child.stdin.write(request(2, 'tools/list'));
-      expect(listedToolNames(await waitForMessage(child, 2, lines))).toHaveLength(42);
+      expect(listedToolNames(await waitForMessage(child, 2, lines))).toHaveLength(43);
       child.stdin.write(
         request(3, 'tools/call', {
           name: 'hoi4.focus_inspect',

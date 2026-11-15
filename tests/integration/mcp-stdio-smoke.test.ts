@@ -250,6 +250,28 @@ describe('stdio smoke: synthetic fixture', () => {
     );
   }, 300_000);
 
+  it('adds a decision to a temporary copy', async () => {
+    const decisionsFile = path.join(rewriteGuiMod, 'common', 'decisions', 'smoke_decisions.txt');
+    await mkdir(path.dirname(decisionsFile), { recursive: true });
+    await writeFile(decisionsFile, 'smoke_category = {\n}\n');
+    const added = await server.call('hoi4.decision_write', 'add a decision and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      id: 'smoke_decision',
+      category: 'smoke_category',
+      body: 'cost = 1',
+      file: 'common/decisions/smoke_decisions.txt',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('DECISION_WRITE_APPLIED');
+    expect(await readFile(decisionsFile, 'utf8')).toBe(
+      'smoke_category = {\n\tsmoke_decision = {\n\t\tcost = 1\n\t}\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);
