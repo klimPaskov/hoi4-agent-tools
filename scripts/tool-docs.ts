@@ -54,7 +54,10 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
   { heading: 'Scripted GUIs', tools: ['hoi4.gui_inspect', 'hoi4.gui_render', 'hoi4.gui_rewrite'] },
   { heading: 'Maps', tools: ['hoi4.map_inspect', 'hoi4.map_rewrite'] },
   { heading: 'Events', tools: ['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_write'] },
-  { heading: 'Technology and doctrines', tools: ['hoi4.tech_inspect', 'hoi4.tech_render'] },
+  {
+    heading: 'Technology and doctrines',
+    tools: ['hoi4.tech_inspect', 'hoi4.tech_render', 'hoi4.tech_write'],
+  },
   {
     heading: 'AI weights and timing',
     tools: ['hoi4.probability_inspect', 'hoi4.probability_analyze'],

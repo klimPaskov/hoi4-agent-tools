@@ -272,6 +272,27 @@ describe('stdio smoke: synthetic fixture', () => {
     );
   }, 300_000);
 
+  it('adds a technology to a temporary copy', async () => {
+    const techsFile = path.join(rewriteGuiMod, 'common', 'technologies', 'smoke_technologies.txt');
+    await mkdir(path.dirname(techsFile), { recursive: true });
+    await writeFile(techsFile, 'technologies = {\n}\n');
+    const added = await server.call('hoi4.tech_write', 'add a technology and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      id: 'smoke_technology',
+      body: 'research_cost = 1\nstart_year = 1936',
+      file: 'common/technologies/smoke_technologies.txt',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('TECH_WRITE_APPLIED');
+    expect(await readFile(techsFile, 'utf8')).toBe(
+      'technologies = {\n\tsmoke_technology = {\n\t\tresearch_cost = 1\n\t\tstart_year = 1936\n\t}\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);

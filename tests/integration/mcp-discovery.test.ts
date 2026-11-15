@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 100_352;
+const toolsListByteBudget = 104_448;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
@@ -62,6 +62,7 @@ describe('MCP discovery', () => {
       'hoi4.character_write',
       'hoi4.event_write',
       'hoi4.decision_write',
+      'hoi4.tech_write',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
@@ -155,6 +156,7 @@ describe('MCP discovery', () => {
       'hoi4.character_write',
       'hoi4.event_write',
       'hoi4.decision_write',
+      'hoi4.tech_write',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: false,

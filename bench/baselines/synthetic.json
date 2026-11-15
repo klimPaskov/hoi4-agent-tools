@@ -148,6 +148,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.tech-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.tech-write-move-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.tech-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.tech-write-unknown-id": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true

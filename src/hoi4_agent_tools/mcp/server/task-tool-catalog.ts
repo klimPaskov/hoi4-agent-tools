@@ -1,6 +1,7 @@
 import { analysisTaskTools } from '../tools/analysis.js';
 import { characterWriteTaskTools } from '../tools/character-write.js';
 import { decisionWriteTaskTools } from '../tools/decision-write.js';
+import { techWriteTaskTools } from '../tools/tech-write.js';
 import { eventWriteTaskTools } from '../tools/event-write.js';
 import { eventTaskTools } from '../tools/event.js';
 import { focusTaskTools } from '../tools/focus.js';
@@ -21,6 +22,7 @@ export const taskToolCatalog: readonly TaskToolDefinition[] = [
   ...characterWriteTaskTools,
   ...eventWriteTaskTools,
   ...decisionWriteTaskTools,
+  ...techWriteTaskTools,
   ...eventTaskTools,
   ...analysisTaskTools,
   ...technologyTaskTools,
