@@ -1148,6 +1148,142 @@
           "includes": "CHARACTER_WRITE_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.event-write-add-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.event_write",
+      "evidence": "bench/fixtures/synthetic/events/bench_regressions.txt declares the namespace bench_regress and defines two events, bench_regress.1 and bench_regress.2, and nothing else, next to the smoke mod event files; apply is false, so the call writes nothing.",
+      "title": "An add previews one new event after the last one of the named namespace file, id line first",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_regress.9",
+        "body": "title = bench_regress.9.t\nis_triggered_only = yes",
+        "file": "events/bench_regressions.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "EVENT_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "events/bench_regressions.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 2
+        },
+        {
+          "path": "data.namespaceAdded",
+          "equals": false
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\tid = bench_regress.9"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.event-write-remove-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.event_write",
+      "evidence": "bench/fixtures/synthetic/events/bench_regressions.txt declares the namespace bench_regress and defines two events, bench_regress.1 and bench_regress.2, and nothing else, next to the smoke mod event files; apply is false, so the call writes nothing.",
+      "title": "A remove previews the one event found by its id and keeps the namespace line",
+      "arguments": {
+        "operation": "remove",
+        "id": "bench_regress.2"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "EVENT_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "events/bench_regressions.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 1
+        },
+        {
+          "path": "data.diff",
+          "includes": "-\tid = bench_regress.2"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.event-write-create-file-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.event_write",
+      "evidence": "bench/fixtures/synthetic/events/bench_regressions.txt declares the namespace bench_regress and defines two events, bench_regress.1 and bench_regress.2, and nothing else, next to the smoke mod event files; apply is false, so the call writes nothing.",
+      "title": "createFile with createNamespace previews a new events file with its namespace line",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_fresh.1",
+        "body": "title = bench_fresh.1.t",
+        "file": "events/bench_fresh.txt",
+        "createFile": true,
+        "createNamespace": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "EVENT_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "events/bench_fresh.txt"
+        },
+        {
+          "path": "data.namespaceAdded",
+          "equals": true
+        },
+        {
+          "path": "data.diff",
+          "includes": "+add_namespace = bench_fresh"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.event-write-undeclared-namespace",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.event_write",
+      "evidence": "bench/fixtures/synthetic/events/bench_regressions.txt declares the namespace bench_regress and defines two events, bench_regress.1 and bench_regress.2, and nothing else, next to the smoke mod event files; apply is false, so the call writes nothing.",
+      "title": "An add into a namespace no mod file declares is refused instead of inventing it",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_typo.1",
+        "body": "title = bench_typo.1.t",
+        "file": "events/bench_regressions.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "EVENT_WRITE_NAMESPACE_MISSING"
+        }
+      ]
     }
   ]
 }

@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
-import { registerWorkerOperations } from '../../src/hoi4_agent_tools/core/job-operation-registration.js';
+import {
+  registerWorkerOperations,
+  workerDomain,
+} from '../../src/hoi4_agent_tools/core/job-operation-registration.js';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -32,6 +35,7 @@ async function fixture() {
 describe('trusted worker domain admission', () => {
   it.each([
     ['hoi4.event_inspect', false],
+    ['hoi4.event_write', true],
     ['hoi4.focus_rewrite', true],
     ['hoi4.gui_rewrite', true],
     ['hoi4.map_rewrite', true],
@@ -46,6 +50,11 @@ describe('trusted worker domain admission', () => {
         toolName.startsWith('hoi4.event_') ? 'hoi4.map_inspect' : 'hoi4.event_inspect',
       ),
     ).toThrow('No typed core operation');
+  });
+
+  it('keeps the event writer in its own domain, apart from the event tools that share its prefix', () => {
+    expect(workerDomain('hoi4.event_write')).not.toBe(workerDomain('hoi4.event_inspect'));
+    expect(workerDomain('hoi4.event_inspect')).toBe(workerDomain('hoi4.event_render'));
   });
 
   it('refuses unknown suffixes and executable or module selectors', async () => {

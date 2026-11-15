@@ -116,6 +116,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.event-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.event-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.event-write-create-file-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.event-write-undeclared-namespace": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true

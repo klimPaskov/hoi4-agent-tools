@@ -1,5 +1,6 @@
 import { analysisTaskTools } from '../tools/analysis.js';
 import { characterWriteTaskTools } from '../tools/character-write.js';
+import { eventWriteTaskTools } from '../tools/event-write.js';
 import { eventTaskTools } from '../tools/event.js';
 import { focusTaskTools } from '../tools/focus.js';
 import { guiTaskTools } from '../tools/gui.js';
@@ -17,6 +18,7 @@ export const taskToolCatalog: readonly TaskToolDefinition[] = [
   ...localisationTaskTools,
   ...ideaWriteTaskTools,
   ...characterWriteTaskTools,
+  ...eventWriteTaskTools,
   ...eventTaskTools,
   ...analysisTaskTools,
   ...technologyTaskTools,
