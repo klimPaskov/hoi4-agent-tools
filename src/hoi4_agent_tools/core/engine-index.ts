@@ -201,6 +201,51 @@ function keep(
   return retry;
 }
 
+/**
+ * Engine answers of earlier builds, keyed by the bytes of the file they describe. A file's answer
+ * depends only on that file and its request flags (issue 137). The scanner hands out the same
+ * buffer for an unchanged installed-game file while it keeps it, so after a mod edit only the
+ * edited files are sent to the engine again, and an entry is dropped with the scanner's copy.
+ */
+const answersByBytes = new WeakMap<Buffer, { key: string; answer: EngineIndexFileAnswer }>();
+
+function answerKey({ file, definitionFile, owned, shadowed }: EngineIndexFileRequest): string {
+  return JSON.stringify([
+    file.displayPath,
+    file.relativePath,
+    file.sha256,
+    definitionFile,
+    owned,
+    shadowed,
+  ]);
+}
+
+/** The indexed requests without a kept answer; the kept ones go straight into `answers`. */
+function unanswered(
+  requests: readonly EngineIndexFileRequest[],
+  answers: Map<EngineIndexFileRequest, EngineIndexFileAnswer>,
+): EngineIndexFileRequest[] {
+  const wanted: EngineIndexFileRequest[] = [];
+  for (const request of requests.filter(indexed)) {
+    const kept = answersByBytes.get(request.file.bytes);
+    if (kept?.key === answerKey(request)) answers.set(request, kept.answer);
+    else wanted.push(request);
+  }
+  return wanted;
+}
+
+/** Keeps the answers the engine just gave for `asked`. */
+function remember(
+  asked: readonly EngineIndexFileRequest[],
+  answers: ReadonlyMap<EngineIndexFileRequest, EngineIndexFileAnswer>,
+): void {
+  for (const request of asked) {
+    const answer = answers.get(request);
+    if (answer !== undefined)
+      answersByBytes.set(request.file.bytes, { key: answerKey(request), answer });
+  }
+}
+
 function inOrder(
   requests: readonly EngineIndexFileRequest[],
   answers: ReadonlyMap<EngineIndexFileRequest, EngineIndexFileAnswer>,
@@ -279,11 +324,12 @@ function runSync({ header, payload }: Frame): unknown {
 /** The shared index of `files`, synchronously, from a one-shot engine. */
 export function engineSymbolIndexSync(files: readonly ScannedFile[]): SymbolIndex {
   const requests = SymbolIndex.engineRequestFiles(files);
-  const wanted = requests.filter(indexed);
   const answers = new Map<EngineIndexFileRequest, EngineIndexFileAnswer>();
+  const wanted = unanswered(requests, answers);
   if (wanted.length > 0) {
     const retry = keep(wanted, parseResponse(runSync(frame(wanted, false))), answers, true);
     if (retry.length > 0) keep(retry, parseResponse(runSync(frame(retry, true))), answers, false);
+    remember(wanted, answers);
   }
   return SymbolIndex.fromEngine(files, inOrder(requests, answers));
 }
@@ -309,11 +355,16 @@ export async function engineSymbolIndex(
     return JSON.parse(outcome.response.payload.toString('utf8')) as unknown;
   };
   const requests = SymbolIndex.engineRequestFiles(files);
-  const wanted = requests.filter(indexed);
   const answers = new Map<EngineIndexFileRequest, EngineIndexFileAnswer>();
+  const wanted = unanswered(requests, answers);
   if (wanted.length > 0) {
     const retry = keep(wanted, parseResponse(await run(frame(wanted, false))), answers, true);
     if (retry.length > 0) keep(retry, parseResponse(await run(frame(retry, true))), answers, false);
+    remember(wanted, answers);
+  } else {
+    // Every answer was kept: still let other work run and a cancellation land, as a build does.
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
+  signal?.throwIfAborted();
   return SymbolIndex.fromEngine(files, inOrder(requests, answers));
 }

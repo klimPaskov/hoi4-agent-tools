@@ -578,14 +578,25 @@ export class SymbolIndex {
         details: { limit: INDEX_RECORD_LIMIT },
       });
     }
-    const groups = new Map<string, SymbolRecord[]>();
+    // Almost every key has one definition, so a group becomes an array only when a second one
+    // arrives (issue 137). Keys keep their first-seen order, as before.
+    const groups = new Map<string, SymbolRecord | SymbolRecord[]>();
     for (const symbol of this.symbols) {
       const key = `${symbol.kind}:${symbol.id}`;
-      const group = groups.get(key) ?? [];
-      group.push(symbol);
-      groups.set(key, group);
+      const known = groups.get(key);
+      if (known === undefined) groups.set(key, symbol);
+      else if (Array.isArray(known)) known.push(symbol);
+      else groups.set(key, [known, symbol]);
     }
-    for (const [key, group] of groups) {
+    for (const [key, entry] of groups) {
+      if (!Array.isArray(entry)) {
+        // One definition: active unless its source is shadowed, and then never overridden.
+        if (entry.sourceShadowed) continue;
+        this.#active.set(key, entry);
+        entry.overridden = false;
+        continue;
+      }
+      const group = entry;
       group.sort((a, b) => b.loadOrder - a.loadOrder || compareCodeUnits(a.path, b.path));
       const candidates = group.filter(({ sourceShadowed }) => !sourceShadowed);
       if (candidates.length === 0) continue;
