@@ -1819,7 +1819,25 @@ async function layoutElement(
       definition,
     );
   }
-  const size = objectProperty(property(definition.attributes, 'size'));
+  const declaredSize = objectProperty(property(definition.attributes, 'size'));
+  // The game refuses `size` on an iconType ("Unexpected token: size") and draws the sprite at
+  // its own size (issue 220), so the scene does the same.
+  // Only an iconType written in source: the parts the renderer builds itself (a scrollbar's
+  // stretched track, the tooltip preview's background) carry a size the renderer computed.
+  const sizeRefused =
+    declaredSize !== undefined &&
+    /^icontype$/iu.test(definition.elementType) &&
+    definition.sourceOwnerId === undefined &&
+    !definition.id.startsWith('tooltip-preview:');
+  const size = sizeRefused ? undefined : declaredSize;
+  if (sizeRefused)
+    addFidelity(
+      fidelity,
+      'ignored',
+      'size',
+      'The game refuses size on an iconType and draws its sprite at the sprite size.',
+      definition,
+    );
   const scriptedX =
     rowValues?.[`${definition.name}.x`] ??
     scenario.values[`${definition.name}.x`] ??
@@ -2148,8 +2166,13 @@ async function layoutElement(
         ),
       );
     } else {
-      if (width === 0 && inferWidth) width = sprite.width * scale;
-      if (height === 0 && inferHeight) height = sprite.height * scale;
+      // A cornered tile sprite is drawn at the size its .gfx declares, not its texture's size.
+      const spriteSize =
+        spriteDefinition.spriteType.toLowerCase() === 'corneredtilespritetype'
+          ? spriteDefinition.declaredSize
+          : undefined;
+      if (width === 0 && inferWidth) width = (spriteSize?.width ?? sprite.width) * scale;
+      if (height === 0 && inferHeight) height = (spriteSize?.height ?? sprite.height) * scale;
       addFidelity(
         fidelity,
         partialAppearance.length === 0 ? 'modelled' : 'approximated',

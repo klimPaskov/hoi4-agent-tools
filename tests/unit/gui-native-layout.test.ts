@@ -65,6 +65,27 @@ async function sceneFor(files: ScannedFile[], scenario: unknown = {}) {
 }
 
 describe('native GUI geometry and composition', () => {
+  it('draws an iconType at its sprite size, as the game does when it refuses size there', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
+      iconType = { name = "stretched_plain" position = { x = 0 y = 0 } size = { width = 40 height = 30 } spriteType = "GFX_fixed" }
+      iconType = { name = "stretched_tile" position = { x = 300 y = 0 } size = { width = 90 height = 70 } spriteType = "GFX_tile" }
+      iconType = { name = "plain_tile" position = { x = 400 y = 0 } spriteType = "GFX_tile" }
+      buttonType = { name = "sized_button" position = { x = 300 y = 200 } size = { width = 90 height = 70 } spriteType = "GFX_tile" }
+    }`);
+    const scene = await sceneFor(files);
+    const rect = (name: string) => scene.elements.find((element) => element.name === name)?.rect;
+    // A plain sprite keeps its texture size, a cornered tile its declared .gfx size.
+    expect(rect('stretched_plain')).toMatchObject({ width: 280, height: 190 });
+    expect(rect('stretched_tile')).toMatchObject({ width: 16, height: 16 });
+    expect(rect('plain_tile')).toMatchObject({ width: 16, height: 16 });
+    // Other element types still take size.
+    expect(rect('sized_button')).toMatchObject({ width: 90, height: 70 });
+    const ignored = scene.fidelity.ignored.filter(({ field }) => field === 'size');
+    expect(ignored).toHaveLength(2);
+    expect(ignored[0]?.detail).toContain('refuses size on an iconType');
+  });
+
   it('keeps multiline=no labels on one line while reporting horizontal overflow', async () => {
     const files =
       await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
@@ -217,15 +238,15 @@ describe('native GUI geometry and composition', () => {
   it('preserves three-slice borders when either cornered-sprite border axis is zero', async () => {
     const files =
       await fixture(`containerWindowType = { name = "native_window" size = { width = 100 height = 80 }
-      iconType = { name = "vertical" size = { width = 8 height = 40 } spriteType = "GFX_vertical" }
-      iconType = { name = "horizontal" position = { x = 20 y = 0 } size = { width = 40 height = 8 } spriteType = "GFX_horizontal" }
+      iconType = { name = "vertical" spriteType = "GFX_vertical" }
+      iconType = { name = "horizontal" position = { x = 20 y = 0 } spriteType = "GFX_horizontal" }
     }`);
     files.push(
       scanned(
         'interface/three-slice.gfx',
         `spriteTypes = {
-      corneredTileSpriteType = { name = "GFX_vertical" texturefile = "gfx/vertical.png" borderSize = { x = 0 y = 4 } tilingCenter = yes }
-      corneredTileSpriteType = { name = "GFX_horizontal" texturefile = "gfx/horizontal.png" borderSize = { x = 4 y = 0 } tilingCenter = yes }
+      corneredTileSpriteType = { name = "GFX_vertical" texturefile = "gfx/vertical.png" size = { x = 8 y = 40 } borderSize = { x = 0 y = 4 } tilingCenter = yes }
+      corneredTileSpriteType = { name = "GFX_horizontal" texturefile = "gfx/horizontal.png" size = { x = 40 y = 8 } borderSize = { x = 4 y = 0 } tilingCenter = yes }
     }`,
       ),
     );

@@ -952,7 +952,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     const files = [
       scanned(
         'interface/centre-probe.gui',
-        'guiTypes = { containerWindowType = { name = "centre_window" size = { width = 200 height = 100 } iconType = { name = "nearly_centred" position = { x = 52 y = 10 } size = { width = 100 height = 20 } } iconType = { name = "centred" position = { x = 50 y = 40 } size = { width = 100 height = 20 } } iconType = { name = "offset" position = { x = 70 y = 70 } size = { width = 100 height = 20 } } } }',
+        'guiTypes = { containerWindowType = { name = "centre_window" size = { width = 200 height = 100 } containerWindowType = { name = "nearly_centred" position = { x = 52 y = 10 } size = { width = 100 height = 20 } } containerWindowType = { name = "centred" position = { x = 50 y = 40 } size = { width = 100 height = 20 } } containerWindowType = { name = "offset" position = { x = 70 y = 70 } size = { width = 100 height = 20 } } } }',
       ),
     ];
     const graph = sourceGraph(files);
@@ -2374,18 +2374,18 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
 \tname = "anchor_window"
 \tsize = { width = 200 height = 100 }
 \tbackground = { spriteType = "GFX_anchor" }
-\ticonType = { name = "center_left" orientation = CENTER_LEFT position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "center_right" orientation = CENTER_RIGHT position = { x = -30 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "center_up" orientation = CENTER_UP position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "center_down" orientation = CENTER_DOWN position = { x = 10 y = -15 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "centered" position = { x = 50 y = 50 } centerposition = yes size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "scaled" position = { x = 10 y = 10 } scale = 2 size = { width = 10 height = 5 } spriteType = "GFX_anchor" }
-\ticonType = { name = "percent" position = { x = 50%% y = 0 } size = { width = 50% height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "percent_edge" position = { x = 50%% y = 0 } size = { width = 80%% height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "empty_percent_edge" position = { x = 50%% y = 0 } size = { width = 50%% height = 10 } spriteType = "GFX_anchor" }
-\ticonType = { name = "clipped_by_default" position = { x = 195 y = 95 } size = { width = 20 height = 20 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "center_left" orientation = CENTER_LEFT position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "center_right" orientation = CENTER_RIGHT position = { x = -30 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "center_up" orientation = CENTER_UP position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "center_down" orientation = CENTER_DOWN position = { x = 10 y = -15 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "centered" position = { x = 50 y = 50 } centerposition = yes size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "scaled" position = { x = 10 y = 10 } scale = 2 size = { width = 10 height = 5 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "percent" position = { x = 50%% y = 0 } size = { width = 50% height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "percent_edge" position = { x = 50%% y = 0 } size = { width = 80%% height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "empty_percent_edge" position = { x = 50%% y = 0 } size = { width = 50%% height = 10 } spriteType = "GFX_anchor" }
+\tbuttonType = { name = "clipped_by_default" position = { x = 195 y = 95 } size = { width = 20 height = 20 } spriteType = "GFX_anchor" }
 \tinstantTextBoxType = { name = "bounded_text" position = { x = 0 y = 70 } text = "A long line of text that wraps into several lines" maxWidth = 100 maxHeight = 20 fixedsize = yes }
-\tcontainerWindowType = { name = "inherited_parent" orientation = CENTER origo = CENTER position = { x = 0 y = 0 } size = { width = 200 height = 100 } iconType = { name = "inherited_center" position = { x = 0 y = 0 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" } }
+\tcontainerWindowType = { name = "inherited_parent" orientation = CENTER origo = CENTER position = { x = 0 y = 0 } size = { width = 200 height = 100 } buttonType = { name = "inherited_center" position = { x = 0 y = 0 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" } }
 } }`,
       ),
       scanned('gfx/anchor.png', png),
