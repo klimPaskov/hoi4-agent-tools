@@ -3,8 +3,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { checkAssertion, matchingItems, resolvePath } from '../../scripts/bench/assertions.js';
-import { compareRun, isSlower, markdownReport, toBaseline } from '../../scripts/bench/compare.js';
-import { contentHash } from '../../scripts/bench/corpus.js';
+import {
+  compareRun,
+  isSlower,
+  markdownReport,
+  mergeRerun,
+  toBaseline,
+} from '../../scripts/bench/compare.js';
+import { contentHash, warmCorpusFiles, warmUpFiles } from '../../scripts/bench/corpus.js';
 import {
   gameUpdateMarkdown,
   pinnedBuilds,
@@ -195,6 +201,60 @@ describe('benchmark comparison', () => {
     expect(report).toContain('measured on other hardware (Example CPU, 16 cores, 64 GB)');
   });
 
+  it('lists cold-start latency apart instead of failing the run', () => {
+    const coldBaseline = toBaseline(
+      run([caseResult('first-touch', 'passed', { timing: 'cold', milliseconds: [100] })]),
+      true,
+    );
+    const slower = run([
+      caseResult('first-touch', 'passed', { timing: 'cold', milliseconds: [900] }),
+    ]);
+    const comparison = compareRun(slower, coldBaseline);
+    expect(comparison.regressions).toEqual([]);
+    expect(comparison.slowCaseIds).toEqual([]);
+    expect(comparison.coldStarts).toEqual(['first-touch p95 100 -> 900 ms']);
+    expect(markdownReport(slower, comparison)).toContain('not counted as regressions: 1');
+    // A cold case that now fails is still a regression: only its latency is set apart.
+    const broken = run([caseResult('first-touch', 'failed', { timing: 'cold' })]);
+    expect(compareRun(broken, coldBaseline).regressions).toEqual([
+      'first-touch now fails: status is "ok"',
+    ]);
+  });
+
+  it('counts a slow case only when its rerun is slow too', () => {
+    const slow = () => run([caseResult('slow', 'passed', { milliseconds: [400] })]);
+    const first = slow();
+    const comparison = compareRun(first, baseline);
+    expect(comparison.slowCaseIds).toEqual(['slow']);
+    // Normal on the rerun: listed with both numbers, not a regression, and the baseline keeps
+    // the faster pass.
+    mergeRerun(first, run([caseResult('slow', 'passed', { milliseconds: [110] })]));
+    const cleared = compareRun(first, baseline);
+    expect(cleared.regressions).toEqual([]);
+    expect(cleared.rerunCleared).toEqual([
+      'slow p95 100 ms in the baseline, 400 ms on the first pass, 110 ms on the rerun',
+    ]);
+    expect(toBaseline(first, true).latency?.slow).toBe(110);
+    // Slow on the rerun too: a regression, judged on the faster of the two passes.
+    const twice = slow();
+    mergeRerun(twice, run([caseResult('slow', 'passed', { milliseconds: [300] })]));
+    expect(compareRun(twice, baseline).regressions).toEqual(['slow p95 100 -> 300 ms']);
+    // A rerun that fails adds no samples, so the first pass stands.
+    const failedRerun = slow();
+    mergeRerun(failedRerun, run([caseResult('slow', 'failed', { milliseconds: [5] })]));
+    expect(compareRun(failedRerun, baseline).regressions).toEqual(['slow p95 100 -> 400 ms']);
+  });
+
+  it('names the warm-up in the report', () => {
+    const warmed = {
+      ...run([caseResult('kept', 'passed')]),
+      warmUp: { files: 12, bytes: 3 * 1024 ** 2, milliseconds: 4000 },
+    };
+    expect(markdownReport(warmed, compareRun(warmed, baseline))).toContain(
+      'Warm-up: read 12 files (3 MB) in 4 s before timing.',
+    );
+  });
+
   it('treats a run without a baseline as having nothing to compare', () => {
     expect(compareRun(before, undefined).regressions).toEqual([]);
   });
@@ -263,6 +323,51 @@ describe('benchmark data', () => {
       expect((await contentHash(root, first.cache)).hash).toBe(first.hash);
       await writeFile(path.join(root, 'events', 'e0.txt'), 'id = e.changed\n');
       expect((await contentHash(root)).hash).not.toBe(first.hash);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('warms the text files, the map and the flags, and nothing else', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'bench-warm-'));
+    try {
+      const files: Record<string, string> = {
+        'descriptor.mod': 'name="x"\n',
+        'common/ideas/a.txt': 'ideas = {}\n',
+        'localisation/english/a_l_english.yml': 'l_english:\n',
+        'map/provinces.bmp': 'BM',
+        'map/terrain/colormap.dds': 'DDS ',
+        'gfx/flags/ABC.tga': 'tga',
+        'gfx/interface/big.dds': 'not warmed',
+        'sound/a.wav': 'not warmed',
+        'tools/notes.txt': 'outside the folders the game loads',
+        '.git/config': 'hidden',
+      };
+      for (const [file, text] of Object.entries(files)) {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await writeFile(path.join(root, file), text);
+      }
+      const expected = [
+        'common/ideas/a.txt',
+        'descriptor.mod',
+        'gfx/flags/ABC.tga',
+        'localisation/english/a_l_english.yml',
+        'map/provinces.bmp',
+        'map/terrain/colormap.dds',
+      ];
+      expect(await warmUpFiles(root)).toEqual(expected);
+      expect(await warmCorpusFiles(root)).toEqual({
+        files: expected.length,
+        bytes: expected.reduce((sum, file) => sum + Buffer.byteLength(files[file]!), 0),
+      });
+      // A corpus without a map or flags folder warms its text files alone.
+      await rm(path.join(root, 'map'), { recursive: true });
+      await rm(path.join(root, 'gfx'), { recursive: true });
+      expect(await warmUpFiles(root)).toEqual([
+        'common/ideas/a.txt',
+        'descriptor.mod',
+        'localisation/english/a_l_english.yml',
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

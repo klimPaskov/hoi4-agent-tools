@@ -16,6 +16,7 @@ import {
   findUserRoot,
   locateCorpus,
   pinCorpus,
+  warmCorpusFiles,
   type CorpusPin,
   type LocatedCorpus,
 } from './corpus.js';
@@ -45,6 +46,10 @@ export interface CaseResult {
   inline: boolean;
   failures: string[];
   milliseconds: number[];
+  /** The case's samples from the rerun of a case that was slower than its baseline. */
+  rerunMilliseconds?: number[];
+  /** A `cold` case measures the first touch after the server starts. */
+  timing?: 'cold' | 'warm' | 'any';
   budgetMs?: number;
   structuredBytes: number;
   resultStatus?: string;
@@ -64,6 +69,8 @@ export interface RunResult {
   toolsCommit?: string;
   machine: Machine;
   corpora: CorpusPin[];
+  /** What the warm-up pass read into the file cache before any case was timed. */
+  warmUp?: { files: number; bytes: number; milliseconds: number };
   cases: CaseResult[];
 }
 
@@ -73,6 +80,10 @@ export interface RunOptions {
   corpora?: string[];
   /** Only cases whose id contains one of these strings. */
   filter?: string[];
+  /** Only the cases with exactly these ids, for example the rerun of slow cases. */
+  ids?: string[];
+  /** Read every corpus file the tools read once before timing, so a cold disk is not measured. */
+  warmUp?: boolean;
   temporaryRoot: string;
   hashContent: boolean;
   /** Where per-file content digests are kept between runs. */
@@ -115,10 +126,24 @@ function percentile(values: number[], fraction: number): number {
   return sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)] ?? 0;
 }
 
-/** The p95 a case is judged on: the warm repeats when there are any, else the only call. */
-export function caseLatency(result: CaseResult): number | undefined {
+/** The p95 of the first pass alone, before any rerun. */
+export function firstPassLatency(result: CaseResult): number | undefined {
   if (result.milliseconds.length === 0) return undefined;
   return percentile(result.milliseconds, 0.95);
+}
+
+/**
+ * The p95 a case is judged on: the warm repeats when there are any, else the only call. A case
+ * that was rerun is judged on the faster pass, so it counts as slower only when both were slow.
+ */
+export function caseLatency(result: CaseResult): number | undefined {
+  const first = firstPassLatency(result);
+  const rerun =
+    result.rerunMilliseconds === undefined || result.rerunMilliseconds.length === 0
+      ? undefined
+      : percentile(result.rerunMilliseconds, 0.95);
+  if (first === undefined) return rerun;
+  return rerun === undefined ? first : Math.min(first, rerun);
 }
 
 async function readArtifact(
@@ -176,6 +201,7 @@ async function runCall(
     inline: false,
     failures: [],
     milliseconds,
+    timing: benchCase.timing,
     ...(benchCase.budgetMs === undefined ? {} : { budgetMs: benchCase.budgetMs }),
     structuredBytes: 0,
   };
@@ -393,7 +419,9 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
   const cases = (await loadCases()).filter(
     (benchCase) =>
       corpora.some(({ id }) => id === benchCase.corpus) &&
-      (options.filter === undefined || options.filter.some((part) => benchCase.id.includes(part))),
+      (options.filter === undefined ||
+        options.filter.some((part) => benchCase.id.includes(part))) &&
+      (options.ids === undefined || options.ids.includes(benchCase.id)),
   );
   const located: LocatedCorpus[] = [];
   const workspaces: Array<Record<string, unknown>> = [];
@@ -448,6 +476,20 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
         options.hashCacheDirectory,
       ),
     );
+  }
+  let warmUp: RunResult['warmUp'];
+  if (options.warmUp === true) {
+    const warmStarted = Date.now();
+    let files = 0;
+    let bytes = 0;
+    for (const entry of located) {
+      if (entry.root === undefined || entry.corpus.kind === 'synthetic') continue;
+      log(`warming the file cache for ${entry.corpus.id}`);
+      const warmed = await warmCorpusFiles(entry.root);
+      files += warmed.files;
+      bytes += warmed.bytes;
+    }
+    warmUp = { files, bytes, milliseconds: Date.now() - warmStarted };
   }
   const results: CaseResult[] = [];
   const unavailable = new Map(
@@ -512,6 +554,7 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
     ...(toolsCommit === undefined ? {} : { toolsCommit }),
     machine: await describeMachine(),
     corpora: pins,
+    ...(warmUp === undefined ? {} : { warmUp }),
     cases: results,
   };
 }

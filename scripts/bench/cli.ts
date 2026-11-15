@@ -4,10 +4,10 @@ import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
 import { canonicalJson } from '../../src/hoi4_agent_tools/core/canonical.js';
-import { compareRun, markdownReport, toBaseline } from './compare.js';
+import { compareRun, markdownReport, mergeRerun, toBaseline } from './compare.js';
 import { findGameRoot } from './corpus.js';
 import { gameUpdateMarkdown, watchGame, type GameUpdate } from './game-watch.js';
-import { BENCH_ROOT, runSuite } from './runner.js';
+import { BENCH_ROOT, loadCorpora, runSuite } from './runner.js';
 import { baselineSchema, type Baseline } from './schema.js';
 
 /**
@@ -24,6 +24,10 @@ import { baselineSchema, type Baseline } from './schema.js';
  * (HOI4_BENCH_DIR, else %LOCALAPPDATA%\hoi4-agent-tools\bench, ~/Library/Application
  * Support/hoi4-agent-tools/bench or ~/.local/share/hoi4-agent-tools/bench). Exit status is 1
  * when a case regressed on an unchanged corpus.
+ *
+ * The real suite reads the corpus files once before timing (--no-warm-up skips that), and a case
+ * slower than its baseline is rerun once on a fresh server before it counts (--no-rerun skips
+ * that), so a disk that other work left cold does not fail the run.
  */
 
 function benchDataRoot(): string {
@@ -65,6 +69,8 @@ const { values } = parseArgs({
     'watch-game': { type: 'boolean', default: false },
     'from-results': { type: 'string' },
     'no-hash': { type: 'boolean', default: false },
+    'no-warm-up': { type: 'boolean', default: false },
+    'no-rerun': { type: 'boolean', default: false },
     dump: { type: 'boolean', default: false },
   },
 });
@@ -131,12 +137,35 @@ try {
     ...(values.case === undefined ? {} : { filter: values.case.split(',') }),
     temporaryRoot: temporary,
     hashContent: !values['no-hash'],
+    warmUp: suite === 'real' && !values['no-warm-up'],
     ...(suite === 'real' ? { hashCacheDirectory: path.join(dataRoot, 'hash-cache') } : {}),
     ...(values.dump ? { dumpDirectory: path.join(out, 'calls') } : {}),
     log: (line) => process.stderr.write(`${line}\n`),
   });
   const baseline = await readBaseline(baselinePath);
-  const comparison = compareRun(result, baseline);
+  let comparison = compareRun(result, baseline);
+  if (comparison.slowCaseIds.length > 0 && !values['no-rerun']) {
+    // A slow case is timed again on a fresh server, now that its files are in the file cache.
+    // Mods are configured with the game corpus as their game root, so it always comes along.
+    const ids = comparison.slowCaseIds;
+    const games = (await loadCorpora()).filter(({ kind }) => kind === 'game').map(({ id }) => id);
+    const slowCorpora = result.cases
+      .filter(({ id }) => ids.includes(id))
+      .map(({ corpus }) => corpus);
+    process.stderr.write(`rerunning ${ids.length} slow case${ids.length === 1 ? '' : 's'}\n`);
+    const rerunRoot = path.join(temporary, 'rerun');
+    await mkdir(rerunRoot, { recursive: true });
+    const rerun = await runSuite({
+      suite,
+      corpora: [...new Set([...games, ...slowCorpora])],
+      ids,
+      temporaryRoot: rerunRoot,
+      hashContent: false,
+      log: (line) => process.stderr.write(`${line}\n`),
+    });
+    mergeRerun(result, rerun);
+    comparison = compareRun(result, baseline);
+  }
   const report = `${markdownReport(result, comparison)}${
     gameUpdate === undefined
       ? ''
