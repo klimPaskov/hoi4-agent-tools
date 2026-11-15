@@ -1,0 +1,1 @@
+- A focus inspect, render or rewrite no longer rebuilds the sprite graph of the installed game's focus icons on every call. The graph is reused while the same sprite files with the same contents are read, so a warm `hoi4.focus_inspect` on a small mod with the game takes about half as long (issue 137).

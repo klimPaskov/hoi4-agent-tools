@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '../core/canonical.js';
+import { canonicalJson, compareCodeUnits } from '../core/canonical.js';
 import path from 'node:path';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
@@ -8,7 +8,7 @@ import type { ResolvedWorkspace } from '../core/workspace.js';
 import type { RenderBudget } from '../core/render-budget.js';
 import { GuiAssetCatalog } from '../gui/assets.js';
 import { buildGuiSourceGraph } from '../gui/source-graph.js';
-import type { GuiSpriteDefinition } from '../gui/types.js';
+import type { GuiSourceGraph, GuiSpriteDefinition } from '../gui/types.js';
 import type {
   ContinuousFocusPalettePlan,
   FocusPresentationResolution,
@@ -158,6 +158,50 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/**
+ * Sprite graphs of earlier calls, keyed by the bytes of an installed-game file they read. The
+ * scanner hands out the same buffer for an unchanged game file while it keeps the file, so an
+ * entry lives as long as the scanner's own copy and is dropped with it when caches are released.
+ */
+const presentationGraphs = new WeakMap<Buffer, { key: string; graph: GuiSourceGraph }>();
+
+/**
+ * The GUI source graph of the sprite-declaring files, reused when the same files with the same
+ * contents, order and shadowing were read before (issue 137). Focus presentation reads only its
+ * sprites and fonts, which depend on those files alone, and which files the index skipped. The
+ * build reads a provided index without writing to it; a build that changed the index anyway is
+ * not reused, so the index would see the same calls as without the cache.
+ */
+export function presentationGraph(
+  files: readonly ScannedFile[],
+  index: SymbolIndex,
+): GuiSourceGraph {
+  const anchor = files.find(({ rootKind }) => rootKind === 'game' || rootKind === 'dlc')?.bytes;
+  const key = canonicalJson(
+    files.map((file) => [
+      file.displayPath,
+      file.sha256,
+      file.loadOrder,
+      file.shadowedBy ?? null,
+      index.isSourceSkipped(file.displayPath),
+    ]),
+  );
+  if (anchor !== undefined) {
+    const known = presentationGraphs.get(anchor);
+    if (known?.key === key) return known.graph;
+  }
+  const diagnosticsBefore = index.diagnostics.length;
+  const skippedBefore = index.skippedSourceCount;
+  const graph = buildGuiSourceGraph(files, index);
+  if (
+    anchor !== undefined &&
+    index.diagnostics.length === diagnosticsBefore &&
+    index.skippedSourceCount === skippedBefore
+  )
+    presentationGraphs.set(anchor, { key, graph });
+  return graph;
+}
+
 export async function resolveFocusPresentation(
   input: ResolveFocusPresentationInput,
 ): Promise<FocusPresentationResolution> {
@@ -179,7 +223,7 @@ export async function resolveFocusPresentation(
   const presentationFiles = input.files.filter(({ displayPath }) =>
     spriteSourcePaths.has(displayPath),
   );
-  const baseGraph = buildGuiSourceGraph(presentationFiles, input.index);
+  const baseGraph = presentationGraph(presentationFiles, input.index);
   const texturePaths = new Set<string>();
   for (const spriteName of spriteNames) {
     const sprite = relevantSprite(spriteName, baseGraph.sprites, input.index);
