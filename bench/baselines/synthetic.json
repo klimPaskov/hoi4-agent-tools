@@ -132,6 +132,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.decision-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.decision-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.decision-write-create-file-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.decision-write-unknown-category": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true

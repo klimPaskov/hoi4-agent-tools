@@ -45,6 +45,8 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.character_write': '{"operation":"add","id":"TAG_jane_doe","body":"name = TAG_jane_doe"}',
   'hoi4.event_write':
     '{"operation":"add","id":"my_events.1","createNamespace":true,"body":"title = my_events.1.t"}',
+  'hoi4.decision_write':
+    '{"operation":"add","id":"my_decision","category":"my_category","body":"icon = generic_research"}',
   'hoi4.gui_inspect': '{"windowName":"my_window"}',
   'hoi4.gui_render': '{"windowName":"my_window","scenario":{"id":"normal"}}',
   'hoi4.gui_rewrite':

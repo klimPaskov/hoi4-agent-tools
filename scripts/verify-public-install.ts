@@ -34,6 +34,7 @@ const publicToolNames = [
   'hoi4.idea_write',
   'hoi4.character_write',
   'hoi4.event_write',
+  'hoi4.decision_write',
   'hoi4.reference_search',
   'hoi4.reference_read',
   'hoi4.reference_context',

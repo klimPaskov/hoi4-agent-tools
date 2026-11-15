@@ -41,6 +41,11 @@ export async function registerWorkerOperations(
     );
   else if (toolName === 'hoi4.idea_write')
     (await import('../ideas/job-operations.js')).registerIdeaWriteJobs(operations, engine);
+  else if (toolName === 'hoi4.decision_write')
+    (await import('../decision/write-job-operations.js')).registerDecisionWriteJobs(
+      operations,
+      engine,
+    );
   else if (toolName === 'hoi4.character_write')
     (await import('../characters/job-operations.js')).registerCharacterWriteJobs(
       operations,

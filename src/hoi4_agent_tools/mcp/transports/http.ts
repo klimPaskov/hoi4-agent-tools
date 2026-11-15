@@ -65,6 +65,7 @@ const WRITE_SCOPED_TOOLS = new Set([
   'hoi4.idea_write',
   'hoi4.character_write',
   'hoi4.event_write',
+  'hoi4.decision_write',
 ]);
 const MCP_ALLOWED_METHODS = 'GET, POST, DELETE';
 const SINGLETON_SECURITY_HEADERS = new Set([
