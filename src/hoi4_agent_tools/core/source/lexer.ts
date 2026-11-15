@@ -269,7 +269,8 @@ export function lexClausewitz(
           code: 'SOURCE_STRING_TOO_LONG',
           severity: 'warning',
           category: 'syntax',
-          message: 'Clausewitz quoted strings longer than 255 characters are not portable',
+          message:
+            'Quoted string longer than 255 characters. Vanilla has none, but no game limit is recorded: check it in game before shortening it',
           location: locationFor(sourcePath, lineIndex, start, index),
         }));
       }
