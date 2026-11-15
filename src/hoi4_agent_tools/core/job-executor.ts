@@ -41,7 +41,37 @@ type Operation =
         recipe: JobOutput | undefined,
         context: JobExecutionContext,
       ): Promise<JobOutput>;
+      /** Whether this request answers once its edit is written, before its check (ADR 0087). */
+      answersBeforeCheck?(input: unknown): boolean;
     };
+
+/** How long an edit that answers before its check waits for the previous edit's check. */
+export const EARLY_ANSWER_LOCK_WAIT_MS = 30_000;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The answer a rewrite gives before its after-edit check ends: its normal tool result for an
+ * applied edit, with `structuredContent.data.afterEditCheck` naming the job whose final result is
+ * the check's outcome. A result without structured data is returned unchanged.
+ */
+export function withAfterEditCheck(
+  result: JobOutput,
+  workspaceId: string,
+  jobId: string,
+): JobOutput {
+  const structured = result.structuredContent;
+  if (!isObject(structured) || !isObject(structured.data)) return result;
+  return jsonObject.parse({
+    ...result,
+    structuredContent: {
+      ...structured,
+      data: { ...structured.data, afterEditCheck: { status: 'running', workspaceId, jobId } },
+    },
+  });
+}
 
 export interface PreparedJobWrite {
   transaction: TransactionManifest;
@@ -103,9 +133,19 @@ export class JobOperations {
       context: JobExecutionContext,
     ) => Promise<JobOutput> = (_input, execution, reconciled) =>
       Promise.resolve(defaultWriteResult(execution, reconciled)),
+    options: { answersBeforeCheck?: (input: Input) => boolean } = {},
   ): void {
+    const answersBeforeCheck = options.answersBeforeCheck;
     this.add(name, {
       mutation: true,
+      ...(answersBeforeCheck === undefined
+        ? {}
+        : {
+            answersBeforeCheck: (input: unknown) => {
+              const parsed = schema.safeParse(input);
+              return parsed.success && answersBeforeCheck(parsed.data);
+            },
+          }),
       prepare: async (input, context) => {
         const prepared = await prepare(schema.parse(input), context);
         if ('readOnlyPreview' in prepared)
@@ -313,6 +353,23 @@ export class JobExecutor {
                     recipe,
                     context,
                   ),
+                operation.answersBeforeCheck?.(initial.request.arguments) === true
+                  ? {
+                      lockWaitMs: EARLY_ANSWER_LOCK_WAIT_MS,
+                      answer: async (execution, recipe) =>
+                        withAfterEditCheck(
+                          await operation.complete(
+                            initial.request.arguments,
+                            execution,
+                            false,
+                            recipe,
+                            context,
+                          ),
+                          workspaceId,
+                          id,
+                        ),
+                    }
+                  : undefined,
               );
             }
             const result = jsonObject.parse(

@@ -81,10 +81,19 @@ export function parseOperationTaskId(value: string): { workspaceId: string; jobI
   return { workspaceId: parsed.slice(0, separator), jobId: parsed.slice(separator + 1) };
 }
 
+/**
+ * What the protocol task answers: a rewrite that published its answer before its after-edit
+ * check (ADR 0087) answers with that, and keeps it whatever the check decides later; the check's
+ * outcome is the job's own result, read with hoi4.job_inspect.
+ */
+export function operationTaskResult(record: JobRecord): Record<string, unknown> | undefined {
+  return record.earlyResult ?? (record.status === 'completed' ? record.result : undefined);
+}
+
 export function operationTaskStatus(
   record: JobRecord,
 ): 'working' | 'completed' | 'cancelled' | 'failed' {
-  if (record.status === 'completed') return 'completed';
+  if (record.status === 'completed' || record.earlyResult !== undefined) return 'completed';
   if (record.status === 'cancelled') return 'cancelled';
   if (record.status === 'failed') return 'failed';
   return 'working';
@@ -317,7 +326,7 @@ export class OperationTaskService {
       throw new ServiceError('TASK_NOT_FOUND', 'The requested protocol task does not exist');
     if (
       status !== operationTaskStatus(record) ||
-      JSON.stringify(record.result) !== JSON.stringify(result)
+      JSON.stringify(operationTaskResult(record)) !== JSON.stringify(result)
     )
       throw new ServiceError(
         'TASK_RESULT_IMMUTABLE',
@@ -329,6 +338,8 @@ export class OperationTaskService {
     let record = await this.find(value, context);
     if (record?.request.protocolTask === undefined)
       throw new ServiceError('TASK_NOT_FOUND', 'The requested protocol task does not exist');
+    // An early answer stands as the task's result without waiting for the check to end.
+    if (record.earlyResult !== undefined) return record.earlyResult;
     const launch = this.launches.get(value);
     if (launch !== undefined) {
       await launch;
@@ -336,6 +347,7 @@ export class OperationTaskService {
       if (record?.request.protocolTask === undefined)
         throw new ServiceError('TASK_NOT_FOUND', 'The requested protocol task does not exist');
     }
+    if (record.earlyResult !== undefined) return record.earlyResult;
     if (record.status === 'completed' && record.result !== undefined) return record.result;
     if (record.status === 'failed')
       return errorResult(

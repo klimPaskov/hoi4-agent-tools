@@ -213,6 +213,12 @@ export const focusRewriteRequestSchema = z
       .max(FOCUS_RENDER_MAX_OUTPUT_SCALE)
       .optional(),
     requestKey: backgroundRequestKeySchema.optional(),
+    /**
+     * Answer once the edit is durably written, before the after-edit check ends (ADR 0087). The
+     * answer carries `data.afterEditCheck`; read that job with hoi4.job_inspect for the check's
+     * outcome. A failing check still undoes the edit.
+     */
+    answerBeforeCheck: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {

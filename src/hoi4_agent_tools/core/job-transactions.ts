@@ -36,6 +36,16 @@ const defaultCompletion: JobWriteCompletion = (execution, reconciled) =>
     }),
   );
 
+/**
+ * An answer published once a rewrite's edit is durably written, before its after-edit check ends
+ * (ADR 0087). `answer` builds it from the written transaction; the check's outcome still becomes
+ * the job's final result.
+ */
+export interface EarlyAnswer {
+  lockWaitMs: number;
+  answer(execution: TransactionExecutionResult, recipe: JobOutput | undefined): Promise<JobOutput>;
+}
+
 /** One shared write boundary for background execution and interrupted-outcome reconciliation. */
 export class JobTransactions {
   constructor(
@@ -52,6 +62,7 @@ export class JobTransactions {
     signal?: AbortSignal,
     recipe?: JobOutput,
     completion: JobWriteCompletion = defaultCompletion,
+    early?: EarlyAnswer,
   ): Promise<JobRecord> {
     const job = await this.owned(workspaceId, id, ownerToken, principal, signal);
     this.assertTransaction(job, transaction);
@@ -66,7 +77,7 @@ export class JobTransactions {
         );
       return this.reconcile(workspaceId, id, ownerToken, principal, signal, true, completion);
     }
-    return this.apply(job, ownerToken, transaction, principal, signal, recipe, completion);
+    return this.apply(job, ownerToken, transaction, principal, signal, recipe, completion, early);
   }
 
   async reconcile(
@@ -185,6 +196,7 @@ export class JobTransactions {
     signal?: AbortSignal,
     recipe?: JobOutput,
     completion: JobWriteCompletion = defaultCompletion,
+    early?: EarlyAnswer,
   ): Promise<JobRecord> {
     try {
       const execution = await executePlannedTransaction(
@@ -210,6 +222,29 @@ export class JobTransactions {
                 'AbortError',
               );
           },
+          ...(early === undefined
+            ? {}
+            : {
+                lockWaitMs: early.lockWaitMs,
+                // The edit is durable: publish the answer, then let the check run as before.
+                afterWrite: async (written) => {
+                  const answer = await early.answer(
+                    {
+                      transaction: written,
+                      outcome: 'applied',
+                      artifacts: [],
+                    },
+                    recipe,
+                  );
+                  await this.jobs.store.updateOwned(
+                    this.jobs.scope(job.scope.workspaceId, principal),
+                    job.id,
+                    ownerToken,
+                    { earlyResult: answer },
+                    signal,
+                  );
+                },
+              }),
         },
       );
       return await this.complete(job, ownerToken, execution, false, principal, recipe, completion);

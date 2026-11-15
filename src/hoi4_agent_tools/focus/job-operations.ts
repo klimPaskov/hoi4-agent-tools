@@ -136,5 +136,6 @@ export function registerFocusJobs(operations: JobOperations, engine: CoreEngine)
       });
       return wireResult.parse(JSON.parse(JSON.stringify(toolResult(result))) as unknown);
     },
+    { answersBeforeCheck: (input) => input.answerBeforeCheck === true },
   );
 }

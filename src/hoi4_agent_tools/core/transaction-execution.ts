@@ -137,6 +137,13 @@ function assertFilesWithinScanLimit(engine: CoreEngine, transaction: Transaction
 export interface TransactionExecutionHooks {
   /** Persist a background request's journal binding before any source write begins. */
   beforeApply?: (transaction: Readonly<TransactionManifest>) => Promise<void>;
+  /**
+   * Runs once every file is durably written and before the after-edit check starts, while the
+   * workspace lock is held (ADR 0087). A failure here undoes the edit like a failed check.
+   */
+  afterWrite?: (transaction: Readonly<TransactionManifest>) => Promise<void>;
+  /** How long to wait for another rewrite's workspace lock; refused at once when absent. */
+  lockWaitMs?: number;
 }
 
 /**
@@ -167,6 +174,10 @@ export async function executePlannedTransaction(
       {
         ...(principal === undefined ? {} : { principal }),
         ...(signal === undefined ? {} : { signal }),
+        ...(hooks.lockWaitMs === undefined ? {} : { lockWaitMs: hooks.lockWaitMs }),
+        ...(hooks.afterWrite === undefined
+          ? {}
+          : { hooks: { beforePostValidation: () => hooks.afterWrite!(transaction) } }),
         postValidate: async (manifest, validationSignal) => {
           const validation = await postValidateTransaction(
             engine,

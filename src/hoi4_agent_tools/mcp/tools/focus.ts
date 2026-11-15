@@ -191,6 +191,15 @@ const focusEngineLayoutOutputSchema = z
   })
   .strict();
 
+/** An edit that answered before its after-edit check: the job that holds the check's outcome. */
+const afterEditCheckOutputSchema = z
+  .object({
+    status: z.literal('running'),
+    workspaceId: z.string().max(64),
+    jobId: z.string().max(128),
+  })
+  .strict();
+
 const focusPlanOutputSchema = strictOperationResultSchema(
   z.discriminatedUnion('mode', [
     z
@@ -212,6 +221,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
           .strict()
           .optional(),
         engine: focusEngineLayoutOutputSchema.optional(),
+        afterEditCheck: afterEditCheckOutputSchema.optional(),
         fileCount: nonNegativeIntegerSchema,
         artifactCount: nonNegativeIntegerSchema,
       })
@@ -223,6 +233,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         drift: focusDriftOutputSchema,
         created: z.boolean(),
         execution: z.enum(['applied', 'blocked', 'unchanged']),
+        afterEditCheck: afterEditCheckOutputSchema.optional(),
         fileCount: nonNegativeIntegerSchema,
         artifactCount: nonNegativeIntegerSchema,
       })

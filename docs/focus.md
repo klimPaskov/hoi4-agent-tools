@@ -207,6 +207,10 @@ Pass `symmetryGroups` with a `centerFocusId` and one or more `{ "leftFocusId": "
 
 A cleanup should not change gameplay relationships to improve the picture. One `prerequisite` block containing several focus IDs is an OR group; several prerequisite blocks are AND requirements.
 
+### Answer before the after-edit check
+
+An editor that redraws after every gesture can pass `answerBeforeCheck: true` to `hoi4.focus_rewrite` (ADR 0087). The call then answers as soon as the edit is durably written, about half a second to a second sooner on a small mod with the game. The answer carries `data.afterEditCheck` with `status: "running"`, the `workspaceId` and a `jobId`. The after-edit check runs as before, in the same job and under the same workspace lock. Read its outcome with `hoi4.job_inspect` and that `jobId`: the job's final result is the full rewrite result when the check passed. When the check fails, or the server stops before it ends, the edit is undone as without the option and the job ends with `JOB_REWRITE_RESTORED`. A second rewrite with the option sent while the check runs waits up to 30 seconds for it instead of failing with `TRANSACTION_LOCKED`. Without the option nothing changes.
+
 ## Engine layout and placement
 
 `layoutMode: "engine"` lays out the tree's `auto` focuses with the shared Rust engine (`hoi4-engine focus-layout`, [ADR 0074](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0074-shared-rust-engine.md)) instead of the TypeScript solver. Fixed and relative focuses keep their coordinates. The engine places each lane as a band, centres parents over their children and children under their parents, keeps mutually exclusive focuses side by side, and never changes prerequisites or exclusions. The result is written through the ordinary source update: the topmost focus of each lane gets `x` and `y`, and every other placed focus of the lane gets `relative_position_id` to it, so moving a lane later means editing one focus. A plan is optional: `{"treeId":"my_tree","layoutMode":"engine"}` lays out the existing tree's automatic focuses.
