@@ -184,6 +184,12 @@ Clients that request progress can reset their idle request timer from these noti
 A read-only `hoi4.gui_inspect` or `hoi4.gui_render` job still running after the configurable `jobDeadlineSeconds` (default 1,800) is stopped with `JOB_DEADLINE_EXCEEDED`; a `hoi4.gui_rewrite` job is not stopped by that deadline.
 See [persistent jobs and MCP tasks](jobs.md#cancellation-and-recovery).
 
+## Keys the game refuses
+
+The game's GUI loader reads only certain keys on each element type and inside each of its blocks, and refuses the rest when it loads the file: `size` on an `iconType` ("Unexpected token: size" in `error.log`, and the sprite is drawn at its own size), `alwaystransparent` on a `containerWindowType`, `width` and `height` where it reads `x` and `y` ("Malformed token: height"), or a `scrollbarType` written with the body of an `extendedScrollbarType` (`slider = { ... }` where the game writes `slider = "button name"`), which crashed the game on load.
+`hoi4.gui_inspect` (with a window and scenario) and `hoi4.gui_render` report these for the window's own mod elements as `GUI_KEY_REFUSED_BY_ENGINE` and `GUI_VALUE_MALFORMED` errors, with the line, and a `gui-engine-keys` validation check.
+The allowed keys are the ones the installed game's own `.gui` files write at the same place (element type and enclosing blocks, game and DLC files), read once per game version. A place the game's files never use is not checked, and without an installed game there is no check. A key the game accepts but never writes in its own files would be reported wrongly; please report such a case.
+
 ## Source-backed button shading
 
 The renderer reads referenced shader source, including legacy `.lua` references whose implementation is a `.shader` file.
