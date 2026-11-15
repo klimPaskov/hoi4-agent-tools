@@ -12,6 +12,7 @@ import {
   guiRewriteRequestSchema,
 } from '../schemas/gui-requests.js';
 import { characterWriteRequestSchema } from '../schemas/character-write.js';
+import { eventWriteRequestSchema } from '../schemas/event-write.js';
 import { ideaWriteRequestSchema } from '../schemas/idea-write.js';
 import { localisationWriteRequestSchema } from '../schemas/localisation-write.js';
 import { mapInspectRequestSchema, mapRewriteRequestSchema } from '../schemas/map-requests.js';
@@ -51,6 +52,7 @@ export const DOMAIN_TOOL_NAMES = [
   'hoi4.localisation_write',
   'hoi4.idea_write',
   'hoi4.character_write',
+  'hoi4.event_write',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
   'hoi4.gui_rewrite',
@@ -81,6 +83,7 @@ export const DOMAIN_TOOL_ARGUMENT_SCHEMAS: Record<
   'hoi4.localisation_write': localisationWriteRequestSchema,
   'hoi4.idea_write': ideaWriteRequestSchema,
   'hoi4.character_write': characterWriteRequestSchema,
+  'hoi4.event_write': eventWriteRequestSchema,
   'hoi4.gui_inspect': guiInspectRequestSchema,
   'hoi4.gui_render': guiRenderRequestSchema,
   'hoi4.gui_rewrite': guiRewriteRequestSchema,
@@ -102,5 +105,6 @@ export const MUTATION_TOOL_NAMES: ReadonlySet<string> = new Set([
   'hoi4.localisation_write',
   'hoi4.idea_write',
   'hoi4.character_write',
+  'hoi4.event_write',
   'hoi4.focus_rewrite',
 ]);

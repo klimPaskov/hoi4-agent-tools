@@ -229,6 +229,27 @@ describe('stdio smoke: synthetic fixture', () => {
     );
   }, 300_000);
 
+  it('adds an event to a temporary copy', async () => {
+    const eventsFile = path.join(rewriteGuiMod, 'events', 'smoke_events.txt');
+    await mkdir(path.dirname(eventsFile), { recursive: true });
+    await writeFile(eventsFile, 'add_namespace = smoke_events\n');
+    const added = await server.call('hoi4.event_write', 'add an event and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      id: 'smoke_events.1',
+      body: 'is_triggered_only = yes',
+      file: 'events/smoke_events.txt',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('EVENT_WRITE_APPLIED');
+    expect(await readFile(eventsFile, 'utf8')).toBe(
+      'add_namespace = smoke_events\n\ncountry_event = {\n\tid = smoke_events.1\n\tis_triggered_only = yes\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);
