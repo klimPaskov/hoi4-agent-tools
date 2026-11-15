@@ -65,6 +65,7 @@ import {
 } from './scenario-generator.js';
 import { parseGeneratedScenarioOptions, parsePreviewScenario } from './scenario.js';
 import { buildGuiSourceGraph } from './source-graph.js';
+import { guiEngineKeyDiagnostics, guiEngineKeyInventory } from './engine-keys.js';
 import { assertGuiSourcePatchesSafe } from './source-patch.js';
 import type {
   GuiArtifactSet,
@@ -888,6 +889,11 @@ export interface GuiStudioScanResult {
    * missing.
    */
   linkedFolders?: string[];
+  /**
+   * Keys of the window's own elements that the game refuses at load (`GUI_KEY_REFUSED_BY_ENGINE`,
+   * `GUI_VALUE_MALFORMED`), from {@link guiEngineKeyDiagnostics}.
+   */
+  engineKeyDiagnostics?: Diagnostic[];
 }
 
 export interface GuiStudioRenderInput extends RenderProgress {
@@ -1289,6 +1295,23 @@ export function guiArtifactProvenance(
   };
 }
 
+/** Add the refused-key findings of a window scan, and a check for them, to its validation. */
+function addEngineKeyValidation(
+  validation: GuiValidationResult,
+  diagnostics: readonly Diagnostic[] | undefined,
+): void {
+  if (diagnostics === undefined) return;
+  validation.diagnostics.push(...diagnostics);
+  validation.checks.push({
+    id: 'gui-engine-keys',
+    passed: diagnostics.length === 0,
+    message:
+      diagnostics.length === 0
+        ? "Every key of the window's own elements is one the installed game's interface files write at the same place"
+        : `${diagnostics.length} key${diagnostics.length === 1 ? '' : 's'} of the window's own elements are refused by the game at load (GUI_KEY_REFUSED_BY_ENGINE, GUI_VALUE_MALFORMED)`,
+  });
+}
+
 const sharedGuiGraphs = new WeakMap<CoreEngine, Map<string, GuiStudioScanResult>>();
 /** Graphs kept per engine: one for each scope a preview builds, across a few workspaces. */
 const GUI_GRAPH_CACHE_SCOPES = 6;
@@ -1483,6 +1506,22 @@ export class ScriptedGuiStudio {
       additionalLocalisationKeys,
     );
     assertTargetWindowAvailable(definitions.graph, windowName);
+    // Keys the game refuses at load, checked against the game's own .gui files (issue 220).
+    const gameLayoutFiles = await this.scanner.scan(workspace, {
+      patterns: layoutPatterns,
+      rootKinds: ['game', 'dlc'],
+      ...(signal === undefined ? {} : { signal }),
+    });
+    // Without an installed game there is no evidence of what the game parses: no check.
+    const engineKeyInventory = guiEngineKeyInventory(gameLayoutFiles);
+    const engineKeyDiagnostics =
+      engineKeyInventory === undefined
+        ? undefined
+        : guiEngineKeyDiagnostics(
+            definitionFiles,
+            selectedElements(definitions.graph, windowName, additionalTemplateNames),
+            engineKeyInventory,
+          );
     const referencedPatterns = [
       ...referencedAssetPatternsForWindow(
         definitions.graph,
@@ -1594,9 +1633,13 @@ export class ScriptedGuiStudio {
       `window:${workspaceId}:${windowName}`,
       additionalLocalisationKeys,
     );
-    return linkedFolders.size === 0
-      ? scanned
-      : { ...scanned, linkedFolders: [...linkedFolders].sort(compareCodeUnits) };
+    return {
+      ...scanned,
+      ...(linkedFolders.size === 0
+        ? {}
+        : { linkedFolders: [...linkedFolders].sort(compareCodeUnits) }),
+      ...(engineKeyDiagnostics === undefined ? {} : { engineKeyDiagnostics }),
+    };
   }
 
   public async lint(
@@ -1691,6 +1734,7 @@ export class ScriptedGuiStudio {
       validationGraph,
       await validateGuiScene(validationGraph, scene, scanned.files, relatedScenes, catalog),
     );
+    addEngineKeyValidation(validation, scanned.engineKeyDiagnostics);
     return { scene, graph: scanned.graph, validation };
   }
 
@@ -2048,6 +2092,7 @@ export class ScriptedGuiStudio {
       ...resolutionValidation.diagnostics,
     );
     validation.checks.push(...stateValidation.checks, ...resolutionValidation.checks);
+    addEngineKeyValidation(validation, scanned.engineKeyDiagnostics);
     const completeValidation = withGraphDiagnostics(validationGraph, validation);
 
     await renderStage(input, 'Writing GUI galleries and evidence');

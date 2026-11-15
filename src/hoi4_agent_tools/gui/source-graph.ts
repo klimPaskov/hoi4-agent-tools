@@ -2040,3 +2040,104 @@ export function buildGuiSourceGraph(
     diagnostics: sortDiagnostics(diagnostics.values()),
   };
 }
+
+/** One key written on a GUI element, or inside one of its nested blocks, as the game reads it. */
+export interface GuiElementKeyUse {
+  /** The element type as written, for example `iconType`. */
+  elementType: string;
+  elementName: string;
+  /** The element's own location, the same one {@link GuiElementDefinition.location} records. */
+  elementLocation: SourceLocation;
+  /**
+   * The keys of the nested blocks that hold this key, outermost first: empty for a key written
+   * on the element itself, `['slider']` inside a scrollbar's slider, `['size']` for the `width`
+   * of `size = { width = 1 height = 1 }`, `['background', 'size']` inside a background.
+   */
+  parents: string[];
+  key: string;
+  location: SourceLocation;
+  /** Whether the key's value is a block (`slider = { ... }`) rather than a value. */
+  block: boolean;
+  /** A bare word (no `= value`) inside a point block such as `size = { width height }`. */
+  bareWord?: boolean;
+}
+
+/** Blocks whose entries are coordinates (`x`/`y` or `width`/`height`). */
+export const GUI_POINT_BLOCK_KEYS: ReadonlySet<string> = new Set([
+  'size',
+  'position',
+  'bordersize',
+  'spacing',
+  'margin',
+  'slotsize',
+  'tilesize',
+]);
+
+/**
+ * Every key written on each GUI element of a document, with the nested non-element blocks that
+ * hold it, in source order. Nested elements are walked as elements of their own; their type key
+ * is not a key of the parent. Local constants (`@name = value`) are not keys. A bare word inside a
+ * point block is reported with `bareWord`.
+ */
+export function guiElementKeyUses(document: SourceDocument): GuiElementKeyUse[] {
+  const uses: GuiElementKeyUse[] = [];
+  const walkKeys = (
+    block: BlockNode,
+    element: Pick<GuiElementKeyUse, 'elementType' | 'elementName' | 'elementLocation'>,
+    parents: string[],
+  ): void => {
+    const pointBlock =
+      parents.length > 0 && GUI_POINT_BLOCK_KEYS.has(parents.at(-1)!.toLowerCase());
+    for (const entry of block.entries) {
+      if (entry.type === 'scalar') {
+        if (pointBlock && !/^-?(?:\d+\.?\d*|\.\d+)%?$/u.test(entry.value))
+          uses.push({
+            ...element,
+            parents,
+            key: entry.value,
+            location: nodeLocation(document, entry),
+            block: false,
+            bareWord: true,
+          });
+        continue;
+      }
+      if (entry.type !== 'assignment') continue;
+      if (isGuiElement(entry, element.elementType)) {
+        walkElement(entry, element.elementType);
+        continue;
+      }
+      if (entry.key.value.startsWith('@')) continue;
+      uses.push({
+        ...element,
+        parents,
+        key: entry.key.value,
+        location: nodeLocation(document, entry.key),
+        block: entry.value.type === 'block',
+      });
+      if (entry.value.type === 'block')
+        walkKeys(entry.value, element, [...parents, entry.key.value]);
+    }
+  };
+  const walkElement = (assignment: AssignmentNode, parentType?: string): void => {
+    if (assignment.value.type !== 'block') return;
+    const name = firstScalar(assignment.value, 'name')?.value;
+    if (name === undefined || !isGuiElement(assignment, parentType)) {
+      walk(assignment.value, parentType);
+      return;
+    }
+    walkKeys(
+      assignment.value,
+      {
+        elementType: assignment.key.value,
+        elementName: name,
+        elementLocation: nodeLocation(document, assignment, name),
+      },
+      [],
+    );
+  };
+  const walk = (block: BlockNode, parentType?: string): void => {
+    for (const assignment of assignments(block)) walkElement(assignment, parentType);
+  };
+  walk(document.root);
+  return uses;
+}
