@@ -29,6 +29,15 @@ interface Envelope {
     diff: string;
     untouchedDefinitions: number;
     missing: { localisation: string[]; sprite: string[]; unlock: string[]; folder: string[] };
+    placement?: {
+      computed: boolean;
+      reason?: string;
+      addedTechnologies?: string[];
+      removedTechnologies?: string[];
+      moved?: Array<{ technologyId: string; from: string[]; to: string[] }>;
+      newIssues?: Array<{ code: string; message: string }>;
+      resolvedIssues?: number;
+    };
   };
 }
 
@@ -63,7 +72,7 @@ async function fixture() {
   await put(
     mod,
     'common/technology_tags/tst_folders.txt',
-    'technology_folders = {\n\ttst_folder = {\n\t}\n}\n',
+    'technology_folders = {\n\ttst_folder = {\n\t\tledger = army\n\t}\n}\n',
   );
   await put(
     mod,
@@ -281,4 +290,61 @@ describe('hoi4.tech_write through an MCP client', () => {
       expect(refused.status).toBe('error');
     }
   });
+});
+
+describe('hoi4.tech_write placement report', () => {
+  // tst_tech_a leads to tst_tech_b, so they are one branch: two technologies on one coordinate of
+  // one branch overlap, where two branches may share coordinates.
+  const TWO = TECHS.replace(
+    '\t\tstart_year = @1936\n',
+    '\t\tstart_year = @1936\n\t\tpath = { leads_to_tech = tst_tech_b research_cost_coeff = 1 }\n',
+  ).replace(
+    '\t}\n}\n',
+    '\t}\n\n\ttst_tech_b = {\n\t\tresearch_cost = 2\n\t\tfolder = { name = tst_folder position = { x = 1 y = 1 } }\n\t}\n}\n',
+  );
+
+  it('reports nothing unless asked, and a move onto an occupied coordinate when asked', async () => {
+    const { call, put, read } = await fixture();
+    await put('common/technologies/tst.txt', TWO);
+    const move = {
+      operation: 'replace',
+      id: 'tst_tech_b',
+      body: 'research_cost = 2\nfolder = { name = tst_folder position = { x = 0 y = 0 } }',
+    };
+    expect((await call(move)).data.placement).toBeUndefined();
+
+    const report = await call({ ...move, placement: true });
+    expect(report.code).toBe('TECH_WRITE_PREVIEW');
+    // Hand-counted: tst_tech_b leaves (1, 1) for (0, 0), where tst_tech_a already stands.
+    expect(report.data.placement).toMatchObject({
+      computed: true,
+      addedTechnologies: [],
+      removedTechnologies: [],
+      moved: [{ technologyId: 'tst_tech_b' }],
+    });
+    expect(report.data.placement?.moved?.[0]?.from[0]).toContain('tst_folder (1, 1)');
+    expect(report.data.placement?.moved?.[0]?.to[0]).toContain('tst_folder (0, 0)');
+    expect(report.data.placement?.newIssues?.map(({ code }) => code)).toContain(
+      'TECH_FOLDER_COORDINATE_OVERLAP',
+    );
+    expect(await read('common/technologies/tst.txt')).toBe(TWO);
+  }, 120_000);
+
+  it('reports a clean move with no new issue, and a removed technology', async () => {
+    const { call, put } = await fixture();
+    await put('common/technologies/tst.txt', TWO);
+    const clean = await call({
+      operation: 'replace',
+      id: 'tst_tech_b',
+      body: 'research_cost = 2\nfolder = { name = tst_folder position = { x = 5 y = 5 } }',
+      placement: true,
+    });
+    expect(clean.data.placement?.computed).toBe(true);
+    expect(clean.data.placement?.moved?.map(({ technologyId }) => technologyId)).toEqual([
+      'tst_tech_b',
+    ]);
+    expect(clean.data.placement?.newIssues ?? []).toEqual([]);
+    const removed = await call({ operation: 'remove', id: 'tst_tech_b', placement: true });
+    expect(removed.data.placement?.removedTechnologies).toEqual(['tst_tech_b']);
+  }, 120_000);
 });
