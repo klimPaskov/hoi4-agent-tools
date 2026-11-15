@@ -100,6 +100,11 @@ const recordBaseSchema = z
       .strict()
       .optional(),
     result: z.record(z.string(), z.json()).optional(),
+    /**
+     * A rewrite's answer published once its edit is durably written, before its after-edit check
+     * ends (ADR 0087). The task answers with it; the job's final result follows in `result`.
+     */
+    earlyResult: z.record(z.string(), z.json()).optional(),
     failure: z
       .object({ code: z.string().min(1), message: z.string().max(4096) })
       .strict()
@@ -113,6 +118,14 @@ const recordSchema = recordBaseSchema.superRefine((value, context) => {
     context.addIssue({
       code: 'custom',
       message: 'Failed jobs require recorded failure evidence',
+    });
+  if (
+    value.earlyResult !== undefined &&
+    (!value.request.mutation || value.transaction === undefined)
+  )
+    context.addIssue({
+      code: 'custom',
+      message: 'An early answer requires a bound mutation transaction',
     });
   if (value.transaction !== undefined && !value.request.mutation)
     context.addIssue({
@@ -164,6 +177,7 @@ const updateSchema = recordBaseSchema
     writeRecipe: true,
     checkpoint: true,
     result: true,
+    earlyResult: true,
     failure: true,
   })
   .partial()
@@ -208,6 +222,7 @@ export type JobUpdate = Partial<
     | 'writeRecipe'
     | 'checkpoint'
     | 'result'
+    | 'earlyResult'
     | 'failure'
   >
 >;
@@ -623,6 +638,12 @@ export class JobStore {
           'JOB_WRITE_RECIPE_CONFLICT',
           'A job cannot replace its authenticated write result recipe',
         );
+      if (
+        current.earlyResult !== undefined &&
+        Object.hasOwn(patch, 'earlyResult') &&
+        canonicalJson(current.earlyResult) !== canonicalJson(patch.earlyResult ?? null)
+      )
+        throw new ServiceError('JOB_RESULT_CONFLICT', 'A published early answer is immutable');
       if (
         current.result !== undefined &&
         Object.hasOwn(patch, 'result') &&

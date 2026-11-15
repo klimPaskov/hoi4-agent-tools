@@ -10,6 +10,10 @@ import {
   JobTransactions,
   type JobWriteCompletion,
 } from '../../src/hoi4_agent_tools/core/job-transactions.js';
+import {
+  operationTaskResult,
+  operationTaskStatus,
+} from '../../src/hoi4_agent_tools/core/operation-tasks.js';
 import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
@@ -244,5 +248,147 @@ describe('background transaction boundary', () => {
     ).rejects.toMatchObject({ code: 'JOB_TRANSACTION_SCOPE_MISMATCH' });
     expect(apply).not.toHaveBeenCalled();
     expect(await readFile(target, 'utf8')).toBe('value = before\n');
+  });
+});
+
+describe('an edit that answers before its after-edit check (ADR 0087)', () => {
+  const answer = (
+    observed: Array<{ file: string; result: unknown }>,
+    target: string,
+    jobs: JobService,
+    id: string,
+  ) => ({
+    lockWaitMs: 0,
+    answer: async (execution: { outcome: string }) => {
+      // The edit is on disk and the job has no final result yet.
+      observed.push({
+        file: await readFile(target, 'utf8'),
+        result: (await jobs.get('test', id)).result ?? null,
+      });
+      return { early: true, outcome: execution.outcome };
+    },
+  });
+
+  it('publishes its answer once the edit is written, then completes with the check', async () => {
+    const { target, jobs, owner, record, transaction, execution } = await fixture();
+    const observed: Array<{ file: string; result: unknown }> = [];
+    const done = await execution.execute(
+      'test',
+      record.id,
+      owner.token,
+      transaction,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      answer(observed, target, jobs, record.id),
+    );
+    expect(observed).toEqual([{ file: 'value = after\n', result: null }]);
+    expect(done).toMatchObject({
+      status: 'completed',
+      earlyResult: { early: true, outcome: 'applied' },
+      result: { execution: 'applied' },
+    });
+    // The task answers with the early answer and keeps it.
+    expect(operationTaskStatus(done)).toBe('completed');
+    expect(operationTaskResult(done)).toEqual({ early: true, outcome: 'applied' });
+  });
+
+  it('keeps a published early answer and refuses one on a job without a transaction', async () => {
+    const { jobs, scope, owner, record, transaction } = await fixture();
+    await expect(
+      jobs.store.updateOwned(scope, record.id, owner.token, { earlyResult: { early: true } }),
+    ).rejects.toThrow();
+    await jobs.store.updateOwned(scope, record.id, owner.token, {
+      transaction: { transactionId: transaction.transactionId, planHash: transaction.planHash },
+      earlyResult: { early: true },
+    });
+    await expect(
+      jobs.store.updateOwned(scope, record.id, owner.token, { earlyResult: { other: true } }),
+    ).rejects.toMatchObject({ code: 'JOB_RESULT_CONFLICT' });
+  });
+
+  it('still undoes the edit when the check fails after the answer', async () => {
+    const { target, jobs, owner, record, transaction, execution } = await fixture('invalid = {\n');
+    const observed: Array<{ file: string; result: unknown }> = [];
+    const done = await execution.execute(
+      'test',
+      record.id,
+      owner.token,
+      transaction,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      answer(observed, target, jobs, record.id),
+    );
+    expect(observed).toEqual([{ file: 'invalid = {\n', result: null }]);
+    // The job's own outcome says the edit was undone; the file holds its original text.
+    expect(done).toMatchObject({
+      status: 'failed',
+      failure: { code: 'JOB_REWRITE_RESTORED' },
+      earlyResult: { early: true },
+    });
+    expect(await readFile(target, 'utf8')).toBe('value = before\n');
+  });
+
+  it('waits for another rewrite that holds the workspace lock when asked to', async () => {
+    const { engine, transaction } = await fixture();
+    const other = await engine.transactions.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations: [{ id: 'other', kind: 'test', summary: 'Second write', data: {} }],
+      changes: [
+        {
+          relativePath: 'common/other.txt',
+          content: Buffer.from('other = yes\n'),
+          operationIds: ['other'],
+        },
+      ],
+      validate: async () => ({
+        diagnostics: [],
+        checks: [{ id: 'synthetic', message: 'Synthetic core plan', passed: true }],
+      }),
+    });
+    const passing = async () => ({
+      diagnostics: [],
+      checks: [{ id: 'synthetic', passed: true, message: 'Synthetic post-validation' }],
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let checking!: () => void;
+    const inCheck = new Promise<void>((resolve) => {
+      checking = resolve;
+    });
+    // The first rewrite holds the lock through a slow after-edit check.
+    const first = engine.transactions.apply(
+      'test',
+      transaction.transactionId,
+      transaction.planHash,
+      {
+        postValidate: async () => {
+          checking();
+          await held;
+          return passing();
+        },
+      },
+    );
+    await inCheck;
+    // Without a wait the second rewrite is refused at once, as before.
+    await expect(
+      engine.transactions.apply('test', other.transactionId, other.planHash, {
+        postValidate: passing,
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_LOCKED' });
+    // With a wait it applies once the first check ends.
+    const second = engine.transactions.apply('test', other.transactionId, other.planHash, {
+      postValidate: passing,
+      lockWaitMs: 10_000,
+    });
+    setTimeout(release, 300);
+    await expect(first).resolves.toMatchObject({ state: 'applied' });
+    await expect(second).resolves.toMatchObject({ state: 'applied' });
   });
 });

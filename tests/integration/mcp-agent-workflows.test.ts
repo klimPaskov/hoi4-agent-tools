@@ -260,6 +260,78 @@ describe('MCP coding-agent workflows', () => {
     );
   }, 120_000);
 
+  it('answers a focus edit before its after-edit check and reports the check through the job', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-focus-early-'));
+    const mod = path.join(temporary, 'mod');
+    const relativePath = 'common/national_focus/early.txt';
+    const sourcePath = path.join(mod, ...relativePath.split('/'));
+    await mkdir(path.dirname(sourcePath), { recursive: true });
+    await writeFile(
+      sourcePath,
+      [
+        'focus_tree = {',
+        '\tid = early_tree',
+        '\tdefault = yes',
+        '\tfocus = {',
+        '\t\tid = early_root',
+        '\t\tx = 0',
+        '\t\ty = 0',
+        '\t\tcost = 5',
+        '\t\tcompletion_reward = { add_political_power = 10 }',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const client = await connect(temporary, { id: 'focus', name: 'Early answer', root: mod });
+    const inspected = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_inspect',
+        arguments: { workspaceId: 'focus', relativePath, treeId: 'early_tree' },
+      }),
+    );
+    const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
+    const plan = (inspection.plans as Array<Record<string, unknown>>)[0]!;
+    (plan.focuses as Array<Record<string, unknown>>)[0]!.cost = 7;
+
+    const answered = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_rewrite',
+        arguments: { workspaceId: 'focus', relativePath, plan, answerBeforeCheck: true },
+      }),
+    );
+    // The edit is written when the call answers; the check's outcome is the job's result.
+    expect(answered).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_CHANGES_APPLIED',
+      data: {
+        execution: 'applied',
+        afterEditCheck: { status: 'running', workspaceId: 'focus', jobId: expect.any(String) },
+      },
+    });
+    expect(await readFile(sourcePath, 'utf8')).toContain('\t\tcost = 7');
+    const { jobId } = answered.data.afterEditCheck as { jobId: string };
+    let final: OperationResult | undefined;
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      final = resultOf(
+        await client.callTool({
+          name: 'hoi4.job_inspect',
+          arguments: { workspaceId: 'focus', jobId },
+        }),
+      );
+      if (final.code === 'FOCUS_CHANGES_APPLIED') break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(final).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_CHANGES_APPLIED',
+      data: { execution: 'applied' },
+      validation: { passed: true },
+    });
+    expect(final!.data.afterEditCheck).toBeUndefined();
+  }, 120_000);
+
   it('inspects, renders, cleans up, and creates scripted GUIs through the composite tools', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-gui-workflow-'));
     const mod = path.join(temporary, 'mod');

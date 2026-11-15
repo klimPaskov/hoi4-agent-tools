@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import {
   access,
@@ -273,6 +274,12 @@ export interface ApplyTransactionOptions {
   ) => Promise<TransactionValidation>;
   hooks?: TransactionHooks;
   signal?: AbortSignal;
+  /**
+   * How long to wait for another rewrite's workspace lock before refusing with
+   * `TRANSACTION_LOCKED`; refused at once when absent. An edit that answered before its
+   * after-edit check holds the lock until the check ends (ADR 0087).
+   */
+  lockWaitMs?: number;
 }
 
 const transactionIdPattern = /^txn_[0-9a-f-]{36}$/u;
@@ -809,284 +816,291 @@ export class TransactionManager {
     // held: a concurrent apply of the same plan may have finished in between.
     await loadApplicable();
 
-    return this.withWorkspaceLock(workspace, transactionId, async () => {
-      const manifest = await loadApplicable();
-      await this.verifyReadDependencies(workspace, manifest, options.principal, options.signal);
-      await this.verifyCurrentFiles(
-        workspace,
-        manifest,
-        'before',
-        options.principal,
-        options.signal,
-      );
-      const targets: Array<{ target: string; staged: string | null; backup: string }> = [];
-      try {
-        manifest.state = 'applying';
-        await this.writeManifest(workspace, manifest, options.hooks);
-        // Staging independent targets can share bounded I/O concurrency. Join the entire
-        // batch before hooks, replacement, or failure cleanup, so no writer can outlive
-        // recovery. Replacement and durable journal advancement remain sequential.
-        for (
-          let offset = 0;
-          offset < manifest.files.length;
-          offset += transactionStageConcurrency
-        ) {
-          options.signal?.throwIfAborted();
-          const files = manifest.files.slice(offset, offset + transactionStageConcurrency);
-          const stagedBatch = await Promise.allSettled(
-            files.map(async (file) => {
-              options.signal?.throwIfAborted();
-              const { path: target } = await this.resolver.resolvePath(
-                workspaceId,
-                file.relativePath,
-                'write',
-                ['mod'],
-                options.principal,
-              );
-              await mkdir(path.dirname(target), { recursive: true });
-              const staged =
-                file.afterBlob === null ? null : `${target}.hoi4-agent-${transactionId}.stage`;
-              const backup = `${target}.hoi4-agent-${transactionId}.backup`;
-              if (staged !== null && file.afterBlob !== null) {
-                const bytes = await this.readVerifiedBlob(workspace, manifest, file, 'after');
-                await durableWrite(staged, bytes);
-              }
-              return { target, staged, backup };
-            }),
-          );
-          const rejected = stagedBatch.find((entry) => entry.status === 'rejected');
-          if (rejected?.status === 'rejected') throw rejected.reason;
-          for (const [index, staged] of stagedBatch.entries()) {
-            if (staged.status !== 'fulfilled')
-              throw new Error('Unreachable rejected staging batch');
-            targets.push(staged.value);
-            await options.hooks?.afterStage?.(files[index]!.relativePath, offset + index);
-          }
-        }
-
-        {
-          const canonicalSnapshot = new TransactionCanonicalSnapshot(manifest, [
-            'revision',
-            'state',
-            'appliedFiles',
-            'pendingFiles',
-            'failure',
-            'integrityHash',
-            'authenticationTag',
-          ]);
-          const batchSize = manifest.version >= 2 ? transactionBatchSize(manifest.files.length) : 1;
-          let pendingByPath: Map<string, TransactionPendingFile> | undefined;
-          for (let offset = 0; offset < manifest.files.length; offset += batchSize) {
-            const batch = manifest.files.slice(offset, offset + batchSize);
-            if (manifest.version >= 2) {
-              const captured = await Promise.allSettled(
-                batch.map(async (file, index) => {
-                  const target = targets[offset + index]!;
-                  if (await fileExists(target.backup))
-                    throw new ServiceError(
-                      'TRANSACTION_STALE',
-                      'Unexpected backup exists before replacement',
-                    );
-                  const beforeIdentity = await fileIdentity(target.target);
-                  const stagedIdentity =
-                    target.staged === null ? null : await fileIdentity(target.staged);
-                  if (
-                    (beforeIdentity === null) !== (file.beforeSha256 === null) ||
-                    (stagedIdentity === null) !== (file.afterSha256 === null)
-                  ) {
-                    throw new ServiceError(
-                      'TRANSACTION_STALE',
-                      'Source or stage presence changed before replacement',
-                    );
-                  }
-                  return { relativePath: file.relativePath, beforeIdentity, stagedIdentity };
-                }),
-              );
-              const rejected = captured.find((entry) => entry.status === 'rejected');
-              if (rejected?.status === 'rejected') throw rejected.reason;
-              manifest.pendingFiles = captured.map((entry) => {
-                if (entry.status !== 'fulfilled')
-                  throw new Error('Unreachable rejected intent batch');
-                return entry.value;
-              });
-              await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
-              pendingByPath = new Map(
-                manifest.pendingFiles.map((pending) => [pending.relativePath, pending]),
-              );
-              await options.hooks?.afterBatchIntent?.(
-                batch.map(({ relativePath }) => relativePath),
-                offset / batchSize,
-              );
+    return this.withWorkspaceLockWaiting(
+      workspace,
+      transactionId,
+      options.lockWaitMs ?? 0,
+      options.signal,
+      async () => {
+        const manifest = await loadApplicable();
+        await this.verifyReadDependencies(workspace, manifest, options.principal, options.signal);
+        await this.verifyCurrentFiles(
+          workspace,
+          manifest,
+          'before',
+          options.principal,
+          options.signal,
+        );
+        const targets: Array<{ target: string; staged: string | null; backup: string }> = [];
+        try {
+          manifest.state = 'applying';
+          await this.writeManifest(workspace, manifest, options.hooks);
+          // Staging independent targets can share bounded I/O concurrency. Join the entire
+          // batch before hooks, replacement, or failure cleanup, so no writer can outlive
+          // recovery. Replacement and durable journal advancement remain sequential.
+          for (
+            let offset = 0;
+            offset < manifest.files.length;
+            offset += transactionStageConcurrency
+          ) {
+            options.signal?.throwIfAborted();
+            const files = manifest.files.slice(offset, offset + transactionStageConcurrency);
+            const stagedBatch = await Promise.allSettled(
+              files.map(async (file) => {
+                options.signal?.throwIfAborted();
+                const { path: target } = await this.resolver.resolvePath(
+                  workspaceId,
+                  file.relativePath,
+                  'write',
+                  ['mod'],
+                  options.principal,
+                );
+                await mkdir(path.dirname(target), { recursive: true });
+                const staged =
+                  file.afterBlob === null ? null : `${target}.hoi4-agent-${transactionId}.stage`;
+                const backup = `${target}.hoi4-agent-${transactionId}.backup`;
+                if (staged !== null && file.afterBlob !== null) {
+                  const bytes = await this.readVerifiedBlob(workspace, manifest, file, 'after');
+                  await durableWrite(staged, bytes);
+                }
+                return { target, staged, backup };
+              }),
+            );
+            const rejected = stagedBatch.find((entry) => entry.status === 'rejected');
+            if (rejected?.status === 'rejected') throw rejected.reason;
+            for (const [index, staged] of stagedBatch.entries()) {
+              if (staged.status !== 'fulfilled')
+                throw new Error('Unreachable rejected staging batch');
+              targets.push(staged.value);
+              await options.hooks?.afterStage?.(files[index]!.relativePath, offset + index);
             }
-            for (const [batchIndex, file] of batch.entries()) {
-              const index = offset + batchIndex;
-              options.signal?.throwIfAborted();
-              const target = targets[index]!;
-              const currentPath = await this.resolver.resolvePath(
-                workspaceId,
-                file.relativePath,
-                'write',
-                ['mod'],
-                options.principal,
-              );
-              if (currentPath.path !== target.target)
-                throw new ServiceError(
-                  'TRANSACTION_STALE',
-                  'Canonical source path changed before replacement',
+          }
+
+          {
+            const canonicalSnapshot = new TransactionCanonicalSnapshot(manifest, [
+              'revision',
+              'state',
+              'appliedFiles',
+              'pendingFiles',
+              'failure',
+              'integrityHash',
+              'authenticationTag',
+            ]);
+            const batchSize =
+              manifest.version >= 2 ? transactionBatchSize(manifest.files.length) : 1;
+            let pendingByPath: Map<string, TransactionPendingFile> | undefined;
+            for (let offset = 0; offset < manifest.files.length; offset += batchSize) {
+              const batch = manifest.files.slice(offset, offset + batchSize);
+              if (manifest.version >= 2) {
+                const captured = await Promise.allSettled(
+                  batch.map(async (file, index) => {
+                    const target = targets[offset + index]!;
+                    if (await fileExists(target.backup))
+                      throw new ServiceError(
+                        'TRANSACTION_STALE',
+                        'Unexpected backup exists before replacement',
+                      );
+                    const beforeIdentity = await fileIdentity(target.target);
+                    const stagedIdentity =
+                      target.staged === null ? null : await fileIdentity(target.staged);
+                    if (
+                      (beforeIdentity === null) !== (file.beforeSha256 === null) ||
+                      (stagedIdentity === null) !== (file.afterSha256 === null)
+                    ) {
+                      throw new ServiceError(
+                        'TRANSACTION_STALE',
+                        'Source or stage presence changed before replacement',
+                      );
+                    }
+                    return { relativePath: file.relativePath, beforeIdentity, stagedIdentity };
+                  }),
                 );
-              const existsBeforeReplace = await fileExists(target.target);
-              const actualBeforeReplace = existsBeforeReplace
-                ? sha256Bytes(await readFile(target.target))
-                : null;
-              if (actualBeforeReplace !== file.beforeSha256) {
-                throw new ServiceError(
-                  'TRANSACTION_STALE',
-                  'Source changed while transaction output was being staged',
+                const rejected = captured.find((entry) => entry.status === 'rejected');
+                if (rejected?.status === 'rejected') throw rejected.reason;
+                manifest.pendingFiles = captured.map((entry) => {
+                  if (entry.status !== 'fulfilled')
+                    throw new Error('Unreachable rejected intent batch');
+                  return entry.value;
+                });
+                await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+                pendingByPath = new Map(
+                  manifest.pendingFiles.map((pending) => [pending.relativePath, pending]),
+                );
+                await options.hooks?.afterBatchIntent?.(
+                  batch.map(({ relativePath }) => relativePath),
+                  offset / batchSize,
                 );
               }
-              const pending = pendingByPath?.get(file.relativePath);
-              if (
-                pending !== undefined &&
-                (!sameFileIdentity(await fileIdentity(target.target), pending.beforeIdentity) ||
-                  !sameFileIdentity(
-                    target.staged === null ? null : await fileIdentity(target.staged),
-                    pending.stagedIdentity,
-                  ))
-              ) {
-                throw new ServiceError(
-                  'TRANSACTION_STALE',
-                  'Source or stage identity changed before replacement',
+              for (const [batchIndex, file] of batch.entries()) {
+                const index = offset + batchIndex;
+                options.signal?.throwIfAborted();
+                const target = targets[index]!;
+                const currentPath = await this.resolver.resolvePath(
+                  workspaceId,
+                  file.relativePath,
+                  'write',
+                  ['mod'],
+                  options.principal,
                 );
-              }
-              if (existsBeforeReplace) {
-                await rename(target.target, target.backup);
-                // An edit between the hash check and the rename would otherwise be discarded with
-                // the backup after a successful apply.
-                if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
-                  await rename(target.backup, target.target);
+                if (currentPath.path !== target.target)
+                  throw new ServiceError(
+                    'TRANSACTION_STALE',
+                    'Canonical source path changed before replacement',
+                  );
+                const existsBeforeReplace = await fileExists(target.target);
+                const actualBeforeReplace = existsBeforeReplace
+                  ? sha256Bytes(await readFile(target.target))
+                  : null;
+                if (actualBeforeReplace !== file.beforeSha256) {
                   throw new ServiceError(
                     'TRANSACTION_STALE',
                     'Source changed while transaction output was being staged',
                   );
                 }
-              }
-              await options.hooks?.afterBackup?.(file.relativePath, index);
-              if (target.staged !== null) {
-                if (await fileExists(target.target)) {
+                const pending = pendingByPath?.get(file.relativePath);
+                if (
+                  pending !== undefined &&
+                  (!sameFileIdentity(await fileIdentity(target.target), pending.beforeIdentity) ||
+                    !sameFileIdentity(
+                      target.staged === null ? null : await fileIdentity(target.staged),
+                      pending.stagedIdentity,
+                    ))
+                ) {
                   throw new ServiceError(
                     'TRANSACTION_STALE',
-                    'Source target was recreated during atomic replacement',
+                    'Source or stage identity changed before replacement',
                   );
                 }
-                await rename(target.staged, target.target);
+                if (existsBeforeReplace) {
+                  await rename(target.target, target.backup);
+                  // An edit between the hash check and the rename would otherwise be discarded with
+                  // the backup after a successful apply.
+                  if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
+                    await rename(target.backup, target.target);
+                    throw new ServiceError(
+                      'TRANSACTION_STALE',
+                      'Source changed while transaction output was being staged',
+                    );
+                  }
+                }
+                await options.hooks?.afterBackup?.(file.relativePath, index);
+                if (target.staged !== null) {
+                  if (await fileExists(target.target)) {
+                    throw new ServiceError(
+                      'TRANSACTION_STALE',
+                      'Source target was recreated during atomic replacement',
+                    );
+                  }
+                  await rename(target.staged, target.target);
+                }
+                manifest.appliedFiles.push(file.relativePath);
+                if (manifest.version < 2)
+                  await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+                await options.hooks?.afterReplace?.(file.relativePath, index);
               }
-              manifest.appliedFiles.push(file.relativePath);
-              if (manifest.version < 2)
+              if (manifest.version >= 2) {
+                await options.hooks?.beforeBatchCheckpoint?.(
+                  batch.map(({ relativePath }) => relativePath),
+                  offset / batchSize,
+                );
+                manifest.pendingFiles = [];
                 await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
-              await options.hooks?.afterReplace?.(file.relativePath, index);
-            }
-            if (manifest.version >= 2) {
-              await options.hooks?.beforeBatchCheckpoint?.(
-                batch.map(({ relativePath }) => relativePath),
-                offset / batchSize,
-              );
-              manifest.pendingFiles = [];
-              await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+              }
             }
           }
-        }
 
-        await options.hooks?.beforePostValidation?.();
-        const result = await options.postValidate(manifest, options.signal);
-        if (result.checks.length === 0) {
-          throw new ServiceError(
-            'TRANSACTION_POST_VALIDATION_REQUIRED',
-            'Post-write validation must report at least one explicit check',
+          await options.hooks?.beforePostValidation?.();
+          const result = await options.postValidate(manifest, options.signal);
+          if (result.checks.length === 0) {
+            throw new ServiceError(
+              'TRANSACTION_POST_VALIDATION_REQUIRED',
+              'Post-write validation must report at least one explicit check',
+            );
+          }
+          if (
+            manifest.diagnostics.length + result.diagnostics.length > TRANSACTION_MAX_DIAGNOSTICS ||
+            manifest.validation.checks.length + result.checks.length >
+              TRANSACTION_MAX_VALIDATION_CHECKS ||
+            (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0) >
+              TRANSACTION_MAX_ARTIFACTS
+          ) {
+            throw new ServiceError(
+              'TRANSACTION_STRUCTURE_LIMIT',
+              'Post-write validation exceeds the supported transaction review or artifact limits',
+              {
+                checks: manifest.validation.checks.length + result.checks.length,
+                checksLimit: TRANSACTION_MAX_VALIDATION_CHECKS,
+                diagnostics: manifest.diagnostics.length + result.diagnostics.length,
+                diagnosticsLimit: TRANSACTION_MAX_DIAGNOSTICS,
+                artifacts:
+                  (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0),
+                artifactsLimit: TRANSACTION_MAX_ARTIFACTS,
+              },
+            );
+          }
+          manifest.diagnostics.push(...result.diagnostics);
+          manifest.validation.checks.push(...result.checks);
+          manifest.executionArtifacts ??= [];
+          for (const artifact of result.artifacts ?? [])
+            if (!manifest.executionArtifacts.some(({ uri }) => uri === artifact.uri))
+              manifest.executionArtifacts.push(artifact);
+          manifest.validation.passed =
+            manifest.validation.passed &&
+            result.checks.every(({ passed }) => passed) &&
+            !result.diagnostics.some(
+              ({ severity }) => severity === 'error' || severity === 'blocker',
+            );
+          if (!manifest.validation.passed) {
+            throw new ServiceError(
+              'TRANSACTION_POST_VALIDATION_FAILED',
+              'Post-write validation failed',
+            );
+          }
+          await this.verifyCurrentFiles(
+            workspace,
+            manifest,
+            'after',
+            options.principal,
+            options.signal,
           );
-        }
-        if (
-          manifest.diagnostics.length + result.diagnostics.length > TRANSACTION_MAX_DIAGNOSTICS ||
-          manifest.validation.checks.length + result.checks.length >
-            TRANSACTION_MAX_VALIDATION_CHECKS ||
-          (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0) >
-            TRANSACTION_MAX_ARTIFACTS
-        ) {
-          throw new ServiceError(
-            'TRANSACTION_STRUCTURE_LIMIT',
-            'Post-write validation exceeds the supported transaction review or artifact limits',
-            {
-              checks: manifest.validation.checks.length + result.checks.length,
-              checksLimit: TRANSACTION_MAX_VALIDATION_CHECKS,
-              diagnostics: manifest.diagnostics.length + result.diagnostics.length,
-              diagnosticsLimit: TRANSACTION_MAX_DIAGNOSTICS,
-              artifacts:
-                (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0),
-              artifactsLimit: TRANSACTION_MAX_ARTIFACTS,
-            },
-          );
-        }
-        manifest.diagnostics.push(...result.diagnostics);
-        manifest.validation.checks.push(...result.checks);
-        manifest.executionArtifacts ??= [];
-        for (const artifact of result.artifacts ?? [])
-          if (!manifest.executionArtifacts.some(({ uri }) => uri === artifact.uri))
-            manifest.executionArtifacts.push(artifact);
-        manifest.validation.passed =
-          manifest.validation.passed &&
-          result.checks.every(({ passed }) => passed) &&
-          !result.diagnostics.some(
-            ({ severity }) => severity === 'error' || severity === 'blocker',
-          );
-        if (!manifest.validation.passed) {
-          throw new ServiceError(
-            'TRANSACTION_POST_VALIDATION_FAILED',
-            'Post-write validation failed',
-          );
-        }
-        await this.verifyCurrentFiles(
-          workspace,
-          manifest,
-          'after',
-          options.principal,
-          options.signal,
-        );
-        for (const target of targets) {
-          if (await fileExists(target.backup)) await unlink(target.backup);
-        }
-        manifest.state = 'applied';
-        await this.writeManifest(workspace, manifest, options.hooks);
-        return manifest;
-      } catch (error) {
-        manifest.failure = this.safeFailure(
-          error,
-          'TRANSACTION_APPLY_FAILED',
-          'Transaction apply failed',
-        );
-        let rollbackError: unknown;
-        try {
-          await this.restoreBeforeState(workspace, manifest, options.principal, options.hooks);
-        } catch (caught) {
-          rollbackError = caught;
-          manifest.rollbackStatus = 'failed';
+          for (const target of targets) {
+            if (await fileExists(target.backup)) await unlink(target.backup);
+          }
+          manifest.state = 'applied';
+          await this.writeManifest(workspace, manifest, options.hooks);
+          return manifest;
+        } catch (error) {
           manifest.failure = this.safeFailure(
-            caught,
-            'TRANSACTION_ROLLBACK_FAILED',
-            'Automatic rollback could not safely complete',
+            error,
+            'TRANSACTION_APPLY_FAILED',
+            'Transaction apply failed',
           );
+          let rollbackError: unknown;
+          try {
+            await this.restoreBeforeState(workspace, manifest, options.principal, options.hooks);
+          } catch (caught) {
+            rollbackError = caught;
+            manifest.rollbackStatus = 'failed';
+            manifest.failure = this.safeFailure(
+              caught,
+              'TRANSACTION_ROLLBACK_FAILED',
+              'Automatic rollback could not safely complete',
+            );
+          }
+          manifest.state = manifest.rollbackStatus === 'applied' ? 'rolled_back' : 'failed';
+          await this.writeManifest(workspace, manifest, options.hooks);
+          if (rollbackError instanceof ServiceError) throw rollbackError;
+          if (rollbackError !== undefined) {
+            throw new ServiceError(
+              'TRANSACTION_ROLLBACK_FAILED',
+              'Automatic rollback could not safely complete',
+            );
+          }
+          if (error instanceof ServiceError) throw error;
+          throw new ServiceError('TRANSACTION_APPLY_FAILED', 'Transaction apply failed');
         }
-        manifest.state = manifest.rollbackStatus === 'applied' ? 'rolled_back' : 'failed';
-        await this.writeManifest(workspace, manifest, options.hooks);
-        if (rollbackError instanceof ServiceError) throw rollbackError;
-        if (rollbackError !== undefined) {
-          throw new ServiceError(
-            'TRANSACTION_ROLLBACK_FAILED',
-            'Automatic rollback could not safely complete',
-          );
-        }
-        if (error instanceof ServiceError) throw error;
-        throw new ServiceError('TRANSACTION_APPLY_FAILED', 'Transaction apply failed');
-      }
-    });
+      },
+    );
   }
 
   async status(
@@ -2298,6 +2312,39 @@ export class TransactionManager {
       });
     }
     return manifest;
+  }
+
+  /**
+   * `withWorkspaceLock`, retrying for up to `waitMs` while another live rewrite holds the lock.
+   * Every other refusal, and the lock still held at the end of the wait, is thrown as before.
+   */
+  private async withWorkspaceLockWaiting<T>(
+    workspace: ResolvedWorkspace,
+    transactionId: string,
+    waitMs: number,
+    signal: AbortSignal | undefined,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const deadline = Date.now() + Math.max(0, waitMs);
+    for (;;) {
+      // Only a refusal to take the lock is retried, never a failure of the locked action.
+      const attempt = { started: false };
+      try {
+        return await this.withWorkspaceLock(workspace, transactionId, () => {
+          attempt.started = true;
+          return action();
+        });
+      } catch (error) {
+        if (
+          attempt.started ||
+          !(error instanceof ServiceError) ||
+          error.code !== 'TRANSACTION_LOCKED' ||
+          Date.now() >= deadline
+        )
+          throw error;
+        await delay(100, undefined, signal === undefined ? {} : { signal });
+      }
+    }
   }
 
   private async withWorkspaceLock<T>(
