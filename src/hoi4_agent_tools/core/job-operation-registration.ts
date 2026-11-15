@@ -16,6 +16,7 @@ export function workerDomain(toolName: string): string {
   // The event writer registers apart from the inspect and render tools that share its prefix, so a
   // warm worker that served one of them still registers the other.
   if (toolName === 'hoi4.event_write') return 'event_write';
+  if (toolName === 'hoi4.tech_write') return 'tech_write';
   const match = /^hoi4\.([a-z]+)_/u.exec(toolName);
   return match?.[1] ?? toolName;
 }
@@ -28,6 +29,11 @@ export async function registerWorkerOperations(
   const operations = new JobOperations();
   if (toolName === 'hoi4.event_write')
     (await import('../event/write-job-operations.js')).registerEventWriteJobs(operations, engine);
+  else if (toolName === 'hoi4.tech_write')
+    (await import('../technology/write-job-operations.js')).registerTechWriteJobs(
+      operations,
+      engine,
+    );
   else if (toolName.startsWith('hoi4.event_'))
     (await import('../event/job-operations.js')).registerEventJobs(operations, engine);
   else if (toolName.startsWith('hoi4.focus_'))

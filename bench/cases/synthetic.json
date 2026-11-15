@@ -1414,6 +1414,125 @@
           "includes": "DECISION_WRITE_CATEGORY_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.tech-write-add-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.tech_write",
+      "evidence": "fixtures/technology defines 1,040 technologies, synthetic_tech_0000 upward, in eight files common/technologies/synthetic_technologies_01.txt to _08.txt; synthetic_tech_0130 is the first of _02. apply is false, so the call writes nothing.",
+      "title": "An add previews one new technology at the end of the named technology file",
+      "arguments": {
+        "operation": "add",
+        "id": "synthetic_tech_bench_new",
+        "body": "start_year = 1940\nresearch_cost = 2",
+        "file": "common/technologies/synthetic_technologies_01.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "TECH_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/technologies/synthetic_technologies_01.txt"
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\tsynthetic_tech_bench_new = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.tech-write-move-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.tech_write",
+      "evidence": "fixtures/technology defines 1,040 technologies, synthetic_tech_0000 upward, in eight files common/technologies/synthetic_technologies_01.txt to _08.txt; synthetic_tech_0130 is the first of _02. apply is false, so the call writes nothing.",
+      "title": "A replace that changes the folder position previews exactly that line, a move in the tree",
+      "arguments": {
+        "operation": "replace",
+        "id": "synthetic_tech_0130",
+        "body": "start_year = 1960\nresearch_cost = 1.50\nfolder = { name = synthetic_folder_01 position = { x = 9 y = 12 } }\npath = { leads_to_tech = synthetic_tech_0131 }\ncategories = { synthetic_category_01 }\ntags = { synthetic_tag_01 }\nresearch_speed_factor = 0.01\nai_will_do = { factor = 1 }"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "TECH_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/technologies/synthetic_technologies_02.txt"
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\t\tfolder = { name = synthetic_folder_01 position = { x = 9 y = 12 } }"
+        },
+        {
+          "path": "data.diff",
+          "includes": "-\t\tfolder = { name = synthetic_folder_01 position = { x = 2 y = 12 } }"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.tech-write-remove-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.tech_write",
+      "evidence": "fixtures/technology defines 1,040 technologies, synthetic_tech_0000 upward, in eight files common/technologies/synthetic_technologies_01.txt to _08.txt; synthetic_tech_0130 is the first of _02. apply is false, so the call writes nothing.",
+      "title": "A remove previews the one technology found by its id",
+      "arguments": {
+        "operation": "remove",
+        "id": "synthetic_tech_0130"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "TECH_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/technologies/synthetic_technologies_02.txt"
+        },
+        {
+          "path": "data.diff",
+          "includes": "-\tsynthetic_tech_0130 = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.tech-write-unknown-id",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.tech_write",
+      "evidence": "fixtures/technology defines 1,040 technologies, synthetic_tech_0000 upward, in eight files common/technologies/synthetic_technologies_01.txt to _08.txt; synthetic_tech_0130 is the first of _02. apply is false, so the call writes nothing.",
+      "title": "A remove of an unknown technology is refused",
+      "arguments": {
+        "operation": "remove",
+        "id": "synthetic_tech_9999"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "TECH_WRITE_NOT_FOUND"
+        }
+      ]
     }
   ]
 }

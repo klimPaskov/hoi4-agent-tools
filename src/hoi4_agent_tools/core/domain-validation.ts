@@ -4,6 +4,7 @@ import {
   exactChangedFilePatterns,
   focusDomainScanPatterns,
   mapChangeScanPatterns,
+  technologyChangeScanPatterns,
 } from './domain-scan-patterns.js';
 import type { Diagnostic } from './diagnostics.js';
 import { rollupRepeatedSoftDiagnostics } from './diagnostic-rollup.js';
@@ -71,7 +72,9 @@ export async function postValidateTransaction(
         ? focusDomainScanPatterns(workspace)
         : transaction.operationKind === 'agent-nudger-map-changes'
           ? mapChangeScanPatterns(changedPaths)
-          : exactChangedFilePatterns(changedPaths),
+          : transaction.operationKind === 'tech-changes'
+            ? technologyChangeScanPatterns(changedPaths)
+            : exactChangedFilePatterns(changedPaths),
     },
     principal,
     signal,

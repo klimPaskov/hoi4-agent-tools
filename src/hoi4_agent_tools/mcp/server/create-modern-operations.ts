@@ -70,7 +70,7 @@ export function createModernOperationServer(
   const controls = new JobControlService(engine);
   const references = new ReferenceToolService(engine);
   const privateOperations = options.createPrivateTools?.(engine, context);
-  const mapEnd = taskToolCatalog.findIndex(({ name }) => name === 'hoi4.decision_write') + 1;
+  const mapEnd = taskToolCatalog.findIndex(({ name }) => name === 'hoi4.tech_write') + 1;
   const definitions: readonly ToolDefinition[] = [
     ...taskToolCatalog.slice(0, mapEnd),
     ...referenceTools,

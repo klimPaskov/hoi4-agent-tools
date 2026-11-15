@@ -117,6 +117,22 @@ export function mapChangeScanPatterns(relativePaths: readonly string[]): string[
   ]);
 }
 
+/**
+ * The changed files of a technology write plus what a technology refers to: the other technologies
+ * (prerequisites and exclusions), the folders and categories, the unlocked equipment, modules,
+ * sub-units and buildings. A scan of the changed files alone would report every one of them as an
+ * unresolved reference, because the game defines them in files the write does not touch.
+ */
+export function technologyChangeScanPatterns(relativePaths: readonly string[]): string[] {
+  return uniquePatterns([
+    ...exactChangedFilePatterns(relativePaths),
+    'common/technologies/**/*.txt',
+    'common/technology_tags/**/*.txt',
+    'common/units/**/*.txt',
+    'common/buildings/**/*.txt',
+  ]);
+}
+
 export function exactChangedFilePatterns(relativePaths: readonly string[]): string[] {
   return uniquePatterns(
     relativePaths.map((relativePath) => relativePath.replaceAll('\\', '/').replace(/^\.\//u, '')),
