@@ -1,6 +1,6 @@
 import { indentedBody, lineIndent } from '../core/block-edit.js';
 import { hasBlockingDiagnostics } from '../core/diagnostics.js';
-import { unifiedTextDiff } from '../core/diff.js';
+import { DIFF_CONTEXT_LINES, unifiedTextDiff } from '../core/diff.js';
 import { ServiceError } from '../core/result.js';
 import {
   applyReplacements,
@@ -145,7 +145,7 @@ export function planNewCharacterFile(path: string, input: CharacterWriteInput): 
     text,
     bytes: Buffer.from(text, 'utf8'),
     edit: { start: 0, end: 0, text, description: `create ${path} with ${input.id}` },
-    diff: unifiedTextDiff('', text, `a/${path}`, `b/${path}`),
+    diff: unifiedTextDiff('', text, `a/${path}`, `b/${path}`, { context: DIFF_CONTEXT_LINES }),
     untouchedDefinitions: 0,
   };
 }
@@ -282,7 +282,9 @@ export function planCharacterWrite(
     text: after,
     bytes,
     edit,
-    diff: unifiedTextDiff(text, after, `a/${source.path}`, `b/${source.path}`),
+    diff: unifiedTextDiff(text, after, `a/${source.path}`, `b/${source.path}`, {
+      context: DIFF_CONTEXT_LINES,
+    }),
     untouchedDefinitions: untouched,
   };
 }

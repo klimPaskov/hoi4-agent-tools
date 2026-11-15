@@ -120,3 +120,46 @@ describe('shared bitmap diffs', () => {
     expect(polls).toBeGreaterThan(3);
   });
 });
+
+describe('unified diff with context', () => {
+  const lines = (count: number, from = 1) =>
+    Array.from({ length: count }, (_, index) => `line ${index + from}\n`).join('');
+
+  it('keeps a few lines around each change instead of the whole file', () => {
+    const before = lines(100);
+    const after = before.replace('line 50\n', 'line 50\nadded\n');
+    const diff = unifiedTextDiff(before, after, 'a/f.txt', 'b/f.txt', { context: 2 });
+    expect(diff).toBe(
+      [
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -49,4 +49,5 @@',
+        ' line 49',
+        ' line 50',
+        '+added',
+        ' line 51',
+        ' line 52',
+      ].join('\n'),
+    );
+  });
+
+  it('merges changes that are close, keeps far ones apart, and numbers the hunks', () => {
+    const before = lines(100);
+    const after = before
+      .replace('line 10\n', 'ten\n')
+      .replace('line 12\n', 'twelve\n')
+      .replace('line 90\n', 'ninety\n');
+    const diff = unifiedTextDiff(before, after, 'a/f.txt', 'b/f.txt', { context: 1 });
+    const headers = diff.split('\n').filter((row) => row.startsWith('@@'));
+    expect(headers).toEqual(['@@ -9,5 +9,5 @@', '@@ -89,3 +89,3 @@']);
+    expect(diff).toContain('+ten\n-line 10\n line 11\n+twelve\n-line 12');
+    expect(diff).not.toContain('line 50');
+  });
+
+  it('is empty for equal text, and without context stays one hunk of the whole file', () => {
+    expect(unifiedTextDiff('a\n', 'a\n', 'a', 'b', { context: 3 })).toBe('');
+    const whole = unifiedTextDiff(lines(20), lines(20).replace('line 5\n', 'five\n'), 'a', 'b');
+    expect(whole.match(/^@@/gmu)).toHaveLength(1);
+    expect(whole).toContain('@@ -1,20 +1,20 @@');
+  });
+});
