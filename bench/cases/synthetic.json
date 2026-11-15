@@ -1539,13 +1539,14 @@
       "surface": "rewrite",
       "corpus": "synthetic",
       "tool": "hoi4.doctrine_write",
-      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else; apply is false, so the call writes nothing.",
-      "title": "An add of a track previews one new block at the end of the only track file",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
+      "title": "An add of a track previews one new block at the end of the named track file",
       "arguments": {
         "operation": "add",
         "kind": "track",
         "id": "bench_track_c",
-        "body": "name = BENCH_TRACK_C"
+        "body": "name = BENCH_TRACK_C",
+        "file": "common/doctrines/tracks/bench_tracks.txt"
       },
       "expect": [
         {
@@ -1575,7 +1576,7 @@
       "surface": "rewrite",
       "corpus": "synthetic",
       "tool": "hoi4.doctrine_write",
-      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else; apply is false, so the call writes nothing.",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
       "title": "A remove previews the one doctrine found by its id, and its kind",
       "arguments": {
         "operation": "remove",
@@ -1609,7 +1610,7 @@
       "surface": "rewrite",
       "corpus": "synthetic",
       "tool": "hoi4.doctrine_write",
-      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else; apply is false, so the call writes nothing.",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
       "title": "createFile under the grand doctrine folder previews a new file of that kind",
       "arguments": {
         "operation": "add",
@@ -1642,7 +1643,7 @@
       "surface": "rewrite",
       "corpus": "synthetic",
       "tool": "hoi4.doctrine_write",
-      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else; apply is false, so the call writes nothing.",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
       "title": "An add that names neither a kind nor a file is refused",
       "arguments": {
         "operation": "add",
