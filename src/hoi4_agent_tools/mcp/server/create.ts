@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { CoreEngine } from '../../core/engine.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../version.js';
 import type { ServerContext } from './base-tools.js';
+import { registerCharacterWriteTools } from '../tools/character-write.js';
 import { registerFocusTools } from '../tools/focus.js';
 import { registerGuiTools } from '../tools/gui.js';
 import { registerIdeaWriteTools } from '../tools/idea-write.js';
@@ -77,6 +78,7 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerMapTools(server, engine, serverContext);
   registerLocalisationWriteTools(server, engine, serverContext);
   registerIdeaWriteTools(server, engine, serverContext);
+  registerCharacterWriteTools(server, engine, serverContext);
   registerReferenceTools(server, engine, serverContext);
   registerEventTools(server);
   registerAnalysisTools(server);

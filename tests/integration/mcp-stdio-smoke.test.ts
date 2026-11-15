@@ -209,6 +209,26 @@ describe('stdio smoke: synthetic fixture', () => {
     );
   }, 300_000);
 
+  it('adds a character to a temporary copy', async () => {
+    const charactersFile = path.join(rewriteGuiMod, 'common', 'characters', 'smoke_characters.txt');
+    await mkdir(path.dirname(charactersFile), { recursive: true });
+    await writeFile(charactersFile, 'characters = {\n}\n');
+    const added = await server.call('hoi4.character_write', 'add a character and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      id: 'SMK_smoke_person',
+      body: 'name = SMK_smoke_person',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('CHARACTER_WRITE_APPLIED');
+    expect(await readFile(charactersFile, 'utf8')).toBe(
+      'characters = {\n\tSMK_smoke_person = {\n\t\tname = SMK_smoke_person\n\t}\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);

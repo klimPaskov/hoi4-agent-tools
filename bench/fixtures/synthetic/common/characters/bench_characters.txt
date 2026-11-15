@@ -1,0 +1,15 @@
+characters = {
+	bench_first_person = {
+		name = bench_first_person
+		portraits = {
+			civilian = {
+				large = GFX_portrait_bench_first_person
+			}
+		}
+	}
+
+	bench_second_person = {
+		name = bench_second_person
+		gender = female
+	}
+}

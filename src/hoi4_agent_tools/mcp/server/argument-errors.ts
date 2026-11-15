@@ -42,6 +42,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"mode":"add","entries":[{"key":"my_focus","text":"My focus"}]} or {"mode":"fix","apply":true}',
   'hoi4.idea_write':
     '{"operation":"add","id":"my_spirit","category":"country","body":"picture = my_spirit"}',
+  'hoi4.character_write': '{"operation":"add","id":"TAG_jane_doe","body":"name = TAG_jane_doe"}',
   'hoi4.gui_inspect': '{"windowName":"my_window"}',
   'hoi4.gui_render': '{"windowName":"my_window","scenario":{"id":"normal"}}',
   'hoi4.gui_rewrite':

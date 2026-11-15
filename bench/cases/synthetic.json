@@ -1023,6 +1023,131 @@
           "includes": "+ideas = {"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.character-write-add-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.character_write",
+      "evidence": "bench/fixtures/synthetic/common/characters/bench_characters.txt defines two characters, bench_first_person and bench_second_person, and nothing else; apply is false, so the call writes nothing.",
+      "title": "An add previews one new character at the end of the only characters file",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_third_person",
+        "body": "name = bench_third_person\ngender = male"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "CHARACTER_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/characters/bench_characters.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 2
+        },
+        {
+          "path": "data.diff",
+          "includes": "+\tbench_third_person = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.character-write-remove-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.character_write",
+      "evidence": "bench/fixtures/synthetic/common/characters/bench_characters.txt defines two characters, bench_first_person and bench_second_person, and nothing else; apply is false, so the call writes nothing.",
+      "title": "A remove previews the one character found by its id, with its blank separator",
+      "arguments": {
+        "operation": "remove",
+        "id": "bench_second_person"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "CHARACTER_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/characters/bench_characters.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 1
+        },
+        {
+          "path": "data.diff",
+          "includes": "-\tbench_second_person = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.character-write-create-file-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.character_write",
+      "evidence": "bench/fixtures/synthetic/common/characters/bench_characters.txt defines two characters, bench_first_person and bench_second_person, and nothing else; apply is false, so the call writes nothing.",
+      "title": "createFile previews a new common/characters file holding one character",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_fresh_person",
+        "body": "name = bench_fresh_person",
+        "file": "common/characters/bench_fresh.txt",
+        "createFile": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "CHARACTER_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/characters/bench_fresh.txt"
+        },
+        {
+          "path": "data.diff",
+          "includes": "+characters = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.character-write-unknown-id",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.character_write",
+      "evidence": "bench/fixtures/synthetic/common/characters/bench_characters.txt defines two characters, bench_first_person and bench_second_person, and nothing else; apply is false, so the call writes nothing.",
+      "title": "A replace of an unknown character is refused instead of added",
+      "arguments": {
+        "operation": "replace",
+        "id": "bench_nobody",
+        "body": "name = bench_nobody"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "CHARACTER_WRITE_NOT_FOUND"
+        }
+      ]
     }
   ]
 }

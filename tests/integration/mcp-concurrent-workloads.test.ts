@@ -179,7 +179,7 @@ async function exercise(clients: Client[], requestCount = 30) {
       'Concurrent domain calls failed',
     );
   expect(results).toHaveLength(requestCount);
-  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(40);
+  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(41);
   console.info(
     JSON.stringify({
       workload: `${requestCount} concurrent mixed domain calls`,
@@ -314,7 +314,7 @@ describe('concurrent production MCP workloads', () => {
       controller.abort();
       await expect(cancelled).rejects.toThrow();
       const discoveryStarted = performance.now();
-      expect((await client.listTools()).tools.length).toBe(41);
+      expect((await client.listTools()).tools.length).toBe(42);
       expect(performance.now() - discoveryStarted).toBeLessThan(2_000);
       await new Promise<void>((resolve) => setTimeout(resolve, 14_000));
       expect(started).toEqual([1]);

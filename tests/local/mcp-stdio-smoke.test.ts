@@ -85,6 +85,7 @@ local('local stdio smoke: installed game and external mod', () => {
         'hoi4.map_rewrite',
         'hoi4.localisation_write',
         'hoi4.idea_write',
+        'hoi4.character_write',
         'hoi4.job_inspect',
         'hoi4.job_cancel',
       ].includes(tool),
