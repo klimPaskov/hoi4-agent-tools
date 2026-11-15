@@ -164,6 +164,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.doctrine-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.doctrine-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.doctrine-write-create-file-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.doctrine-write-kind-required": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true

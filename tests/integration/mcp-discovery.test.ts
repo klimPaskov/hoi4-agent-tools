@@ -63,6 +63,7 @@ describe('MCP discovery', () => {
       'hoi4.event_write',
       'hoi4.decision_write',
       'hoi4.tech_write',
+      'hoi4.doctrine_write',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
@@ -157,6 +158,7 @@ describe('MCP discovery', () => {
       'hoi4.event_write',
       'hoi4.decision_write',
       'hoi4.tech_write',
+      'hoi4.doctrine_write',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: false,

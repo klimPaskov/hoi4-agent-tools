@@ -293,6 +293,33 @@ describe('stdio smoke: synthetic fixture', () => {
     );
   }, 300_000);
 
+  it('adds a doctrine to a temporary copy', async () => {
+    const doctrinesFile = path.join(
+      rewriteGuiMod,
+      'common',
+      'doctrines',
+      'tracks',
+      'smoke_tracks.txt',
+    );
+    await mkdir(path.dirname(doctrinesFile), { recursive: true });
+    await writeFile(doctrinesFile, 'smoke_track_a = {\n\tname = SMOKE_TRACK_A\n}\n');
+    const added = await server.call('hoi4.doctrine_write', 'add a doctrine and write it', {
+      workspaceId: 'rewrite_gui',
+      operation: 'add',
+      kind: 'track',
+      id: 'smoke_track_b',
+      body: 'name = SMOKE_TRACK_B',
+      apply: true,
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('DOCTRINE_WRITE_APPLIED');
+    expect(await readFile(doctrinesFile, 'utf8')).toBe(
+      'smoke_track_a = {\n\tname = SMOKE_TRACK_A\n}\n\nsmoke_track_b = {\n\tname = SMOKE_TRACK_B\n}\n',
+    );
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);

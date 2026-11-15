@@ -52,6 +52,11 @@ export async function registerWorkerOperations(
       operations,
       engine,
     );
+  else if (toolName === 'hoi4.doctrine_write')
+    (await import('../doctrine/write-job-operations.js')).registerDoctrineWriteJobs(
+      operations,
+      engine,
+    );
   else if (toolName === 'hoi4.character_write')
     (await import('../characters/job-operations.js')).registerCharacterWriteJobs(
       operations,

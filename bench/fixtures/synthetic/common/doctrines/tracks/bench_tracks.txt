@@ -1,0 +1,9 @@
+bench_track_a = {
+	name = BENCH_TRACK_A
+	type = infantry
+}
+
+bench_track_b = {
+	name = BENCH_TRACK_B
+	type = armor
+}
