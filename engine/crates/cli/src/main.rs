@@ -43,6 +43,7 @@ USAGE:
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
     hoi4-engine map-provinces [--input FILE] [--output FILE]
+    hoi4-engine index-files [--input FILE] [--output FILE]
     hoi4-engine serve
     hoi4-engine --version
 
@@ -698,6 +699,49 @@ fn cmd_map_provinces(args: &Args) -> Result<ExitCode, String> {
     Ok(code)
 }
 
+/// `index-files`: one frame in (a `hoi4-index-files-request/1` JSON line, then the bytes of the
+/// files that exist only in the server's memory, as its `payload` field counts) and one JSON line
+/// out (`{"ok":true,"result":<hoi4-index-files/1>}`), as `serve` answers the `index.files` op.
+/// The frames are read from `--input FILE` and written to `--output FILE` when given, else from
+/// stdin and to stdout, as for `map-provinces`.
+fn cmd_index_files(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&["--input", "--output"])?;
+    let input = match args.value("--input") {
+        Some(path) => fs::read(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut input = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut input).map_err(|e| format!("cannot read stdin: {e}"))?;
+            input
+        }
+    };
+    let newline = input.iter().position(|byte| *byte == b'\n').unwrap_or(input.len());
+    let header: serde_json::Value = serde_json::from_slice(&input[..newline]).map_err(|e| format!("invalid index-files header: {e}"))?;
+    let payload = input.get(newline + 1..).unwrap_or(&[]);
+    if header["payload"].as_u64().unwrap_or(0) != payload.len() as u64 {
+        return Err(format!("the header counts {} payload bytes but {} followed", header["payload"], payload.len()));
+    }
+    let (frame, code) = match hoi4_engine::symbol_index::records::respond(&header, payload) {
+        Ok(result) => {
+            let mut frame = Vec::with_capacity(result.len() + 24);
+            frame.extend_from_slice(br#"{"ok":true,"result":"#);
+            frame.extend_from_slice(&result);
+            frame.extend_from_slice(b"}\n");
+            (frame, ExitCode::SUCCESS)
+        }
+        Err(error) => {
+            eprintln!("hoi4-engine: index-files: {}", error["message"].as_str().unwrap_or("invalid request"));
+            let mut frame = serde_json::to_vec(&serde_json::json!({ "ok": false, "error": error })).map_err(|e| e.to_string())?;
+            frame.push(b'\n');
+            (frame, ExitCode::from(1))
+        }
+    };
+    match args.value("--output") {
+        Some(path) => fs::write(path, &frame).map_err(|e| format!("cannot write {path}: {e}"))?,
+        None => std::io::stdout().lock().write_all(&frame).map_err(|e| e.to_string())?,
+    }
+    Ok(code)
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -732,6 +776,7 @@ fn main() -> ExitCode {
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),
         Some("map-provinces") => cmd_map_provinces(&args),
+        Some("index-files") => cmd_index_files(&args),
         Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {
             print!("{HELP}");

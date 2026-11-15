@@ -125,7 +125,6 @@ describe('worker exit reporting through the host', () => {
         }),
       ),
     );
-    await engine.persistentAnalysisCache;
     const jobs = await JobService.create(engine.resolver);
     const record = (
       await jobs.submit('test', {

@@ -78,7 +78,6 @@ async function createHarness(
     artifacts,
   });
   // Rejected requests may never scan; finish asynchronous cache setup before fixture teardown.
-  await engine.persistentAnalysisCache;
   const studio = new ScriptedGuiStudio(engine);
   return {
     absolutePath,

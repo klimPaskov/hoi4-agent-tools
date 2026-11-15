@@ -40,7 +40,7 @@ A hand-written file has no storage defaults: set `serverStateRoot` yourself, and
 
 What each location holds:
 
-- `serverStateRoot` holds the persistent index and parsed-source cache (`analysis-cache/`), background jobs (`jobs/`, `job-workers/`), the records of running server processes (`servers/`) and the key that authenticates rewrite journals.
+- `serverStateRoot` holds background jobs (`jobs/`, `job-workers/`), the records of running server processes (`servers/`) and the key that authenticates rewrite journals.
 - `workspaceStorageRoot` holds one folder per workspace ID, with `artifacts/` for rendered images and other generated results and `cache/` for rewrite transactions and locks.
 - Without `workspaceStorageRoot`, a mod workspace keeps these in `.hoi4-agent/artifacts` and `.hoi4-agent/cache` inside the mod folder.
 

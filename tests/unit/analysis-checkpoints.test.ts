@@ -32,7 +32,6 @@ async function fixture() {
   });
   const resolver = await WorkspaceResolver.create(configuration);
   const engine = new CoreEngine(resolver);
-  await engine.persistentAnalysisCache;
   const jobs = await JobService.create(resolver);
   const scope = jobs.scope('test');
   const record = (
@@ -77,7 +76,6 @@ describe('authenticated dependency checkpoints', () => {
     const saved = (await jobs.get('test', record.id)).checkpoint!;
     expect(saved.resources).toHaveLength(3);
     const otherEngine = new CoreEngine(await WorkspaceResolver.create(resolver.config()));
-    await otherEngine.persistentAnalysisCache;
     const workspace = otherEngine.resolver.get('test');
     for (let index = 0; index < 10; index++)
       await otherEngine.artifacts.put(

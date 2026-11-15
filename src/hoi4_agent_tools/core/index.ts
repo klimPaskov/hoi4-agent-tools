@@ -1,26 +1,14 @@
 import { compareCodeUnits } from './canonical.js';
+import { ServiceError } from './result.js';
 import path from 'node:path';
 import type { Diagnostic, SourceLocation } from './diagnostics.js';
 import { sortDiagnostics } from './diagnostics.js';
 import type { ScannedFile } from './scanner.js';
-import {
-  type FileIndexSegment,
-  type IndexSegmentCache,
-  indexSegmentAddress,
-} from './index-segments.js';
+import { engineSymbolIndex, engineSymbolIndexSync } from './engine-index.js';
 import {
   parseClausewitz,
-  parseLocalisation,
-  assignments,
-  childBlocks,
   firstScalar,
-  locationFor,
   sourcePartialLimitDiagnostics,
-  SOURCE_MAX_BYTES,
-  SOURCE_MAX_NESTING,
-  nodeLocation,
-  type BlockNode,
-  type ScalarNode,
   type SourceDocument,
 } from './source/index.js';
 
@@ -93,24 +81,33 @@ export interface ReferenceRecord {
   location?: SourceLocation;
 }
 
-const spriteDefinitionKeys = new Set([
-  'spritetype',
-  'textspritetype',
-  'frameanimatedspritetype',
-  'corneredtilespritetype',
-  'maskedshieldtype',
-]);
+/** One file's records from `hoi4-engine index-files` (ADR 0085). */
+export interface EngineIndexFileAnswer {
+  symbols: Array<[SymbolKind, string, SourceLocation | null, Record<string, unknown>]>;
+  references: Array<[string, string, SymbolKind, string, SourceLocation]>;
+  diagnostics: Diagnostic[];
+  /** The ceiling diagnostics that make the index skip the file. */
+  skip: Diagnostic[] | null;
+  /** A table or nesting ceiling made the index incomplete. */
+  incomplete: boolean;
+}
 
-function firstScalarInsensitiveNode(block: BlockNode, ...keys: string[]): ScalarNode | undefined {
-  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
-  for (const assignment of assignments(block)) {
-    if (
-      assignment.value.type === 'scalar' &&
-      normalizedKeys.has(assignment.key.value.toLowerCase())
-    )
-      return assignment.value;
-  }
-  return undefined;
+/** A file the index asks the engine about, with what the engine needs to know of it. */
+export interface EngineIndexFileRequest {
+  file: ScannedFile;
+  /** A `definition.csv` the index selected. */
+  definitionFile: boolean;
+  /** The workspace owns it, so its parser diagnostics are reported. */
+  owned: boolean;
+  /** A higher layer replaces it, so its diagnostics and references are dropped. */
+  shadowed: boolean;
+}
+
+/** The order the index visits files in: by load order, then by display path. */
+export function engineIndexOrder(files: readonly ScannedFile[]): ScannedFile[] {
+  return [...files].sort(
+    (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
+  );
 }
 
 export interface IndexSkippedSource {
@@ -123,42 +120,6 @@ export interface IndexSkippedSource {
   possibleSymbolKinds: SymbolKind[];
 }
 
-const guiElementKeys = new Set([
-  'containerWindowType',
-  'windowType',
-  'iconType',
-  'buttonType',
-  'instantTextBoxType',
-  'textBoxType',
-  'gridBoxType',
-  'listboxType',
-  'smoothListboxType',
-  'scrollbarType',
-  'checkboxType',
-  'editBoxType',
-  'OverlappingElementsBoxType',
-]);
-
-const eventBlockKeys = new Set([
-  'country_event',
-  'news_event',
-  'state_event',
-  'unit_leader_event',
-  'operative_leader_event',
-]);
-
-const decisionCategoryFields = new Set([
-  'allowed',
-  'available',
-  'icon',
-  'picture',
-  'priority',
-  'scripted_gui',
-  'target_root_trigger',
-  'visible',
-  'visible_when_empty',
-]);
-
 // A current HOI4 installation plus one feature-rich mod exceeds 250k symbols
 // before the higher-precedence mod roots are reached. Keep the inventory
 // bounded, but leave enough headroom for the supported game build and a large
@@ -166,8 +127,6 @@ const decisionCategoryFields = new Set([
 const INDEX_RECORD_LIMIT = 2_000_000;
 const INDEX_DIAGNOSTIC_LIMIT = 10_000;
 const INDEX_RELATED_LOCATION_LIMIT = 100;
-const INDEX_TABLE_RECORD_LIMIT = 100_000;
-const INDEX_TABLE_FIELD_LIMIT = 10_000;
 export const INDEX_SKIPPED_SOURCE_SAMPLE_LIMIT = 100;
 
 function possibleSymbolKinds(
@@ -236,29 +195,6 @@ function possibleSymbolKinds(
     if (/(?:^|\/)strategicregions\//u.test(sourcePath)) kinds.add('strategic_region');
   }
   return [...kinds].sort((left, right) => compareCodeUnits(left, right));
-}
-
-function splitDelimitedBounded(value: string, delimiter: string, maximumFields: number): string[] {
-  const result: string[] = [];
-  let start = 0;
-  while (result.length + 1 < maximumFields) {
-    const next = value.indexOf(delimiter, start);
-    if (next < 0) break;
-    result.push(value.slice(start, next));
-    start = next + delimiter.length;
-  }
-  result.push(value.slice(start));
-  return result;
-}
-
-function numeric(value: string | undefined): number | undefined {
-  if (value === undefined || !/^-?\d+$/u.test(value)) return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function scalars(block: BlockNode): string[] {
-  return block.entries.filter((entry) => entry.type === 'scalar').map((entry) => entry.value);
 }
 
 function normalizedRelative(value: string): string {
@@ -369,16 +305,6 @@ export class SymbolIndex {
   readonly files = new Map<string, ScannedFile>();
   readonly #active = new Map<string, SymbolRecord>();
   readonly #definitionFiles = new Set<string>();
-  /**
-   * Where each completely indexed file's records sit in this index, by segment address, so a
-   * rebuild after an edit reuses unchanged files instead of parsing and indexing them again.
-   */
-  readonly #fileRanges = new Map<
-    string,
-    // Diagnostics are copied, not ranged: finalize() sorts and extends that array.
-    { symbols: [number, number]; references: [number, number]; diagnostics: Diagnostic[] }
-  >();
-  readonly #indexNestingBlocked = new Set<string>();
   readonly #skippedSourcePaths = new Set<string>();
   readonly #skippedPossibleSymbolKinds = new Set<SymbolKind>();
   #currentFileShadowed = false;
@@ -387,12 +313,15 @@ export class SymbolIndex {
   #symbolLimitReported = false;
   #referenceLimitReported = false;
   #diagnosticsTruncated = false;
-  readonly #indexTableBlocked = new Set<string>();
 
-  static build(
+  /**
+   * The index of `files` from the shared engine's per-file records (`hoi4-engine index-files`,
+   * ADR 0085): the engine parses and walks each file, and this side keeps the bookkeeping across
+   * files exactly as `build` does. `answers` lines up with `engineIndexOrder(files)`.
+   */
+  static fromEngine(
     files: readonly ScannedFile[],
-    segments?: IndexSegmentCache,
-    previous?: SymbolIndex,
+    answers: readonly EngineIndexFileAnswer[],
   ): SymbolIndex {
     const index = new SymbolIndex();
     const definitionSelection = selectedDefinitionFiles(files);
@@ -400,46 +329,61 @@ export class SymbolIndex {
     for (const skipped of definitionSelection.skipped) {
       index.recordSkippedSource(skipped.file, skipped.diagnostics);
     }
-    for (const file of [...files].sort(
-      (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
-    )) {
+    const ordered = engineIndexOrder(files);
+    if (answers.length !== ordered.length)
+      throw new ServiceError(
+        'ENGINE_UNAVAILABLE',
+        'hoi4-engine index-files answered out of shape',
+        {
+          reason: 'invalid_output',
+        },
+      );
+    for (const [position, file] of ordered.entries()) {
+      const answer = answers[position]!;
       index.files.set(file.displayPath, file);
-      index.indexFileWithSegments(file, segments, previous);
+      index.#currentFileShadowed = file.shadowedBy !== undefined;
+      if (answer.skip !== null) {
+        index.recordSkippedSource(file, answer.skip);
+        continue;
+      }
+      index.addDiagnostics(answer.diagnostics);
+      for (const [kind, id, location, metadata] of answer.symbols)
+        index.addSymbol({
+          kind,
+          id,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          ...(location === null ? {} : { location }),
+          metadata,
+        });
+      for (const [kind, from, toKind, to, location] of answer.references)
+        index.addReference({ kind, from, toKind, to, path: file.displayPath, location });
+      if (answer.incomplete) index.#complete = false;
     }
     index.finalize();
     return index;
   }
 
-  /** Yield between source files so protocol cancellation and progress remain responsive. */
-  static async buildAsync(
-    files: readonly ScannedFile[],
-    signal?: AbortSignal,
-    segments?: IndexSegmentCache,
-    previous?: SymbolIndex,
-  ): Promise<SymbolIndex> {
-    signal?.throwIfAborted();
-    const index = new SymbolIndex();
-    const definitionSelection = selectedDefinitionFiles(files);
-    for (const displayPath of definitionSelection.selected) index.#definitionFiles.add(displayPath);
-    for (const skipped of definitionSelection.skipped) {
-      index.recordSkippedSource(skipped.file, skipped.diagnostics);
-    }
-    let yieldedAt = performance.now();
-    for (const file of [...files].sort(
-      (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
-    )) {
-      signal?.throwIfAborted();
-      index.files.set(file.displayPath, file);
-      index.indexFileWithSegments(file, segments, previous);
-      if (performance.now() - yieldedAt >= 20) {
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        signal?.throwIfAborted();
-        yieldedAt = performance.now();
-      }
-    }
-    index.finalize();
-    signal?.throwIfAborted();
-    return index;
+  /** The files `fromEngine` sends to the engine, in the index's order, with their options. */
+  static engineRequestFiles(files: readonly ScannedFile[]): EngineIndexFileRequest[] {
+    const definitions = selectedDefinitionFiles(files).selected;
+    return engineIndexOrder(files).map((file) => ({
+      file,
+      definitionFile: definitions.has(file.displayPath),
+      owned: isWorkspaceOwnedSource(file),
+      shadowed: file.shadowedBy !== undefined,
+    }));
+  }
+
+  /** The shared index of `files` from a one-shot engine (ADR 0085). */
+  static build(files: readonly ScannedFile[]): SymbolIndex {
+    return engineSymbolIndexSync(files);
+  }
+
+  /** The shared index of `files` from the resident engine (ADR 0085). */
+  static buildAsync(files: readonly ScannedFile[], signal?: AbortSignal): Promise<SymbolIndex> {
+    return engineSymbolIndex(files, signal);
   }
 
   get complete(): boolean {
@@ -594,953 +538,6 @@ export class SymbolIndex {
 
   private addDiagnostics(diagnostics: readonly Diagnostic[]): void {
     for (const diagnostic of diagnostics) this.addDiagnostic(diagnostic);
-  }
-
-  /** The records one completely indexed file contributed to this index, if it was recorded. */
-  #segmentAt(address: string): FileIndexSegment | undefined {
-    const range = this.#fileRanges.get(address);
-    if (range === undefined) return undefined;
-    return {
-      symbols: this.symbols.slice(...range.symbols),
-      references: this.references.slice(...range.references),
-      diagnostics: range.diagnostics,
-      complete: true,
-    };
-  }
-
-  private indexFileWithSegments(
-    file: ScannedFile,
-    cache?: IndexSegmentCache,
-    previous?: SymbolIndex,
-  ): void {
-    if (cache === undefined && previous === undefined) {
-      this.indexFile(file);
-      return;
-    }
-    const address = indexSegmentAddress(file, this.#definitionFiles.has(file.displayPath));
-    const symbols = this.symbols.length;
-    const references = this.references.length;
-    const diagnostics = this.diagnostics.length;
-    const record = () =>
-      this.#fileRanges.set(address, {
-        symbols: [symbols, this.symbols.length],
-        references: [references, this.references.length],
-        diagnostics: this.diagnostics.slice(diagnostics),
-      });
-    const reused =
-      (previous === undefined ? undefined : previous.#segmentAt(address)) ?? cache?.get(address);
-    if (
-      reused?.complete === true &&
-      this.symbols.length + reused.symbols.length <= INDEX_RECORD_LIMIT &&
-      this.references.length + reused.references.length <= INDEX_RECORD_LIMIT &&
-      this.diagnostics.length + reused.diagnostics.length <= INDEX_DIAGNOSTIC_LIMIT
-    ) {
-      this.#currentFileShadowed = file.shadowedBy !== undefined;
-      for (const symbol of reused.symbols) this.addSymbol(symbol);
-      for (const reference of reused.references) this.addReference(reference);
-      this.addDiagnostics(reused.diagnostics);
-      if (!this.#diagnosticsTruncated) record();
-      return;
-    }
-    this.indexFile(file);
-    // Incomplete files and aggregate ceilings retain the full builder's exact diagnostic
-    // ordering and coverage bookkeeping. They are never reused as complete segments.
-    if (
-      this.#indexTableBlocked.has(file.displayPath) ||
-      this.#skippedSourcePaths.has(file.displayPath) ||
-      this.#indexNestingBlocked.has(file.displayPath) ||
-      this.#symbolLimitReported ||
-      this.#referenceLimitReported ||
-      this.#diagnosticsTruncated
-    )
-      return;
-    record();
-    cache?.put(address, {
-      symbols: this.symbols.slice(symbols),
-      references: this.references.slice(references),
-      diagnostics: this.diagnostics.slice(diagnostics),
-      complete: true,
-    });
-  }
-
-  private indexFile(file: ScannedFile): void {
-    this.#currentFileShadowed = file.shadowedBy !== undefined;
-    const diagnosticStart = this.diagnostics.length;
-    const referenceStart = this.references.length;
-    const lower = file.relativePath.toLowerCase();
-    if (lower.endsWith('.yml')) {
-      const document = parseLocalisation(file.bytes, file.displayPath);
-      const limitDiagnostics = sourcePartialLimitDiagnostics(document.diagnostics);
-      if (limitDiagnostics.length > 0) {
-        this.recordSkippedSource(file, limitDiagnostics);
-        return;
-      }
-      if (isWorkspaceOwnedSource(file)) this.addDiagnostics(document.diagnostics);
-      for (const entry of document.entries) {
-        this.addSymbol({
-          kind: 'localisation',
-          id: `${entry.language}:${entry.key}`,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: locationFor(file.displayPath, document.lineIndex, entry.start, entry.end),
-          metadata: { language: entry.language, key: entry.key, value: entry.value },
-        });
-      }
-      if (this.#currentFileShadowed) this.diagnostics.splice(diagnosticStart);
-      return;
-    }
-    if (this.#definitionFiles.has(file.displayPath)) {
-      this.indexDefinitions(file);
-      return;
-    }
-    if (lower.endsWith('adjacencies.csv')) {
-      this.indexAdjacencies(file);
-      return;
-    }
-    if (lower.endsWith('supply_nodes.txt') || lower.endsWith('railways.txt')) {
-      this.indexNetwork(file, lower.endsWith('supply_nodes.txt') ? 'supply_node' : 'railway');
-      return;
-    }
-    if (!/\.(?:txt|gui|gfx)$/u.test(lower)) return;
-    // Map position/network tables can be very large but are not Clausewitz
-    // assignment sources. Their domain model is built by Agent Nudger.
-    if (!file.bytes.includes(0x3d)) return;
-    const document = parseClausewitz(file.bytes, file.displayPath);
-    const limitDiagnostics = sourcePartialLimitDiagnostics(document.diagnostics);
-    if (limitDiagnostics.length > 0) {
-      this.recordSkippedSource(file, limitDiagnostics);
-      return;
-    }
-    if (isWorkspaceOwnedSource(file)) this.addDiagnostics(document.diagnostics);
-    this.walkBlock(document, document.root, file, []);
-    if (this.#currentFileShadowed) {
-      this.diagnostics.splice(diagnosticStart);
-      this.references.splice(referenceStart);
-    }
-  }
-
-  private walkBlock(
-    document: SourceDocument,
-    block: BlockNode,
-    file: ScannedFile,
-    ancestors: string[],
-  ): void {
-    if (ancestors.length > SOURCE_MAX_NESTING) {
-      this.#complete = false;
-      const sourceAlreadyBlocked = document.diagnostics.some(
-        ({ code }) => code === 'SOURCE_NESTING_LIMIT' || code === 'SOURCE_DIAGNOSTICS_TRUNCATED',
-      );
-      if (!sourceAlreadyBlocked && !this.#indexNestingBlocked.has(file.displayPath)) {
-        this.#indexNestingBlocked.add(file.displayPath);
-        this.addDiagnostic({
-          code: 'SOURCE_INDEX_NESTING_LIMIT',
-          severity: 'blocker',
-          category: 'syntax',
-          message: `Source index traversal exceeds the supported nesting limit of ${SOURCE_MAX_NESTING}`,
-          location: nodeLocation(document, block),
-          details: { limit: SOURCE_MAX_NESTING },
-        });
-      }
-      return;
-    }
-    const sourcePath = file.relativePath.replaceAll('\\', '/').toLowerCase();
-    for (const assignment of assignments(block)) {
-      const key = assignment.key.value;
-      if (assignment.value.type !== 'block') {
-        // An advisor's `idea_token` is the idea that `add_ideas` and `has_idea` name.
-        if (
-          key === 'idea_token' &&
-          sourcePath.startsWith('common/characters/') &&
-          ancestors.at(-1) === 'advisor'
-        ) {
-          this.addSymbol({
-            kind: 'idea',
-            id: assignment.value.value,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, assignment, assignment.value.value),
-            metadata: { advisor: true },
-          });
-        }
-        if (
-          sourcePath.startsWith('common/script_constants/') &&
-          key !== 'schema' &&
-          !ancestors.includes('schema')
-        ) {
-          const id = [...ancestors, key].join('.');
-          this.addSymbol({
-            kind: 'script_constant',
-            id,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, assignment, id),
-            metadata: { value: assignment.value.value },
-          });
-        }
-        continue;
-      }
-      const child = assignment.value;
-      const id = firstScalar(child, 'id')?.value;
-      if (key === 'focus_tree' && id !== undefined) {
-        this.addSymbol({
-          kind: 'focus_tree',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: {},
-        });
-      } else if (key === 'continuous_focus_palette' && id !== undefined) {
-        this.addSymbol({
-          kind: 'continuous_focus_palette',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/technologies/') &&
-        ancestors.length === 1 &&
-        ancestors[0] === 'technologies' &&
-        !key.startsWith('@')
-      ) {
-        this.addSymbol({
-          kind: 'technology',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {
-            startYear: firstScalar(child, 'start_year')?.value,
-            researchCost: firstScalar(child, 'research_cost')?.value,
-            doctrine: firstScalar(child, 'doctrine')?.value === 'yes',
-            icon: `GFX_${key}_medium`,
-          },
-        });
-        for (const pathBlock of childBlocks(child, 'path')) {
-          const target = firstScalar(pathBlock, 'leads_to_tech');
-          if (target !== undefined)
-            this.addReference({
-              kind: 'technology_prerequisite',
-              from: key,
-              toKind: 'technology',
-              to: target.value,
-              path: file.displayPath,
-              location: nodeLocation(document, target, key),
-            });
-        }
-        for (const xor of childBlocks(child, 'xor'))
-          for (const target of scalars(xor))
-            this.addReference({
-              kind: 'technology_exclusive',
-              from: key,
-              toKind: 'technology',
-              to: target,
-              path: file.displayPath,
-              location: nodeLocation(document, xor, key),
-            });
-        for (const folder of childBlocks(child, 'folder')) {
-          const target = firstScalar(folder, 'name');
-          if (target !== undefined)
-            this.addReference({
-              kind: 'technology_folder',
-              from: key,
-              toKind: 'technology_folder',
-              to: target.value,
-              path: file.displayPath,
-              location: nodeLocation(document, target, key),
-            });
-        }
-        for (const categories of childBlocks(child, 'categories'))
-          for (const target of scalars(categories))
-            this.addReference({
-              kind: 'technology_category',
-              from: key,
-              toKind: 'technology_category',
-              to: target,
-              path: file.displayPath,
-              location: nodeLocation(document, categories, key),
-            });
-        for (const tags of childBlocks(child, 'tags'))
-          for (const target of scalars(tags))
-            this.addReference({
-              kind: 'technology_tag',
-              from: key,
-              toKind: 'technology_tag',
-              to: target,
-              path: file.displayPath,
-              location: nodeLocation(document, tags, key),
-            });
-        for (const [field, targetKind] of [
-          ['enable_equipments', 'equipment'],
-          ['enable_equipment_modules', 'equipment_module'],
-          ['enable_subunits', 'sub_unit'],
-        ] as const)
-          for (const unlockBlock of childBlocks(child, field))
-            for (const target of scalars(unlockBlock))
-              this.addReference({
-                kind: `technology_${field}`,
-                from: key,
-                toKind: targetKind,
-                to: target,
-                path: file.displayPath,
-                location: nodeLocation(document, unlockBlock, key),
-              });
-        for (const building of childBlocks(child, 'enable_building')) {
-          const target = firstScalar(building, 'building');
-          if (target !== undefined)
-            this.addReference({
-              kind: 'technology_enable_building',
-              from: key,
-              toKind: 'building',
-              to: target.value,
-              path: file.displayPath,
-              location: nodeLocation(document, target, key),
-            });
-        }
-      } else if (
-        sourcePath.startsWith('common/technology_tags/') &&
-        key === 'technology_categories'
-      ) {
-        for (const category of child.entries.filter((entry) => entry.type === 'scalar'))
-          this.addSymbol({
-            kind: 'technology_category',
-            id: category.value,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, category, category.value),
-            metadata: {},
-          });
-      } else if (sourcePath.startsWith('common/technology_tags/') && key === 'technology_tags') {
-        for (const tag of child.entries.filter((entry) => entry.type === 'scalar'))
-          this.addSymbol({
-            kind: 'technology_tag',
-            id: tag.value,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, tag, tag.value),
-            metadata: {},
-          });
-      } else if (
-        sourcePath.startsWith('common/technology_tags/') &&
-        ancestors.at(-1) === 'technology_folders'
-      ) {
-        this.addSymbol({
-          kind: 'technology_folder',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {
-            doctrine: firstScalar(child, 'doctrine')?.value === 'yes',
-            ledger: firstScalar(child, 'ledger')?.value,
-          },
-        });
-      } else if (
-        sourcePath.startsWith('common/units/equipment/modules/') &&
-        ancestors.at(-1) === 'equipment_modules' &&
-        key !== 'limit'
-      ) {
-        this.addSymbol({
-          kind: 'equipment_module',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/units/equipment/') &&
-        !sourcePath.startsWith('common/units/equipment/modules/') &&
-        ancestors.at(-1) === 'equipments' &&
-        key !== 'limit'
-      ) {
-        this.addSymbol({
-          kind: 'equipment',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/units/') &&
-        !sourcePath.startsWith('common/units/equipment/') &&
-        ancestors.at(-1) === 'sub_units'
-      ) {
-        this.addSymbol({
-          kind: 'sub_unit',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/buildings/') && ancestors.at(-1) === 'buildings') {
-        this.addSymbol({
-          kind: 'building',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/abilities/') && ancestors.at(-1) === 'ability') {
-        this.addSymbol({
-          kind: 'ability',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        (sourcePath === 'common/combat_tactics.txt' ||
-          sourcePath.startsWith('common/combat_tactics/')) &&
-        ancestors.at(-1) === 'combat_tactics'
-      ) {
-        this.addSymbol({
-          kind: 'combat_tactic',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/doctrines/folders/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'doctrine_folder',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/doctrines/grand_doctrines/') &&
-        ancestors.length === 0
-      ) {
-        this.addSymbol({
-          kind: 'grand_doctrine',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: { folder: firstScalar(child, 'folder')?.value },
-        });
-      } else if (sourcePath.startsWith('common/doctrines/tracks/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'doctrine_track',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/doctrines/subdoctrines/') &&
-        ancestors.length === 0
-      ) {
-        this.addSymbol({
-          kind: 'subdoctrine',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        key === 'focus' &&
-        id !== undefined &&
-        ancestors.at(-1) === 'continuous_focus_palette'
-      ) {
-        this.addSymbol({
-          kind: 'continuous_focus',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: {},
-        });
-        const icon = firstScalar(child, 'icon');
-        if (icon !== undefined)
-          this.addReference({
-            kind: 'continuous_focus_icon',
-            from: id,
-            toKind: 'sprite',
-            to: icon.value,
-            path: file.displayPath,
-            location: nodeLocation(document, icon, id),
-          });
-      } else if (
-        (key === 'shared_focus' || key === 'joint_focus') &&
-        id !== undefined &&
-        ancestors.length === 0
-      ) {
-        // Shared and joint focuses sit outside any tree; trees add them with `shared_focus = <id>`.
-        this.addSymbol({
-          kind: 'focus',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: { shared: key },
-        });
-      } else if (key === 'focus' && id !== undefined && ancestors.at(-1) === 'focus_tree') {
-        this.addSymbol({
-          kind: 'focus',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: {
-            x: numeric(firstScalar(child, 'x')?.value),
-            y: numeric(firstScalar(child, 'y')?.value),
-          },
-        });
-        for (const prerequisite of childBlocks(child, 'prerequisite')) {
-          for (const target of assignments(prerequisite, 'focus')) {
-            if (target.value.type === 'scalar')
-              this.addReference({
-                kind: 'focus_prerequisite',
-                from: id,
-                toKind: 'focus',
-                to: target.value.value,
-                path: file.displayPath,
-                location: nodeLocation(document, target, id),
-              });
-          }
-        }
-        for (const exclusion of childBlocks(child, 'mutually_exclusive')) {
-          for (const target of assignments(exclusion, 'focus')) {
-            if (target.value.type === 'scalar')
-              this.addReference({
-                kind: 'focus_exclusion',
-                from: id,
-                toKind: 'focus',
-                to: target.value.value,
-                path: file.displayPath,
-                location: nodeLocation(document, target, id),
-              });
-          }
-        }
-        const relative = firstScalar(child, 'relative_position_id');
-        if (relative !== undefined)
-          this.addReference({
-            kind: 'focus_relative_position',
-            from: id,
-            toKind: 'focus',
-            to: relative.value,
-            path: file.displayPath,
-            location: nodeLocation(document, relative, id),
-          });
-        const icon = firstScalar(child, 'icon');
-        if (icon !== undefined)
-          this.addReference({
-            kind: 'focus_icon',
-            from: id,
-            toKind: 'sprite',
-            to: icon.value,
-            path: file.displayPath,
-            location: nodeLocation(document, icon, id),
-          });
-      } else if (
-        sourcePath.startsWith('events/') &&
-        ancestors.length === 0 &&
-        eventBlockKeys.has(key) &&
-        id !== undefined
-      ) {
-        this.addSymbol({
-          kind: 'event',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: { eventType: key },
-        });
-      } else if (sourcePath.startsWith('common/scripted_effects/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'scripted_effect',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/scripted_triggers/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'scripted_trigger',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/mtth/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'mtth_variable',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/ai_strategy/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'ai_strategy',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/ai_strategy_plans/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'ai_strategy_plan',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (sourcePath.startsWith('common/decisions/') && ancestors.length === 0) {
-        this.addSymbol({
-          kind: 'decision_category',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.startsWith('common/decisions/') &&
-        !sourcePath.startsWith('common/decisions/categories/') &&
-        ancestors.length === 1 &&
-        !decisionCategoryFields.has(key)
-      ) {
-        this.addSymbol({
-          kind: 'decision',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: { category: ancestors[0] },
-        });
-        if (
-          /formable|form_country/iu.test(`${sourcePath}:${ancestors[0] ?? ''}`) ||
-          /^form_/iu.test(key)
-        ) {
-          this.addSymbol({
-            kind: 'formable',
-            id: key,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, assignment, key),
-            metadata: { decision: key },
-          });
-        }
-      } else if (
-        sourcePath.startsWith('common/ideas/') &&
-        ancestors.length === 2 &&
-        ancestors[0] === 'ideas'
-      ) {
-        this.addSymbol({
-          kind: 'idea',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: { category: ancestors[1] },
-        });
-      } else if (
-        sourcePath.startsWith('common/characters/') &&
-        ancestors.length === 1 &&
-        ancestors[0] === 'characters'
-      ) {
-        this.addSymbol({
-          kind: 'leader',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {},
-        });
-      } else if (
-        sourcePath.endsWith('.gfx') &&
-        spriteDefinitionKeys.has(key.toLowerCase()) &&
-        firstScalarInsensitiveNode(child, 'name') !== undefined
-      ) {
-        const name = firstScalarInsensitiveNode(child, 'name')!;
-        const texture = firstScalarInsensitiveNode(child, 'texturefile', 'textureFile');
-        this.addSymbol({
-          kind: 'sprite',
-          id: name.value,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, name.value),
-          metadata: {
-            spriteType: key,
-            texture: texture?.value,
-            frames: numeric(firstScalarInsensitiveNode(child, 'noOfFrames', 'noofframes')?.value),
-          },
-        });
-        if (texture !== undefined)
-          this.addSymbol({
-            kind: 'texture',
-            id: texture.value,
-            path: file.displayPath,
-            rootKind: file.rootKind,
-            loadOrder: file.loadOrder,
-            location: nodeLocation(document, texture, texture.value),
-            metadata: { sprite: name.value },
-          });
-      } else if (guiElementKeys.has(key) && firstScalar(child, 'name') !== undefined) {
-        const name = firstScalar(child, 'name')!;
-        this.addSymbol({
-          kind: 'gui_element',
-          id: name.value,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, name.value),
-          metadata: { elementType: key, ancestors },
-        });
-        const sprite = firstScalar(child, 'spriteType');
-        if (sprite !== undefined)
-          this.addReference({
-            kind: 'gui_sprite',
-            from: name.value,
-            toKind: 'sprite',
-            to: sprite.value,
-            path: file.displayPath,
-            location: nodeLocation(document, sprite, name.value),
-          });
-      } else if (ancestors.at(-1) === 'scripted_gui') {
-        this.addSymbol({
-          kind: 'scripted_gui',
-          id: key,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, key),
-          metadata: {
-            context: firstScalar(child, 'context_type')?.value,
-            window: firstScalar(child, 'window_name')?.value,
-          },
-        });
-        const window = firstScalar(child, 'window_name');
-        if (window !== undefined)
-          this.addReference({
-            kind: 'scripted_gui_window',
-            from: key,
-            toKind: 'gui_element',
-            to: window.value,
-            path: file.displayPath,
-            location: nodeLocation(document, window, key),
-          });
-      } else if (key === 'state' && id !== undefined) {
-        const provinces = childBlocks(child, 'provinces').flatMap(scalars);
-        this.addSymbol({
-          kind: 'state',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: { provinces, name: firstScalar(child, 'name')?.value },
-        });
-        for (const province of provinces)
-          this.addReference({
-            kind: 'state_province',
-            from: id,
-            toKind: 'province',
-            to: province,
-            path: file.displayPath,
-            location: nodeLocation(document, assignment, id),
-          });
-      } else if (
-        (key === 'strategic_region' || key === 'strategic_region_template') &&
-        id !== undefined
-      ) {
-        const provinces = childBlocks(child, 'provinces').flatMap(scalars);
-        this.addSymbol({
-          kind: 'strategic_region',
-          id,
-          path: file.displayPath,
-          rootKind: file.rootKind,
-          loadOrder: file.loadOrder,
-          location: nodeLocation(document, assignment, id),
-          metadata: { provinces, name: firstScalar(child, 'name')?.value },
-        });
-      }
-      this.walkBlock(document, child, file, [...ancestors, key]);
-    }
-  }
-
-  private *tableLines(file: ScannedFile): Generator<{ text: string; line: number }> {
-    if (file.bytes.length > SOURCE_MAX_BYTES) {
-      this.recordSkippedSource(file, [
-        {
-          code: 'INDEX_TABLE_FILE_LIMIT',
-          severity: 'blocker',
-          category: 'reference',
-          message: 'Shared-index map table exceeds the fixed parsing-byte limit',
-          details: { path: file.displayPath, limit: SOURCE_MAX_BYTES },
-        },
-      ]);
-      return;
-    }
-    const text = file.bytes.toString('utf8');
-    let start = 0;
-    let line = 1;
-    while (start <= text.length) {
-      if (line > INDEX_TABLE_RECORD_LIMIT) {
-        this.#indexTableBlocked.add(file.displayPath);
-        this.#complete = false;
-        this.addDiagnostic({
-          code: 'INDEX_TABLE_RECORD_LIMIT',
-          severity: 'blocker',
-          category: 'reference',
-          message: 'Shared-index map table exceeds the fixed record limit',
-          details: { path: file.displayPath, limit: INDEX_TABLE_RECORD_LIMIT },
-        });
-        return;
-      }
-      let end = start;
-      while (end < text.length && text[end] !== '\r' && text[end] !== '\n') end += 1;
-      yield { text: text.slice(start, end), line };
-      if (end >= text.length) return;
-      start = end + (text[end] === '\r' && text[end + 1] === '\n' ? 2 : 1);
-      line += 1;
-    }
-  }
-
-  private whitespaceFields(file: ScannedFile, value: string, line: number): string[] | undefined {
-    const fields: string[] = [];
-    const matcher = /\S+/gu;
-    let match: RegExpExecArray | null;
-    while ((match = matcher.exec(value)) !== null) {
-      if (fields.length >= INDEX_TABLE_FIELD_LIMIT) {
-        this.#indexTableBlocked.add(file.displayPath);
-        this.#complete = false;
-        this.addDiagnostic({
-          code: 'INDEX_TABLE_FIELD_LIMIT',
-          severity: 'blocker',
-          category: 'reference',
-          message: 'Shared-index map-table row exceeds the fixed field limit',
-          details: { path: file.displayPath, line, limit: INDEX_TABLE_FIELD_LIMIT },
-        });
-        return undefined;
-      }
-      fields.push(match[0]);
-    }
-    return fields;
-  }
-
-  private indexDefinitions(file: ScannedFile): void {
-    for (const { text, line } of this.tableLines(file)) {
-      const parts = splitDelimitedBounded(text, ';', 8);
-      if (parts.length < 4 || !/^\d+$/u.test(parts[0]!)) continue;
-      const id = parts[0]!;
-      const color = `${parts[1]},${parts[2]},${parts[3]}`;
-      this.addSymbol({
-        kind: 'province',
-        id,
-        path: file.displayPath,
-        rootKind: file.rootKind,
-        loadOrder: file.loadOrder,
-        metadata: {
-          color,
-          type: parts[4],
-          coastal: parts[5],
-          terrain: parts[6],
-          continent: parts[7],
-          line,
-        },
-      });
-      this.addSymbol({
-        kind: 'province_color',
-        id: color,
-        path: file.displayPath,
-        rootKind: file.rootKind,
-        loadOrder: file.loadOrder,
-        metadata: { provinceId: id, line },
-      });
-    }
-  }
-
-  private indexAdjacencies(file: ScannedFile): void {
-    for (const { text, line } of this.tableLines(file)) {
-      if (line === 1) continue;
-      const parts = splitDelimitedBounded(text, ';', 4);
-      if (parts.length < 3 || !/^\d+$/u.test(parts[0]!) || !/^\d+$/u.test(parts[1]!)) continue;
-      const id = `${parts[0]}:${parts[1]}:${parts[2]}:${line}`;
-      this.addSymbol({
-        kind: 'adjacency',
-        id,
-        path: file.displayPath,
-        rootKind: file.rootKind,
-        loadOrder: file.loadOrder,
-        metadata: {
-          from: parts[0],
-          to: parts[1],
-          type: parts[2],
-          through: parts[3],
-          line,
-        },
-      });
-    }
-  }
-
-  private indexNetwork(file: ScannedFile, kind: 'supply_node' | 'railway'): void {
-    for (const { text, line } of this.tableLines(file)) {
-      const values = this.whitespaceFields(file, text, line);
-      if (values === undefined) continue;
-      if (values.length < 2 || values.some((value) => !/^\d+$/u.test(value))) continue;
-      this.addSymbol({
-        kind,
-        id: `${line}:${values.join(':')}`,
-        path: file.displayPath,
-        rootKind: file.rootKind,
-        loadOrder: file.loadOrder,
-        metadata: { values, line },
-      });
-    }
   }
 
   private finalize(): void {

@@ -19,6 +19,7 @@
 //! references, so that ceiling cannot be reached here.
 
 pub mod reader;
+pub mod records;
 pub mod scan;
 pub mod semantic;
 mod walk;

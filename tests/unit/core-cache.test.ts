@@ -56,8 +56,6 @@ describe('CoreEngine scan cache', () => {
       const reconstructed = await engine.scan('cache_test');
       expect(reconstructed).not.toBe(first);
       expect(reconstructed.index.symbols).toEqual(first.index.symbols);
-      // The workspace's last index, not the segment cache, supplied the unchanged file's records.
-      expect(engine.indexSegments.statistics()).toMatchObject({ hits: 0, misses: 1 });
 
       const metadataBefore = await stat(sourcePath);
       await writeFile(sourcePath, changed, 'utf8');
@@ -89,7 +87,6 @@ describe('CoreEngine scan cache', () => {
         focusOnly,
       );
       engine.releaseScanCaches();
-      expect(engine.indexSegments.statistics().retainedBytes).toBe(0);
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);
       engine.invalidate('cache_test');
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);
@@ -292,7 +289,7 @@ describe('CoreEngine scan cache', () => {
     }
   });
 
-  it('indexes only the edited file after an invalidation, with other patterns', async () => {
+  it('indexes the edited file after an invalidation, with other patterns', async () => {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'hoi4-core-reuse-'));
     try {
       const workspaceRoot = path.join(temporaryRoot, 'workspace');
@@ -324,8 +321,6 @@ describe('CoreEngine scan cache', () => {
           .map(({ id }) => id)
           .sort(),
       ).toEqual(['reuse_after', 'reuse_stable']);
-      // Only the edited file was indexed again.
-      expect(engine.indexSegments.statistics().misses).toBe(first.files.length + 1);
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }

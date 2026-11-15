@@ -2,11 +2,6 @@ import { compareCodeUnits, hashCanonical } from './canonical.js';
 import type { Diagnostic } from './diagnostics.js';
 import { installedEffectCommands, type DocumentedCommands } from './game-documentation.js';
 import { SymbolIndex, type IndexSkippedSource } from './index.js';
-import { IndexSegmentCache } from './index-segments.js';
-import {
-  PersistentAnalysisCache,
-  type PersistentAnalysisCacheStatistics,
-} from './persistent-analysis-cache.js';
 import { sourceDocuments } from './source/cache.js';
 import { WorkspaceScanner, type ScanOptions, type ScannedFile } from './scanner.js';
 import { ArtifactStore } from './artifacts.js';
@@ -58,8 +53,6 @@ export interface WorkspaceStatus {
 }
 
 export interface CoreEngineServices {
-  indexSegments?: IndexSegmentCache;
-  persistentAnalysisCache?: PersistentAnalysisCache | null;
   scanner?: WorkspaceScanner;
   artifacts?: ArtifactStore;
   transactions?: TransactionManager;
@@ -158,8 +151,6 @@ export class CoreEngine {
   readonly scanner: WorkspaceScanner;
   readonly artifacts: ArtifactStore;
   readonly transactions: TransactionManager;
-  readonly indexSegments: IndexSegmentCache;
-  readonly persistentAnalysisCache: Promise<PersistentAnalysisCache> | undefined;
   readonly #scanCache = new Map<string, FileScanSnapshot>();
   readonly #scanFlights = new Map<string, ScanFlight>();
   readonly #scanGenerations = new Map<string, number>();
@@ -170,7 +161,6 @@ export class CoreEngine {
    * records. They are addressed by the file's content hash, so an older index can never supply
    * a wrong one.
    */
-  readonly #latestIndexes = new Map<string, SymbolIndex>();
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
   #recovery: Promise<void> | undefined;
@@ -179,14 +169,7 @@ export class CoreEngine {
     public readonly resolver: WorkspaceResolver,
     services: CoreEngineServices = {},
   ) {
-    this.indexSegments = services.indexSegments ?? new IndexSegmentCache();
     const state = resolver.serverState();
-    this.persistentAnalysisCache =
-      services.persistentAnalysisCache === null || state === undefined
-        ? undefined
-        : Promise.resolve(
-            services.persistentAnalysisCache ?? PersistentAnalysisCache.create(state),
-          );
     this.requests = new RequestScheduler(resolver.config().maxConcurrentTools);
     this.sharedRequests = new SharedRequestCapacity(
       resolver.serverState()?.root,
@@ -391,41 +374,8 @@ export class CoreEngine {
             this.#retainScan(workspaceId, generation, requestKey, cacheKey, snapshot);
             return snapshot;
           }
-          const persistentAnalysisCache = await this.persistentAnalysisCache;
-          const analysisScope = {
-            workspaceIdentity: workspace.workspaceIdentity,
-            rootFingerprint: transactionRootFingerprint(workspace),
-            principal: principal ?? null,
-          };
-          await persistentAnalysisCache?.hydrate(
-            analysisScope,
-            files,
-            sourceDocuments,
-            this.indexSegments,
-            controller.signal,
-          );
-          // The previous revision of the same request still holds every unchanged file's
-          // records, so only edited files are parsed and indexed again.
-          const previous =
-            (
-              [...this.#scanCache]
-                .filter(([key]) => key.startsWith(`${requestKey}:`))
-                .at(-1)?.[1] as ScanSnapshot | undefined
-            )?.index ?? this.#latestIndexes.get(workspaceId);
-          const index = await SymbolIndex.buildAsync(
-            files,
-            controller.signal,
-            this.indexSegments,
-            previous,
-          );
-          await persistentAnalysisCache?.persist(
-            analysisScope,
-            files,
-            sourceDocuments,
-            this.indexSegments,
-            controller.signal,
-          );
-          this.#latestIndexes.set(workspaceId, index);
+          // The shared engine parses and walks the files (ADR 0085).
+          const index = await SymbolIndex.buildAsync(files, controller.signal);
           const documentedEffects = await installedEffectCommands(workspace.gameRoot);
           const snapshot = {
             workspaceId,
@@ -515,8 +465,6 @@ export class CoreEngine {
   /** Drop completed scan buffers without invalidating revisions or interrupting active scans. */
   releaseScanCaches(): void {
     this.#scanCache.clear();
-    this.#latestIndexes.clear();
-    this.indexSegments.clear();
     sourceDocuments.clear();
     this.scanner.clearCaches();
   }
@@ -524,12 +472,6 @@ export class CoreEngine {
   /** Monotonic cache generation used by domain services to invalidate derived snapshots. */
   generation(workspaceId: string): number {
     return this.#scanGenerations.get(workspaceId) ?? 0;
-  }
-
-  async persistentAnalysisCacheStatistics(): Promise<
-    PersistentAnalysisCacheStatistics | undefined
-  > {
-    return (await this.persistentAnalysisCache)?.statistics();
   }
 
   private awaitScanFlight(
@@ -655,8 +597,13 @@ export class CoreEngine {
     }
   }
 
-  /** `previous` supplies unchanged files' records from an earlier index of the same sources. */
-  indexFiles(files: readonly ScannedFile[], previous?: SymbolIndex): SymbolIndex {
-    return SymbolIndex.build(files, this.indexSegments, previous);
+  /** The shared index of `files`, from the engine (ADR 0085). */
+  indexFiles(files: readonly ScannedFile[]): SymbolIndex {
+    return SymbolIndex.build(files);
+  }
+
+  /** `indexFiles` without blocking the event loop, for large file sets. */
+  indexFilesAsync(files: readonly ScannedFile[], signal?: AbortSignal): Promise<SymbolIndex> {
+    return SymbolIndex.buildAsync(files, signal);
   }
 }

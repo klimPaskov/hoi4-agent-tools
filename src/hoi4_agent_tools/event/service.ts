@@ -420,7 +420,7 @@ async function scanEventSources(
     (left, right) =>
       left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
   );
-  const index = engine.indexFiles(files);
+  const index = await engine.indexFilesAsync(files, signal);
   return {
     workspaceId,
     revision: snapshotRevision(files),
