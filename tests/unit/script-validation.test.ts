@@ -185,6 +185,20 @@ describe('documentation-backed script checks', () => {
     );
   });
 
+  it('keeps a parser warning a warning and a parser error an error', async () => {
+    const { check } = await fixture();
+    // No game limit is recorded for long quoted strings, so one must not make the script invalid.
+    const long = await check(`add_ideas = "${'x'.repeat(300)}"`);
+    expect(long.valid).not.toBe(false);
+    expect(long.findings).toContainEqual(
+      expect.objectContaining({ code: 'SOURCE_STRING_TOO_LONG', status: 'warning' }),
+    );
+    expect(long.findings.some(({ status }) => status === 'error')).toBe(false);
+    const broken = await check('log = "never closed');
+    expect(broken.valid).toBe(false);
+    expect(broken.findings.some(({ status }) => status === 'error')).toBe(true);
+  });
+
   it('checks identifier arguments against the definitions the workspace has', async () => {
     const { check } = await fixture();
     const identifiers = (complete: boolean): IdentifierContext => ({

@@ -400,10 +400,12 @@ export async function validateScript(
       column: position.column,
     });
   };
+  // A parser warning stays a warning: only errors and blockers make the script invalid.
   for (const diagnostic of document.diagnostics)
     findings.push({
       code: diagnostic.code,
-      status: 'error',
+      status:
+        diagnostic.severity === 'error' || diagnostic.severity === 'blocker' ? 'error' : 'warning',
       command: '',
       kind: input.kind ?? 'effect',
       scope: input.scope ?? UNKNOWN_SCOPE,
