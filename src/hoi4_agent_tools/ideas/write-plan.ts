@@ -1,3 +1,4 @@
+import { indentedBody, lineIndent } from '../core/block-edit.js';
 import { hasBlockingDiagnostics } from '../core/diagnostics.js';
 import { unifiedTextDiff } from '../core/diff.js';
 import { ServiceError } from '../core/result.js';
@@ -89,13 +90,6 @@ function categoryBlocks(document: SourceDocument): AssignmentNode[] {
   );
 }
 
-/** The whitespace that starts the line `offset` is on. */
-function lineIndent(text: string, offset: number): string {
-  const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
-  const prefix = text.slice(lineStart, offset);
-  return /^[ \t]*$/u.test(prefix) ? prefix : (/^[ \t]*/u.exec(prefix)?.[0] ?? '');
-}
-
 /** One level of indentation, read from the file's own ideas, tabs when it has none. */
 function indentUnit(document: SourceDocument, located: readonly Located[]): string {
   for (const { idea, category } of located) {
@@ -104,18 +98,6 @@ function indentUnit(document: SourceDocument, located: readonly Located[]): stri
     if (inner.length > outer.length && inner.startsWith(outer)) return inner.slice(outer.length);
   }
   return '\t';
-}
-
-/** The body re-indented to `inner`, without its common leading indentation and blank edges. */
-function indentedBody(body: string, inner: string, newline: string): string {
-  const lines = body.split(/\r\n|\r|\n/u).map((line) => line.replace(/[ \t]+$/u, ''));
-  while (lines.length > 0 && lines[0] === '') lines.shift();
-  while (lines.length > 0 && lines.at(-1) === '') lines.pop();
-  const indents = lines
-    .filter((line) => line !== '')
-    .map((line) => /^[ \t]*/u.exec(line)?.[0].length ?? 0);
-  const common = indents.length === 0 ? 0 : Math.min(...indents);
-  return lines.map((line) => (line === '' ? '' : `${inner}${line.slice(common)}`)).join(newline);
 }
 
 /** The body, checked on its own as the block it will become. */

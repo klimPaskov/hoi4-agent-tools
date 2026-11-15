@@ -22,7 +22,7 @@ Optional tasks are available for all 20 domain tools; the 7 reference tools and 
 - `hoi4.tech_inspect` and `hoi4.tech_render`
 - `hoi4.probability_inspect` and `hoi4.probability_analyze`
 - `hoi4.map_inspect` and `hoi4.map_rewrite`
-- `hoi4.localisation_write` and `hoi4.idea_write`
+- `hoi4.localisation_write`, `hoi4.idea_write` and `hoi4.character_write`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`
 - `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite`
 

@@ -100,6 +100,22 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.character-write-add-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.character-write-remove-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.character-write-create-file-preview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.character-write-unknown-id": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.rewrite.idea-write-remove-preview": {
       "inline": true,
       "passed": true
