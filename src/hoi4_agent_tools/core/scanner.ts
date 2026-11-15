@@ -124,6 +124,12 @@ export interface ScanOptions {
   maxFiles?: number;
   maxBytes?: number;
   signal?: AbortSignal;
+  /**
+   * Called for a symbolic link or junction a walked root holds on the requested paths (see
+   * `FileGlobOptions.onSkippedLink` for which ones). The scanner never follows them; callers use
+   * this only to explain a missing file.
+   */
+  onSkippedLink?: (link: { rootKind: RootKind; relativePath: string }) => void;
 }
 
 interface CachedSourceBytes {
@@ -498,6 +504,12 @@ export class WorkspaceScanner {
         cwd: root.path,
         ignore: options.ignore ?? ['**/.hoi4-agent/**'],
         ...(options.signal === undefined ? {} : { signal: options.signal }),
+        ...(options.onSkippedLink === undefined
+          ? {}
+          : {
+              onSkippedLink: (relativePath: string) =>
+                options.onSkippedLink!({ rootKind: root.kind, relativePath }),
+            }),
       });
       const relativePaths: string[] = [];
       for await (const match of matches) {

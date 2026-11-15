@@ -61,6 +61,10 @@ For launching, loading a save and watching a campaign, pair it with the separate
 
 The server reads the installed game once and then trusts that read for as long as the game's own version files (`hoi4_rev.txt`, `hoi4_branch.txt`, `clausewitz_rev.txt`, `checksum_manifest.txt`) and the game's top-level folders look the same. That keeps a focus call under a second. A game update changes those files, and the server reads the game again at once. The server also records what it read in its state folder (`game-manifests/`), so a new server process starts from that record instead of walking the game. A game file you edit in place is noticed by the next server process, because the file's identity changes. A file you add to the game without an update is not seen while that record stands. Set the environment variable `HOI4_AGENT_FULL_GAME_SCAN` to any value to read the game on every call instead, or delete the `game-manifests` folder in the server state folder to have it read once more. A mod, a dependency and a game folder that has no `hoi4_rev.txt` are always read in full.
 
+## A file in a linked folder is not found
+
+The server never follows a symbolic link or a Windows junction inside a mod, a dependency or the game: every file behind one is left out, as if it did not exist. This keeps a workspace from reading outside its configured folders. A copy of a mod whose `gfx/` or `common/` is linked into another folder therefore loses those files. A GUI preview says so: a texture behind a linked folder is reported as `GUI_TEXTURE_UNSUPPORTED` with "Texture not found", followed by the name of the link. Point the workspace at the mod's real folder, or copy the files instead of linking them.
+
 ## Still stuck
 
 Run `hoi4-agent-tools-setup --diagnose`, then open an issue at <https://github.com/klimPaskov/hoi4-agent-tools/issues> with the tool name, the arguments (without private paths), the error code and message, and the output of `hoi4-agent-tools-setup --diagnose`, which includes the server and Node.js versions.

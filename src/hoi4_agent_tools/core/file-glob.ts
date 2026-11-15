@@ -8,6 +8,13 @@ export interface FileGlobOptions {
   ignore?: readonly string[];
   caseSensitive?: boolean;
   signal?: AbortSignal;
+  /**
+   * Called with the root-relative path of a symbolic link or junction the walk skips. Links are
+   * never followed; this only lets a caller say why a file behind one was not found. A link on a
+   * pattern's literal prefix (the `gfx` of a `gfx/` pattern) is always reported; one that only a
+   * `**` segment would reach may be passed over without a call.
+   */
+  onSkippedLink?: (relativePath: string) => void;
 }
 
 function validatePatterns(patterns: readonly string[]): void {
@@ -124,6 +131,7 @@ export async function* iterateFiles(
         }
       }
       if (metadata.isSymbolicLink()) {
+        options.onSkippedLink?.(path.relative(options.cwd, candidate).replaceAll('\\', '/'));
         allowed = false;
         break;
       }
@@ -147,6 +155,11 @@ export async function* iterateFiles(
     } else allowedPatterns.push(pattern);
   }
   if (allowedPatterns.length === 0) return;
+  const skippedLink = (entry: { isSymbolicLink(): boolean; fullpath(): string }): boolean => {
+    if (!entry.isSymbolicLink()) return false;
+    options.onSkippedLink?.(path.relative(options.cwd, entry.fullpath()).replaceAll('\\', '/'));
+    return true;
+  };
   const matches = globIterate(allowedPatterns, {
     cwd: options.cwd,
     withFileTypes: true,
@@ -156,8 +169,8 @@ export async function* iterateFiles(
     nocase,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ignore: {
-      ignored: (entry) => entry.isSymbolicLink() || excluded.ignored(entry),
-      childrenIgnored: (entry) => entry.isSymbolicLink() || excluded.childrenIgnored(entry),
+      ignored: (entry) => skippedLink(entry) || excluded.ignored(entry),
+      childrenIgnored: (entry) => skippedLink(entry) || excluded.childrenIgnored(entry),
     },
   });
   for await (const entry of matches) {

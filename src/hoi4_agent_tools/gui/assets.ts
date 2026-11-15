@@ -288,6 +288,8 @@ export class GuiAssetCatalog {
     scannedFiles: readonly ScannedFile[],
     private readonly budget = new RenderBudget(),
     language = 'l_english',
+    /** `<root kind>:<relative path>` of links the asset scan skipped; see {@link missingTextureReason}. */
+    private readonly linkedFolders: readonly string[] = [],
   ) {
     const sourceLoadOrder = new Map(
       scannedFiles.map((file) => [file.displayPath, file.loadOrder] as const),
@@ -405,6 +407,22 @@ export class GuiAssetCatalog {
     return undefined;
   }
 
+  /**
+   * Why a texture is missing. The scanner never follows a link or junction inside a root, so a
+   * texture under one is absent although the file exists; name the link instead of only saying
+   * "not found", which reads like a format problem.
+   */
+  private missingTextureReason(assetPath: string): string {
+    const normalized = normalizeAssetPath(assetPath);
+    const link = this.linkedFolders.find((entry) => {
+      const relativePath = normalizeAssetPath(entry.slice(entry.indexOf(':') + 1));
+      return normalized === relativePath || normalized.startsWith(`${relativePath}/`);
+    });
+    if (link === undefined) return `Texture not found: ${assetPath}`;
+    const separator = link.indexOf(':');
+    return `Texture not found: ${assetPath}. ${link.slice(separator + 1)} in the ${link.slice(0, separator)} folder is a symbolic link or junction, and workspace scans never follow links; open the mod's real folder or copy the files instead of linking them.`;
+  }
+
   public async loadRaster(assetPath: string, relativeTo?: string): Promise<LoadedRaster> {
     const file = this.resolveFile(assetPath, relativeTo);
     if (file === undefined)
@@ -414,7 +432,7 @@ export class GuiAssetCatalog {
         data: Buffer.alloc(0),
         format: path.extname(assetPath).slice(1).toLowerCase() || 'unknown',
         supported: false,
-        reason: `Texture not found: ${assetPath}`,
+        reason: this.missingTextureReason(assetPath),
       };
     const key = `${file.displayPath}:${file.sha256}`;
     let promise = this.rasters.get(key);

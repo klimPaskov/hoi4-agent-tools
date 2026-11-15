@@ -545,6 +545,24 @@ describe('GUI raster decoders', () => {
       code: 'RENDER_ASSET_SVG_BLOCKED',
     });
   });
+
+  it('names the skipped link when a texture behind one is not found', async () => {
+    const files = [scanned('interface/window.gui', 'guiTypes = { }')];
+    const linked = new GuiAssetCatalog(sourceGraph(files), files, undefined, 'l_english', [
+      'mod:gfx',
+    ]);
+    const behindLink = await linked.loadRaster('gfx/interface/reading.dds');
+    expect(behindLink.supported).toBe(false);
+    expect(behindLink.reason).toContain('Texture not found: gfx/interface/reading.dds.');
+    expect(behindLink.reason).toContain('gfx in the mod folder is a symbolic link or junction');
+    // A prefix that is not a whole folder name, and a path outside the link, keep the plain reason.
+    expect((await linked.loadRaster('gfxtra/reading.dds')).reason).toBe(
+      'Texture not found: gfxtra/reading.dds',
+    );
+    expect(
+      (await new GuiAssetCatalog(sourceGraph(files), files).loadRaster('gfx/x.dds')).reason,
+    ).toBe('Texture not found: gfx/x.dds');
+  });
 });
 
 describe('Scripted GUI source graph, layout, rendering, and validation', () => {
