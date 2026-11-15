@@ -14,11 +14,15 @@ import {
   type TechWriteRequest,
 } from '../schemas/tech-write.js';
 import { planTechWrite, planNewTechFile, type TechWritePlan } from './write-plan.js';
+import { TechnologyTreeViewer } from './service.js';
+import { techPlacementReport } from './write-placement.js';
 
 export interface TechWriteOperationContext {
   workspaceId: string;
   principal?: string;
   signal?: AbortSignal;
+  /** The viewer a placement report compares with; a worker shares one so its graph is cached. */
+  placementViewer?: TechnologyTreeViewer;
   progress?(completed: number, total: number, message: string): Promise<void>;
 }
 
@@ -282,6 +286,25 @@ export async function computeTechWrite(
       });
     }
   }
+  const placement =
+    input.placement === true
+      ? await techPlacementReport(
+          context.placementViewer ?? new TechnologyTreeViewer(engine),
+          {
+            workspaceId: context.workspaceId,
+            ...(context.principal === undefined ? {} : { principal: context.principal }),
+            ...(context.signal === undefined ? {} : { signal: context.signal }),
+          },
+          { path: plan.path, text: plan.text, sourceHash: file?.sha256 },
+        )
+      : undefined;
+  if (placement?.computed === false)
+    diagnostics.push({
+      code: 'TECH_WRITE_PLACEMENT_UNAVAILABLE',
+      severity: 'warning',
+      category: 'reference',
+      message: `The effect on the technology trees could not be computed (${placement.reason ?? 'unknown'}); the edit is not affected`,
+    });
   const budget = plan.diff.length > DIFF_BUDGET_BYTES;
   const data = techWriteDataSchema.parse({
     operation: plan.operation,
@@ -291,6 +314,7 @@ export async function computeTechWrite(
     diff: budget ? `${plan.diff.slice(0, DIFF_BUDGET_BYTES)}\n` : plan.diff,
     diffTruncated: budget,
     untouchedDefinitions: plan.untouchedDefinitions,
+    ...(placement === undefined ? {} : { placement }),
     missing,
   });
   return { plan, file, data, diagnostics };
