@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -76,5 +76,52 @@ describe('GUI asset basename fallback', () => {
     const sprites1 = result.scene.elements.find(({ name }) => name === 'icon_1')?.sprite;
     expect(sprites0?.supported).toBe(true);
     expect(sprites1?.supported).toBe(false);
+  });
+
+  it('says a texture behind a linked gfx folder is skipped, and still does not read it', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'hoi4-gui-linked-'));
+    roots.push(root);
+    const mod = path.join(root, 'mod');
+    const outside = path.join(root, 'real-gfx');
+    await write(
+      path.join(mod, 'interface', 'linked.gui'),
+      'guiTypes = { containerWindowType = { name = "linked_window" size = { width = 64 height = 64 }\n' +
+        'iconType = { name = "plate" spriteType = "GFX_linked_plate" position = { x = 0 y = 0 } } } }\n',
+    );
+    await write(
+      path.join(mod, 'interface', 'linked.gfx'),
+      'spriteTypes = { spriteType = { name = "GFX_linked_plate" texturefile = "gfx/interface/plate.png" } }\n',
+    );
+    await write(
+      path.join(outside, 'interface', 'plate.png'),
+      await sharp({
+        create: { width: 4, height: 4, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } },
+      })
+        .png()
+        .toBuffer(),
+    );
+    await symlink(
+      outside,
+      path.join(mod, 'gfx'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          workspaces: [{ id: 'linked', name: 'Linked', root: mod }],
+        }),
+      ),
+    );
+    const result = await new ScriptedGuiStudio(engine).lint({
+      workspaceId: 'linked',
+      windowName: 'linked_window',
+      scenario: { id: 'linked', resolution: { width: 640, height: 480 } },
+    });
+    const plate = result.scene.elements.find(({ name }) => name === 'plate')?.sprite;
+    expect(plate?.supported).toBe(false);
+    expect(plate?.reason).toContain('Texture not found: gfx/interface/plate.png.');
+    expect(plate?.reason).toContain('gfx in the mod folder is a symbolic link or junction');
   });
 });

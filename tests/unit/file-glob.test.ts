@@ -94,6 +94,38 @@ describe('scoped streaming file globs', () => {
     expect(await globFiles(['linked/**/*.txt'], { cwd: mod })).toEqual([]);
   });
 
+  it('reports each skipped link to the caller and still does not follow it', async () => {
+    const { root, mod } = await fixture();
+    const outside = path.join(root, 'outside');
+    await mkdir(path.join(outside, 'interface'), { recursive: true });
+    await writeFile(path.join(outside, 'interface', 'art.dds'), 'dds');
+    await symlink(
+      outside,
+      path.join(mod, 'gfx'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const wildcard = new Set<string>();
+    expect(
+      await globFiles(['gfx/**/*.dds'], {
+        cwd: mod,
+        onSkippedLink: (link) => wildcard.add(link),
+      }),
+    ).toEqual([]);
+    expect([...wildcard]).toEqual(['gfx']);
+    expect(await globFiles(['**/*.dds'], { cwd: mod, onSkippedLink: () => undefined })).toEqual([]);
+    const literal: string[] = [];
+    expect(
+      await globFiles(['gfx/interface/art.dds'], {
+        cwd: mod,
+        onSkippedLink: (link) => literal.push(link),
+      }),
+    ).toEqual([]);
+    expect(literal).toEqual(['gfx']);
+    const unrelated: string[] = [];
+    await globFiles(['nested/*.txt'], { cwd: mod, onSkippedLink: (link) => unrelated.push(link) });
+    expect(unrelated).toEqual([]);
+  });
+
   it('rejects escaping and excessive patterns before walking files', async () => {
     const { mod } = await fixture();
     for (const pattern of ['../*.txt', '/tmp/*.txt', 'C:/private/*.txt', '\\./\\.\\./*.txt'])

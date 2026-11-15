@@ -882,6 +882,12 @@ export interface GuiStudioScanResult {
   graph: GuiSourceGraph;
   /** The symbol index the graph was built from, reused when the same scope is rebuilt. */
   index?: SymbolIndex;
+  /**
+   * Links and junctions in the mod or a dependency that the asset scan skipped (it never
+   * follows them), as `<root kind>:<relative path>`, so a texture behind one can say why it is
+   * missing.
+   */
+  linkedFolders?: string[];
 }
 
 export interface GuiStudioRenderInput extends RenderProgress {
@@ -1489,11 +1495,20 @@ export class ScriptedGuiStudio {
       ...additionalAssetPatterns,
     ];
     await stage('Loading selected GUI assets');
+    const linkedFolders = new Set<string>();
+    const onSkippedLink = ({
+      rootKind,
+      relativePath,
+    }: {
+      rootKind: string;
+      relativePath: string;
+    }) => linkedFolders.add(`${rootKind}:${relativePath}`);
     const exactReferenced =
       referencedPatterns.length === 0
         ? []
         : await this.scanner.scan(workspace, {
             patterns: referencedPatterns,
+            onSkippedLink,
             ...(signal === undefined ? {} : { signal }),
           });
     signal?.throwIfAborted();
@@ -1507,6 +1522,7 @@ export class ScriptedGuiStudio {
         ? []
         : await this.scanner.scan(workspace, {
             patterns: fallbackPatterns,
+            onSkippedLink,
             ...(signal === undefined ? {} : { signal }),
           });
     const referenced = mergeScannedFiles(exactReferenced, fallbackReferenced);
@@ -1573,11 +1589,14 @@ export class ScriptedGuiStudio {
       fontPages,
     );
     await stage('Resolving selected GUI assets');
-    return this.graphForFiles(
+    const scanned = this.graphForFiles(
       files,
       `window:${workspaceId}:${windowName}`,
       additionalLocalisationKeys,
     );
+    return linkedFolders.size === 0
+      ? scanned
+      : { ...scanned, linkedFolders: [...linkedFolders].sort(compareCodeUnits) };
   }
 
   public async lint(
@@ -1642,7 +1661,13 @@ export class ScriptedGuiStudio {
     ];
     assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const budget = new RenderBudget();
-    const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
+    const catalog = new GuiAssetCatalog(
+      scanned.graph,
+      scanned.files,
+      budget,
+      scenario.language,
+      scanned.linkedFolders,
+    );
     await renderStage(input, 'Laying out GUI and decoding visible assets');
     const scene = await buildGuiScene(
       scanned.graph,
@@ -1831,7 +1856,13 @@ export class ScriptedGuiStudio {
     const baselineScenario =
       requestedBaselineScenario ??
       parsePreviewScenario({ ...scenario, id: `${scenario.id}-comparison`, state: 'normal' });
-    const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
+    const catalog = new GuiAssetCatalog(
+      scanned.graph,
+      scanned.files,
+      budget,
+      scenario.language,
+      scanned.linkedFolders,
+    );
     await renderStage(input, 'Laying out GUI and decoding visible assets');
     const scene = await buildGuiScene(
       scanned.graph,
@@ -2473,11 +2504,20 @@ export class ScriptedGuiStudio {
         ),
         ...scenarioCountryAssetPatterns([scenario]),
       ];
+      const proposedLinks = new Set<string>();
+      const onSkippedLink = ({
+        rootKind,
+        relativePath,
+      }: {
+        rootKind: string;
+        relativePath: string;
+      }) => proposedLinks.add(`${rootKind}:${relativePath}`);
       const exactProposedAssets =
         proposedAssetPatterns.length === 0
           ? []
           : await this.scanner.scan(workspace, {
               patterns: proposedAssetPatterns,
+              onSkippedLink,
               ...(input.signal === undefined ? {} : { signal: input.signal }),
             });
       const proposedFallbackPatterns = basenameFallbackPatterns(
@@ -2489,6 +2529,7 @@ export class ScriptedGuiStudio {
           ? []
           : await this.scanner.scan(workspace, {
               patterns: proposedFallbackPatterns,
+              onSkippedLink,
               ...(input.signal === undefined ? {} : { signal: input.signal }),
             });
       const proposedAssets = mergeScannedFiles(exactProposedAssets, fallbackProposedAssets);
@@ -2519,7 +2560,13 @@ export class ScriptedGuiStudio {
       dependencyFiles = mergeScannedFiles(baseline.files, proposedAssets, proposedFontPages);
       proposedFiles = mergeScannedFiles(proposedFiles, proposedAssets, proposedFontPages);
       proposedGraph = buildGuiSourceGraph(proposedFiles, this.engine.indexFiles(proposedFiles));
-      const proposedCatalog = new GuiAssetCatalog(proposedGraph, proposedFiles, renderBudget);
+      const proposedCatalog = new GuiAssetCatalog(
+        proposedGraph,
+        proposedFiles,
+        renderBudget,
+        'l_english',
+        [...proposedLinks].sort(compareCodeUnits),
+      );
       const proposedScene = await buildGuiScene(
         proposedGraph,
         proposedFiles,
