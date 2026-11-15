@@ -1,13 +1,30 @@
-import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import type * as FsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import type * as FileGlob from '../../src/hoi4_agent_tools/core/file-glob.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { ServerStateGameManifests } from '../../src/hoi4_agent_tools/core/game-manifest.js';
 import { WorkspaceScanner } from '../../src/hoi4_agent_tools/core/scanner.js';
 
-const tracking = vi.hoisted(() => ({ readFiles: [] as string[], openedFiles: [] as string[] }));
+const tracking = vi.hoisted(() => ({
+  readFiles: [] as string[],
+  openedFiles: [] as string[],
+  walkedRoots: [] as string[],
+}));
+
+vi.mock('../../src/hoi4_agent_tools/core/file-glob.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileGlob>();
+  return {
+    ...actual,
+    iterateFiles: (...args: Parameters<typeof actual.iterateFiles>) => {
+      tracking.walkedRoots.push(path.basename(args[1].cwd));
+      return actual.iterateFiles(...args);
+    },
+  };
+});
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>();
@@ -37,6 +54,7 @@ const roots: string[] = [];
 afterEach(async () => {
   tracking.readFiles.length = 0;
   tracking.openedFiles.length = 0;
+  tracking.walkedRoots.length = 0;
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -168,6 +186,15 @@ describe('scanning an installed game that names its version', () => {
 
   it('always walks a game folder that does not name its version', async () => {
     const { resolver } = await fixture();
+    const manifests = new ServerStateGameManifests(resolver.serverState()!);
+    await scan(new WorkspaceScanner(undefined, undefined, undefined, manifests), resolver);
+    tracking.walkedRoots.length = 0;
+    await scan(new WorkspaceScanner(undefined, undefined, undefined, manifests), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+  });
+
+  it('walks a game folder without a version and without a manifest store', async () => {
+    const { resolver } = await fixture();
     const scanner = new WorkspaceScanner();
     await scan(scanner, resolver);
     tracking.openedFiles.length = 0;
@@ -175,3 +202,103 @@ describe('scanning an installed game that names its version', () => {
     expect(tracking.openedFiles).toContain('game_ideas.txt');
   });
 });
+
+describe('the game-build manifest a new process starts from', () => {
+  /** A scanner as a new server process or worker has it: nothing in memory, same server state. */
+  const freshScanner = (resolver: WorkspaceResolver) =>
+    new WorkspaceScanner(
+      undefined,
+      undefined,
+      undefined,
+      new ServerStateGameManifests(resolver.serverState()!),
+    );
+  const manifestFolder = (resolver: WorkspaceResolver) =>
+    path.join(resolver.serverState()!.root, 'game-manifests');
+
+  it('opens the recorded game files without walking the game', async () => {
+    const { resolver } = await fixture({ gameVersion: true });
+    const first = await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+    expect(await readdir(manifestFolder(resolver))).toHaveLength(1);
+
+    tracking.walkedRoots.length = 0;
+    tracking.openedFiles.length = 0;
+    const second = await scan(freshScanner(resolver), resolver);
+    // Only the mod is walked; the game file is opened straight from the manifest.
+    expect(tracking.walkedRoots).toEqual(['mod']);
+    expect(tracking.openedFiles).toContain('game_ideas.txt');
+    expect(second.map(({ displayPath, sha256 }) => [displayPath, sha256])).toEqual(
+      first.map(({ displayPath, sha256 }) => [displayPath, sha256]),
+    );
+  });
+
+  it('walks again and records a new manifest when the game build changes', async () => {
+    const { resolver, gameRoot, gameFile } = await fixture({ gameVersion: true });
+    await scan(freshScanner(resolver), resolver);
+    await writeFile(gameFile, 'ideas = { game_idea_patched = { } }\n', 'utf8');
+    await writeFile(path.join(gameRoot, 'hoi4_rev.txt'), 'bbbbbbbbbbbb', 'utf8');
+
+    tracking.walkedRoots.length = 0;
+    const patched = await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+    expect(gameText(patched)).toContain('game_idea_patched');
+    // The walk recorded the new build, so the next process takes the manifest again.
+    tracking.walkedRoots.length = 0;
+    await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['mod']);
+  });
+
+  it('walks again when the manifest is missing', async () => {
+    const { resolver } = await fixture({ gameVersion: true });
+    await scan(freshScanner(resolver), resolver);
+    await rm(manifestFolder(resolver), { recursive: true });
+    tracking.walkedRoots.length = 0;
+    await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+    expect(await readdir(manifestFolder(resolver))).toHaveLength(1);
+  });
+
+  it('walks again when one game file changed in place under the same build', async () => {
+    const { resolver, gameFile } = await fixture({ gameVersion: true });
+    await scan(freshScanner(resolver), resolver);
+    await writeFile(gameFile, 'ideas = { game_idea_edited = { } }\n', 'utf8');
+    tracking.walkedRoots.length = 0;
+    const edited = await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+    expect(gameText(edited)).toContain('game_idea_edited');
+  });
+
+  it('does not trust a manifest someone edited or one that names a path outside the game', async () => {
+    const { resolver, gameRoot } = await fixture({ gameVersion: true });
+    await scan(freshScanner(resolver), resolver);
+    const [name] = await readdir(manifestFolder(resolver));
+    const file = path.join(manifestFolder(resolver), name!);
+    const recorded = JSON.parse(await readFile(file, 'utf8')) as {
+      files: Array<[string, number, string, string, number]>;
+    };
+    // Pointing the manifest at a file outside the game root, with that file's real identity,
+    // fails the authentication tag and the path check.
+    const outside = path.join(path.dirname(gameRoot), 'outside.txt');
+    await writeFile(outside, 'ideas = { smuggled = { } }\n', 'utf8');
+    recorded.files[0]![0] = '../outside.txt';
+    await writeFile(file, JSON.stringify(recorded), 'utf8');
+    tracking.walkedRoots.length = 0;
+    const result = await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+    expect(result.some(({ bytes }) => bytes.toString('utf8').includes('smuggled'))).toBe(false);
+
+    // A manifest with a valid shape but a changed hash and no fresh tag is refused too.
+    const rewritten = JSON.parse(await readFile(file, 'utf8')) as {
+      files: Array<[string, number, string, string, number]>;
+    };
+    rewritten.files[0]![3] = 'f'.repeat(64);
+    await writeFile(file, JSON.stringify(rewritten), 'utf8');
+    tracking.walkedRoots.length = 0;
+    await scan(freshScanner(resolver), resolver);
+    expect(tracking.walkedRoots).toEqual(['game', 'mod']);
+  });
+});
+
+function gameText(files: Awaited<ReturnType<WorkspaceScanner['scan']>>): string {
+  return files.find(({ rootKind }) => rootKind === 'game')!.bytes.toString('utf8');
+}

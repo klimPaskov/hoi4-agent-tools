@@ -9,6 +9,7 @@ import {
   DEFAULT_SCAN_MAX_FILE_BYTES,
   DEFAULT_SCAN_MAX_FILES,
 } from './configuration.js';
+import type { GameManifest, GameManifestStore } from './game-manifest.js';
 import { ServiceError } from './result.js';
 import { isWithin, type ResolvedRoot, type ResolvedWorkspace, type RootKind } from './workspace.js';
 
@@ -263,6 +264,8 @@ export class WorkspaceScanner {
     private readonly serverMaxFiles = DEFAULT_SCAN_MAX_FILES,
     private readonly serverMaxBytes = DEFAULT_SCAN_MAX_BYTES,
     private readonly serverMaxFileBytes = DEFAULT_SCAN_MAX_FILE_BYTES,
+    /** Game-build manifests kept across processes (ADR 0087); none without server state. */
+    private readonly manifests?: GameManifestStore,
   ) {
     this.#sourceCacheMaxBytes = Math.max(1, Math.min(134_217_728, serverMaxBytes));
   }
@@ -321,6 +324,77 @@ export class WorkspaceScanner {
       gameScanBytes: 0,
       gameScanEntries: 0,
     };
+  }
+
+  /**
+   * The game files a manifest names, opened directly instead of walked. Every file must still be
+   * the one the walk verified: its opened handle must have the recorded identity (device, file
+   * number, size and both change times) and its bytes the recorded SHA-256. A swapped link or
+   * junction opens a file with another identity, so this keeps the walk's containment check.
+   * Undefined when anything differs or a scan limit would be passed; the caller walks instead.
+   */
+  private async filesFromManifest(
+    root: ResolvedRoot,
+    manifest: GameManifest,
+    limits: { maxFiles: number; maxBytes: number; signal?: AbortSignal },
+  ): Promise<ScannedFile[] | undefined> {
+    if (manifest.enumerated > limits.maxFiles) return undefined;
+    const recorded = manifest.files.reduce((sum, entry) => sum + entry.size, 0);
+    if (
+      recorded > limits.maxBytes ||
+      manifest.files.some((entry) => entry.size > this.serverMaxFileBytes)
+    )
+      return undefined;
+    const files: ScannedFile[] = [];
+    for (let offset = 0; offset < manifest.files.length; offset += SCAN_IO_CONCURRENCY * 4) {
+      limits.signal?.throwIfAborted();
+      const batch = manifest.files.slice(offset, offset + SCAN_IO_CONCURRENCY * 4);
+      const read = await Promise.all(
+        batch.map(async (entry): Promise<ScannedFile | undefined> => {
+          const absolutePath = path.join(root.path, ...entry.relativePath.split('/'));
+          let handle: FileHandle;
+          try {
+            handle = await open(absolutePath, 'r');
+          } catch {
+            return undefined;
+          }
+          try {
+            const metadata = await handle.stat();
+            if (!metadata.isFile() || fileIdentity(metadata) !== entry.identity) return undefined;
+            const key = this.cacheKey(absolutePath);
+            const retained = this.#sourceCache.get(key);
+            const bytes =
+              retained?.identity === entry.identity && retained.sha256 === entry.sha256
+                ? retained.bytes
+                : await readBoundedFile(handle, metadata.size, limits.signal);
+            if (bytes.length !== entry.size || sha256Bytes(bytes) !== entry.sha256)
+              return undefined;
+            this.retainSource(key, { sha256: entry.sha256, bytes, identity: entry.identity });
+            return {
+              absolutePath,
+              displayPath: `${rootLabel(root)}:${entry.relativePath}`,
+              relativePath: entry.relativePath,
+              rootKind: root.kind,
+              loadOrder: root.loadOrder,
+              size: bytes.length,
+              modifiedMs: metadata.mtimeMs,
+              sha256: entry.sha256,
+              bytes,
+            };
+          } catch (error) {
+            if (limits.signal?.aborted === true) throw error;
+            return undefined;
+          } finally {
+            await handle.close();
+          }
+        }),
+      );
+      for (const file of read) {
+        if (file === undefined) return undefined;
+        files.push(file);
+      }
+    }
+    return files;
   }
 
   async scan(workspace: ResolvedWorkspace, options: ScanOptions): Promise<ScannedFile[]> {
@@ -388,6 +462,33 @@ export class WorkspaceScanner {
           result.push(fresh);
         }
         continue;
+      }
+      // A new process, or one that released its caches when idle, has no inventory in memory.
+      // The game-build manifest of an earlier walk names the files, so they are opened directly
+      // and each must still be the file that was walked; any difference walks the game again.
+      if (inventoryKey !== undefined && fingerprint !== undefined && this.manifests !== undefined) {
+        const manifest = await this.manifests.load(inventoryKey, fingerprint);
+        const files =
+          manifest === undefined
+            ? undefined
+            : await this.filesFromManifest(root, manifest, {
+                maxFiles: maxFiles - enumeratedFiles,
+                maxBytes: maxBytes - totalBytes,
+                ...(options.signal === undefined ? {} : { signal: options.signal }),
+              });
+        if (manifest !== undefined && files !== undefined) {
+          enumeratedFiles += manifest.enumerated;
+          const bytes = files.reduce((sum, file) => sum + file.bytes.length, 0);
+          totalBytes += bytes;
+          result.push(...files);
+          this.rememberGameInventory(inventoryKey, {
+            fingerprint,
+            enumerated: manifest.enumerated,
+            files: files.map((file) => ({ ...file })),
+            bytes,
+          });
+          continue;
+        }
       }
       const resultBefore = result.length;
       const enumeratedBefore = enumeratedFiles;
@@ -535,12 +636,38 @@ export class WorkspaceScanner {
         }
       }
       if (inventoryKey !== undefined && fingerprint !== undefined) {
+        const walked = result.slice(resultBefore);
         this.rememberGameInventory(inventoryKey, {
           fingerprint,
           enumerated: enumeratedFiles - enumeratedBefore,
-          files: result.slice(resultBefore).map((file) => ({ ...file })),
-          bytes: result.slice(resultBefore).reduce((sum, file) => sum + file.bytes.length, 0),
+          files: walked.map((file) => ({ ...file })),
+          bytes: walked.reduce((sum, file) => sum + file.bytes.length, 0),
         });
+        if (this.manifests !== undefined) {
+          const entries = walked.flatMap((file) => {
+            const identity = this.#sourceCache.get(this.cacheKey(file.absolutePath))?.identity;
+            return identity === undefined
+              ? []
+              : [
+                  {
+                    relativePath: file.relativePath,
+                    size: file.size,
+                    identity,
+                    sha256: file.sha256,
+                    modifiedMs: file.modifiedMs,
+                  },
+                ];
+          });
+          // A file whose identity was not kept (too large for the source cache) cannot be
+          // checked against a manifest, so such a walk records none.
+          if (entries.length === walked.length)
+            await this.manifests.save({
+              key: inventoryKey,
+              fingerprint,
+              enumerated: enumeratedFiles - enumeratedBefore,
+              files: entries,
+            });
+        }
       }
     }
     options.signal?.throwIfAborted();

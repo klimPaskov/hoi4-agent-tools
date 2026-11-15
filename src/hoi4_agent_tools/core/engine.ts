@@ -3,6 +3,7 @@ import type { Diagnostic } from './diagnostics.js';
 import { installedEffectCommands, type DocumentedCommands } from './game-documentation.js';
 import { SymbolIndex, type IndexSkippedSource } from './index.js';
 import { sourceDocuments } from './source/cache.js';
+import { ServerStateGameManifests } from './game-manifest.js';
 import { WorkspaceScanner, type ScanOptions, type ScannedFile } from './scanner.js';
 import { ArtifactStore } from './artifacts.js';
 import { TransactionManager, transactionRootFingerprint } from './transactions.js';
@@ -181,6 +182,7 @@ export class CoreEngine {
         resolver.config().scanMaxFiles,
         resolver.config().scanMaxBytes,
         resolver.config().scanMaxFileBytes,
+        state === undefined ? undefined : new ServerStateGameManifests(state),
       );
     let retentionJobs: Promise<JobStore> | undefined;
     this.artifacts =
