@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
+import { reachableEventNodeIds } from '../../src/hoi4_agent_tools/event/algorithms.js';
 import { selectEventComparison } from '../../src/hoi4_agent_tools/event/comparison-selection.js';
 import {
   analyzeEventImpact,
@@ -887,4 +888,32 @@ describe('Event Chain Viewer graph algorithms', () => {
       analyzeEventImpact(source, { kind: 'event', name: 'unit.1' }, controller.signal),
     ).toThrow();
   });
+
+  it('walks a graph of tens of thousands of events in time linear in its size', () => {
+    // A trace used to rebuild the node index for every node it visited, so reachability over the
+    // whole installed game never ended (issue 206). A chain this long took tens of seconds then.
+    const count = 20_000;
+    const source = graph();
+    source.nodes = [];
+    source.edges = [];
+    source.stateAccesses = [];
+    source.unresolved = [];
+    for (let index = 0; index < count; index += 1) {
+      source.nodes.push(node(`event:chain.${index}`, 'event', { isTriggeredOnly: index > 0 }));
+      if (index > 0)
+        source.edges.push(
+          edge(
+            `edge:chain.${index}`,
+            `event:chain.${index - 1}`,
+            `event:chain.${index}`,
+            'immediate_event_call',
+          ),
+        );
+    }
+    const started = performance.now();
+    const reached = reachableEventNodeIds(source, ['event:chain.0'], 'downstream', false);
+    const elapsed = performance.now() - started;
+    expect(reached).toHaveLength(count);
+    expect(elapsed).toBeLessThan(5_000);
+  }, 20_000);
 });

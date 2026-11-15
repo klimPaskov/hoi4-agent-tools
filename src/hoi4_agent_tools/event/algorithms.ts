@@ -43,6 +43,19 @@ function sortedUnique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort(compareCodeUnits);
 }
 
+/** The nodes of a trace grouped by depth, each layer sorted, in one pass over the nodes. */
+function traceLayers(depthByNode: ReadonlyMap<string, number>): EventTraceLayer[] {
+  const byDepth = new Map<number, string[]>();
+  for (const [id, depth] of depthByNode) {
+    const layer = byDepth.get(depth);
+    if (layer === undefined) byDepth.set(depth, [id]);
+    else layer.push(id);
+  }
+  return [...byDepth.keys()]
+    .sort((left, right) => left - right)
+    .map((depth) => ({ depth, nodeIds: byDepth.get(depth)!.sort(compareCodeUnits) }));
+}
+
 function nodeMap(graph: EventGraphSnapshot): Map<string, EventGraphNode> {
   return new Map(graph.nodes.map((node) => [node.id, node]));
 }
@@ -130,14 +143,13 @@ function collapsedHelperEdge(
  * expensive when an agent asks for one route in a large installed game.
  */
 function lazyCollapsedEdges(
-  graph: EventGraphSnapshot,
+  nodes: ReadonlyMap<string, EventGraphNode>,
   nodeId: string,
   direction: EventTraceDirection,
   maps: ReturnType<typeof edgeMaps>,
   maximumPaths: number,
   signal?: AbortSignal,
 ): EventGraphEdge[] {
-  const nodes = nodeMap(graph);
   const retained = new Map<string, EventGraphEdge>();
   let pathVisits = 0;
   const add = (edge: EventGraphEdge): void => {
@@ -214,8 +226,10 @@ function traceCollapsedHelpers(
     const key = `${nodeId}\0${boundary.direction}`;
     const cached = edgeCache.get(key);
     if (cached !== undefined) return cached;
+    // The node index is built once for the whole trace: rebuilding it per visited node made a
+    // full-graph reachability pass quadratic, and a comparison on the installed game never ended.
     const edges = lazyCollapsedEdges(
-      graph,
+      byId,
       nodeId,
       boundary.direction,
       maps,
@@ -276,15 +290,7 @@ function traceCollapsedHelpers(
       return node === undefined ? [] : [node];
     })
     .sort((left, right) => compareCodeUnits(left.id, right.id));
-  const layers = [...new Set(depthByNode.values())]
-    .sort((left, right) => left - right)
-    .map((depth) => ({
-      depth,
-      nodeIds: [...depthByNode.entries()]
-        .filter(([, value]) => value === depth)
-        .map(([id]) => id)
-        .sort(compareCodeUnits),
-    }));
+  const layers = traceLayers(depthByNode);
   return {
     startNodeIds: [...starts],
     nodes: retainedNodes,
@@ -376,15 +382,7 @@ export function traceEventGraph(
       return node === undefined ? [] : [node];
     })
     .sort((left, right) => compareCodeUnits(left.id, right.id));
-  const layers = [...new Set(depthByNode.values())]
-    .sort((left, right) => left - right)
-    .map((depth) => ({
-      depth,
-      nodeIds: [...depthByNode.entries()]
-        .filter(([, value]) => value === depth)
-        .map(([id]) => id)
-        .sort(compareCodeUnits),
-    }));
+  const layers = traceLayers(depthByNode);
   return {
     startNodeIds: starts,
     nodes: retainedNodes,
