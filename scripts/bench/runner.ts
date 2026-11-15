@@ -70,7 +70,9 @@ export interface RunResult {
   machine: Machine;
   corpora: CorpusPin[];
   /** What the warm-up pass read into the file cache before any case was timed. */
-  warmUp?: { files: number; bytes: number; milliseconds: number };
+  warmUp?: { files: number; bytes: number; skipped: number; milliseconds: number };
+  /** Free memory when the run started; little of it means the file cache had little room. */
+  freeMemoryGb?: number;
   cases: CaseResult[];
 }
 
@@ -411,6 +413,7 @@ async function prepareSynthetic(temporaryRoot: string): Promise<{
 export async function runSuite(options: RunOptions): Promise<RunResult> {
   const log = options.log ?? (() => undefined);
   const started = Date.now();
+  const freeMemoryGb = Math.round((os.freemem() / 1024 ** 3) * 10) / 10;
   const corpora = (await loadCorpora()).filter(
     (corpus) =>
       (options.suite === 'synthetic') === (corpus.kind === 'synthetic') &&
@@ -482,14 +485,16 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
     const warmStarted = Date.now();
     let files = 0;
     let bytes = 0;
+    let skipped = 0;
     for (const entry of located) {
       if (entry.root === undefined || entry.corpus.kind === 'synthetic') continue;
       log(`warming the file cache for ${entry.corpus.id}`);
       const warmed = await warmCorpusFiles(entry.root);
       files += warmed.files;
       bytes += warmed.bytes;
+      skipped += warmed.skipped;
     }
-    warmUp = { files, bytes, milliseconds: Date.now() - warmStarted };
+    warmUp = { files, bytes, skipped, milliseconds: Date.now() - warmStarted };
   }
   const results: CaseResult[] = [];
   const unavailable = new Map(
@@ -554,6 +559,7 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
     ...(toolsCommit === undefined ? {} : { toolsCommit }),
     machine: await describeMachine(),
     corpora: pins,
+    freeMemoryGb,
     ...(warmUp === undefined ? {} : { warmUp }),
     cases: results,
   };

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { checkAssertion, matchingItems, resolvePath } from '../../scripts/bench/assertions.js';
 import {
   compareRun,
+  isColdStartSlower,
   isSlower,
   markdownReport,
   mergeRerun,
@@ -201,20 +202,35 @@ describe('benchmark comparison', () => {
     expect(report).toContain('measured on other hardware (Example CPU, 16 cores, 64 GB)');
   });
 
-  it('lists cold-start latency apart instead of failing the run', () => {
+  it('holds cold starts to a looser limit', () => {
     const coldBaseline = toBaseline(
       run([caseResult('first-touch', 'passed', { timing: 'cold', milliseconds: [100] })]),
       true,
     );
-    const slower = run([
-      caseResult('first-touch', 'passed', { timing: 'cold', milliseconds: [900] }),
-    ]);
+    const cold = (milliseconds: number) =>
+      run([caseResult('first-touch', 'passed', { timing: 'cold', milliseconds: [milliseconds] })]);
+    // Slower, but within twice the baseline and 500 ms more: listed, and the run stays clean.
+    const slower = cold(190);
     const comparison = compareRun(slower, coldBaseline);
     expect(comparison.regressions).toEqual([]);
     expect(comparison.slowCaseIds).toEqual([]);
-    expect(comparison.coldStarts).toEqual(['first-touch p95 100 -> 900 ms']);
+    expect(comparison.coldStarts).toEqual(['first-touch p95 100 -> 190 ms']);
     expect(markdownReport(slower, comparison)).toContain('not counted as regressions: 1');
-    // A cold case that now fails is still a regression: only its latency is set apart.
+    // Past the limit: rerun, and a regression when the rerun is slow too.
+    const much = cold(900);
+    expect(compareRun(much, coldBaseline).slowCaseIds).toEqual(['first-touch']);
+    mergeRerun(much, cold(800));
+    expect(compareRun(much, coldBaseline).regressions).toEqual(['first-touch p95 100 -> 800 ms']);
+    const cleared = cold(900);
+    mergeRerun(cleared, cold(150));
+    expect(compareRun(cleared, coldBaseline).regressions).toEqual([]);
+    expect(compareRun(cleared, coldBaseline).rerunCleared).toEqual([
+      'first-touch p95 100 ms in the baseline, 900 ms on the first pass, 150 ms on the rerun',
+    ]);
+    expect(isColdStartSlower(700, 300)).toBe(false);
+    expect(isColdStartSlower(1100, 500)).toBe(true);
+    expect(isColdStartSlower(1000, 600)).toBe(false);
+    // A cold case that now fails is still a regression.
     const broken = run([caseResult('first-touch', 'failed', { timing: 'cold' })]);
     expect(compareRun(broken, coldBaseline).regressions).toEqual([
       'first-touch now fails: status is "ok"',
@@ -248,10 +264,13 @@ describe('benchmark comparison', () => {
   it('names the warm-up in the report', () => {
     const warmed = {
       ...run([caseResult('kept', 'passed')]),
-      warmUp: { files: 12, bytes: 3 * 1024 ** 2, milliseconds: 4000 },
+      freeMemoryGb: 18.5,
+      warmUp: { files: 12, bytes: 3 * 1024 ** 2, skipped: 2, milliseconds: 4000 },
     };
-    expect(markdownReport(warmed, compareRun(warmed, baseline))).toContain(
-      'Warm-up: read 12 files (3 MB) in 4 s before timing.',
+    const report = markdownReport(warmed, compareRun(warmed, baseline));
+    expect(report).toContain('Free memory at the start: 18.5 GB.');
+    expect(report).toContain(
+      'Warm-up: read 12 files (3 MB) in 4 s before timing; 2 files over the per-corpus budget were not read.',
     );
   });
 
@@ -328,17 +347,19 @@ describe('benchmark data', () => {
     }
   });
 
-  it('warms the text files, the map and the flags, and nothing else', async () => {
+  it('warms text first, then the map, flags and interface textures, within a budget', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'bench-warm-'));
     try {
       const files: Record<string, string> = {
         'descriptor.mod': 'name="x"\n',
         'common/ideas/a.txt': 'ideas = {}\n',
+        'interface/ideas.gfx': 'spriteTypes = {}\n',
         'localisation/english/a_l_english.yml': 'l_english:\n',
         'map/provinces.bmp': 'BM',
         'map/terrain/colormap.dds': 'DDS ',
         'gfx/flags/ABC.tga': 'tga',
-        'gfx/interface/big.dds': 'not warmed',
+        'gfx/interface/ideas/idea.dds': 'DDS idea',
+        'gfx/leaders/big.dds': 'not warmed',
         'sound/a.wav': 'not warmed',
         'tools/notes.txt': 'outside the folders the game loads',
         '.git/config': 'hidden',
@@ -350,24 +371,32 @@ describe('benchmark data', () => {
       const expected = [
         'common/ideas/a.txt',
         'descriptor.mod',
-        'gfx/flags/ABC.tga',
+        'interface/ideas.gfx',
         'localisation/english/a_l_english.yml',
         'map/provinces.bmp',
         'map/terrain/colormap.dds',
+        'gfx/flags/ABC.tga',
+        'gfx/interface/ideas/idea.dds',
       ];
+      const size = (list: string[]) =>
+        list.reduce((sum, file) => sum + Buffer.byteLength(files[file]!), 0);
       expect(await warmUpFiles(root)).toEqual(expected);
       expect(await warmCorpusFiles(root)).toEqual({
         files: expected.length,
-        bytes: expected.reduce((sum, file) => sum + Buffer.byteLength(files[file]!), 0),
+        bytes: size(expected),
+        skipped: 0,
       });
-      // A corpus without a map or flags folder warms its text files alone.
+      // Over the budget, the files later in the order are skipped: textures before text.
+      const text = expected.slice(0, 4);
+      expect(await warmCorpusFiles(root, size(text))).toEqual({
+        files: text.length,
+        bytes: size(text),
+        skipped: expected.length - text.length,
+      });
+      // A corpus without a map or gfx folder warms its text files alone.
       await rm(path.join(root, 'map'), { recursive: true });
       await rm(path.join(root, 'gfx'), { recursive: true });
-      expect(await warmUpFiles(root)).toEqual([
-        'common/ideas/a.txt',
-        'descriptor.mod',
-        'localisation/english/a_l_english.yml',
-      ]);
+      expect(await warmUpFiles(root)).toEqual(text);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

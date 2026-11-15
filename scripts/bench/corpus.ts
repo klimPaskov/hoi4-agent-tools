@@ -191,11 +191,15 @@ async function textFiles(root: string, relative = ''): Promise<string[]> {
 }
 
 /**
- * Folders read whole by the warm-up pass besides the hashed text files: the map rasters and the
- * flags, which map and asset cases read. The rest of gfx, sound and dlc is several gigabytes for
- * vanilla alone, more than the file cache should be asked to hold.
+ * Folders read whole by the warm-up pass after the hashed text files, in this order: the map
+ * rasters, the flags, and the interface textures that idea and asset cases read. The rest of gfx,
+ * sound and dlc is several gigabytes for vanilla alone, more than the file cache should be asked
+ * to hold.
  */
-const WARMED_DIRECTORIES = ['map', 'gfx/flags'];
+const WARMED_DIRECTORIES = ['map', 'gfx/flags', 'gfx/interface'];
+
+/** The most the warm-up reads from one corpus; later files in the warm-up order are skipped. */
+export const WARM_UP_BUDGET_BYTES = 2 * 1024 ** 3;
 
 async function allFiles(root: string, relative: string): Promise<string[]> {
   let entries;
@@ -215,29 +219,50 @@ async function allFiles(root: string, relative: string): Promise<string[]> {
 }
 
 /**
- * The files the warm-up pass reads: every hashed text file plus everything in
- * `WARMED_DIRECTORIES`, sorted and without duplicates.
+ * The files the warm-up pass reads, in the order it reads them: every hashed text file, then
+ * everything in each of `WARMED_DIRECTORIES`, each group sorted and without duplicates.
  */
 export async function warmUpFiles(root: string): Promise<string[]> {
-  const files = new Set(await textFiles(root));
+  const files = new Set((await textFiles(root)).sort());
   for (const directory of WARMED_DIRECTORIES)
-    for (const file of await allFiles(root, directory)) files.add(file);
-  return [...files].sort();
+    for (const file of (await allFiles(root, directory)).sort()) files.add(file);
+  return [...files];
 }
 
 /**
  * Reads the files the tools read once and discards them, so the operating system's file cache
  * holds them before any case is timed. A case measured after other work pushed the corpus out
- * of memory times the disk, not the tool. Nothing is written.
+ * of memory times the disk, not the tool. Files are taken in the warm-up order until
+ * `budgetBytes` is reached; the rest are counted as skipped. Nothing is written.
  */
-export async function warmCorpusFiles(root: string): Promise<{ files: number; bytes: number }> {
-  const files = await warmUpFiles(root);
+export async function warmCorpusFiles(
+  root: string,
+  budgetBytes = WARM_UP_BUDGET_BYTES,
+): Promise<{ files: number; bytes: number; skipped: number }> {
+  const candidates = await warmUpFiles(root);
+  const chosen: string[] = [];
+  let planned = 0;
+  let skipped = 0;
+  for (const file of candidates) {
+    let size: number;
+    try {
+      size = (await stat(path.join(root, file))).size;
+    } catch {
+      continue;
+    }
+    if (planned + size > budgetBytes) {
+      skipped += 1;
+      continue;
+    }
+    planned += size;
+    chosen.push(file);
+  }
   let cursor = 0;
   let bytes = 0;
   let read = 0;
   const worker = async (): Promise<void> => {
-    while (cursor < files.length) {
-      const file = files[cursor++]!;
+    while (cursor < chosen.length) {
+      const file = chosen[cursor++]!;
       try {
         // Read first, then add: `bytes += await ...` would add to a total read before the await.
         const { length } = await readFile(path.join(root, file));
@@ -249,7 +274,7 @@ export async function warmCorpusFiles(root: string): Promise<{ files: number; by
     }
   };
   await Promise.all(Array.from({ length: 16 }, worker));
-  return { files: read, bytes };
+  return { files: read, bytes, skipped };
 }
 
 /** Per-file digests from an earlier run, keyed by relative path: [size, mtimeMs, sha256]. */

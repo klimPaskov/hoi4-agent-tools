@@ -8,11 +8,12 @@ import { SURFACES, type Baseline } from './schema.js';
  * on a corpus whose pin changed are listed apart: a changed mod or game build can move the
  * ground truth, so they are flagged for a look instead of failing the run.
  *
- * Latency is noisy in two known ways, and neither fails the run. A `cold` case times the first
- * touch after the server starts, which depends on process start and the disk as much as on the
- * tool, so its latency changes are listed as cold starts. A case slower than its baseline is
- * rerun once, and it counts as slower only when the rerun is slow too (`caseLatency` takes the
- * faster pass); one that was slow on the first pass alone is listed apart with both numbers.
+ * Latency is noisy in two known ways. A `cold` case times the first call after the server
+ * starts, which process start makes noisier than a warm repeat, so it counts as slower only at
+ * the looser `isColdStartSlower` limit; a smaller slowdown is listed as a cold start without
+ * failing the run. A case slower than its baseline is rerun once, and it counts as slower only
+ * when the rerun is slow too (`caseLatency` takes the faster pass); one that was slow on the
+ * first pass alone is listed apart with both numbers.
  */
 
 export interface Comparison {
@@ -21,7 +22,7 @@ export interface Comparison {
   improvements: string[];
   newCases: string[];
   changedCorpora: string[];
-  /** Latency changes of `cold` cases, reported but not counted as regressions. */
+  /** Cold starts slower than their baseline but within the cold-start limit: not regressions. */
   coldStarts: string[];
   /** Cases that were slower than their baseline on the first pass and normal on the rerun. */
   rerunCleared: string[];
@@ -34,6 +35,15 @@ export interface Comparison {
 /** A warm p95 counts as slower above 1.5 times the baseline and at least 50 ms more. */
 export function isSlower(current: number, baseline: number): boolean {
   return current > baseline * 1.5 && current - baseline >= 50;
+}
+
+/**
+ * A cold start counts as slower above twice the baseline and at least 500 ms more. After the
+ * warm-up it measures a fresh server on cached files, the cost of a user's first call, but
+ * process start makes it noisier than a warm repeat.
+ */
+export function isColdStartSlower(current: number, baseline: number): boolean {
+  return current > baseline * 2 && current - baseline >= 500;
 }
 
 export function toBaseline(run: RunResult, withLatency: boolean): Baseline {
@@ -135,16 +145,16 @@ export function compareRun(run: RunResult, baseline: Baseline | undefined): Comp
     if (p95 !== undefined && baselineP95 !== undefined && passed) {
       const change = `${result.id} p95 ${baselineP95} -> ${p95} ms`;
       const first = firstPassLatency(result);
-      if (result.timing === 'cold') {
-        if (isSlower(p95, baselineP95) || isSlower(baselineP95, p95))
-          comparison.coldStarts.push(change);
-      } else if (isSlower(p95, baselineP95)) {
+      const cold = result.timing === 'cold';
+      const slower = cold ? isColdStartSlower : isSlower;
+      if (slower(p95, baselineP95)) {
         findings.push(change);
         if (!changed.has(result.corpus)) comparison.slowCaseIds.push(result.id);
-      } else if (first !== undefined && first !== p95 && isSlower(first, baselineP95))
+      } else if (first !== undefined && first !== p95 && slower(first, baselineP95))
         comparison.rerunCleared.push(
           `${result.id} p95 ${baselineP95} ms in the baseline, ${first} ms on the first pass, ${p95} ms on the rerun`,
         );
+      else if (cold && isSlower(p95, baselineP95)) comparison.coldStarts.push(change);
       else if (isSlower(baselineP95, p95)) comparison.improvements.push(change);
     }
     if (changed.has(result.corpus)) comparison.changedCorpusFindings.push(...findings);
@@ -188,10 +198,13 @@ export function markdownReport(run: RunResult, comparison: Comparison): string {
     '',
     `Machine: ${run.machine.cpu}, ${run.machine.cores} cores, ${run.machine.memoryGb} GB${run.machine.engineSha256 === undefined ? '' : `, hoi4-engine sha256 ${run.machine.engineSha256.slice(0, 16)}`}.`,
     '',
+    ...(run.freeMemoryGb === undefined
+      ? []
+      : [`Free memory at the start: ${run.freeMemoryGb} GB.`, '']),
     ...(run.warmUp === undefined
       ? []
       : [
-          `Warm-up: read ${run.warmUp.files} files (${Math.round(run.warmUp.bytes / 1024 ** 2)} MB) in ${Math.round(run.warmUp.milliseconds / 1000)} s before timing.`,
+          `Warm-up: read ${run.warmUp.files} files (${Math.round(run.warmUp.bytes / 1024 ** 2)} MB) in ${Math.round(run.warmUp.milliseconds / 1000)} s before timing${run.warmUp.skipped > 0 ? `; ${run.warmUp.skipped} files over the per-corpus budget were not read` : ''}.`,
           '',
         ]),
     '## Corpora',
@@ -229,7 +242,7 @@ export function markdownReport(run: RunResult, comparison: Comparison): string {
     ...(comparison.coldStarts.length === 0
       ? []
       : [
-          `- Cold starts, the first call after the server starts, which depends on process start and the disk; not counted as regressions: ${comparison.coldStarts.length}`,
+          `- Cold starts slower than the baseline but within the cold-start limit (twice the baseline and 500 ms more); not counted as regressions: ${comparison.coldStarts.length}`,
           ...comparison.coldStarts.map((line) => `  - ${line}`),
         ]),
     ...(comparison.rerunCleared.length === 0
