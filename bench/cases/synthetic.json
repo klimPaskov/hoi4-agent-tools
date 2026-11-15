@@ -1533,6 +1533,133 @@
           "includes": "TECH_WRITE_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.doctrine-write-add-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.doctrine_write",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
+      "title": "An add of a track previews one new block at the end of the named track file",
+      "arguments": {
+        "operation": "add",
+        "kind": "track",
+        "id": "bench_track_c",
+        "body": "name = BENCH_TRACK_C",
+        "file": "common/doctrines/tracks/bench_tracks.txt"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DOCTRINE_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/doctrines/tracks/bench_tracks.txt"
+        },
+        {
+          "path": "data.untouchedDefinitions",
+          "equals": 2
+        },
+        {
+          "path": "data.diff",
+          "includes": "+bench_track_c = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.doctrine-write-remove-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.doctrine_write",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
+      "title": "A remove previews the one doctrine found by its id, and its kind",
+      "arguments": {
+        "operation": "remove",
+        "id": "bench_track_b"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DOCTRINE_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.path",
+          "equals": "common/doctrines/tracks/bench_tracks.txt"
+        },
+        {
+          "path": "data.kind",
+          "equals": "track"
+        },
+        {
+          "path": "data.diff",
+          "includes": "-bench_track_b = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.doctrine-write-create-file-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.doctrine_write",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
+      "title": "createFile under the grand doctrine folder previews a new file of that kind",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_grand",
+        "body": "name = BENCH_GRAND",
+        "file": "common/doctrines/grand_doctrines/bench_grand.txt",
+        "createFile": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "DOCTRINE_WRITE_PREVIEW"
+        },
+        {
+          "path": "data.kind",
+          "equals": "grand_doctrine"
+        },
+        {
+          "path": "data.diff",
+          "includes": "+bench_grand = {"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.doctrine-write-kind-required",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "tool": "hoi4.doctrine_write",
+      "evidence": "bench/fixtures/synthetic/common/doctrines/tracks/bench_tracks.txt defines two tracks, bench_track_a and bench_track_b, and nothing else, next to the smoke mod doctrine files; apply is false, so the call writes nothing.",
+      "title": "An add that names neither a kind nor a file is refused",
+      "arguments": {
+        "operation": "add",
+        "id": "bench_track_c",
+        "body": "name = BENCH_TRACK_C"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "DOCTRINE_WRITE_KIND_REQUIRED"
+        }
+      ]
     }
   ]
 }

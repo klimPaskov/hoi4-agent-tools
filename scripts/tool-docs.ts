@@ -56,7 +56,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
   { heading: 'Events', tools: ['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_write'] },
   {
     heading: 'Technology and doctrines',
-    tools: ['hoi4.tech_inspect', 'hoi4.tech_render', 'hoi4.tech_write'],
+    tools: ['hoi4.tech_inspect', 'hoi4.tech_render', 'hoi4.tech_write', 'hoi4.doctrine_write'],
   },
   {
     heading: 'AI weights and timing',
