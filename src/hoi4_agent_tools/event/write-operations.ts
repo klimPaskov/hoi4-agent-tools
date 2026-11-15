@@ -13,6 +13,8 @@ import {
   type EventWriteData,
   type EventWriteRequest,
 } from '../schemas/event-write.js';
+import { eventChainReport } from './write-chain.js';
+import { EventChainViewer } from './service.js';
 import {
   eventFileContents,
   namespaceOf,
@@ -25,6 +27,8 @@ export interface EventWriteOperationContext {
   workspaceId: string;
   principal?: string;
   signal?: AbortSignal;
+  /** The viewer a chain report compares with; a worker shares one so its graph is cached. */
+  chainViewer?: EventChainViewer;
   progress?(completed: number, total: number, message: string): Promise<void>;
 }
 
@@ -272,6 +276,25 @@ export async function computeEventWrite(
       });
     }
   }
+  const chain =
+    input.chain === true
+      ? await eventChainReport(
+          context.chainViewer ?? new EventChainViewer(engine),
+          {
+            workspaceId: context.workspaceId,
+            ...(context.principal === undefined ? {} : { principal: context.principal }),
+            ...(context.signal === undefined ? {} : { signal: context.signal }),
+          },
+          { path: plan.path, text: plan.text, sourceHash: file?.sha256 },
+        )
+      : undefined;
+  if (chain?.computed === false)
+    diagnostics.push({
+      code: 'EVENT_WRITE_CHAIN_UNAVAILABLE',
+      severity: 'warning',
+      category: 'reference',
+      message: `The effect on the event chains could not be computed (${chain.reason ?? 'unknown'}); the edit is not affected`,
+    });
   const budget = plan.diff.length > DIFF_BUDGET_BYTES;
   const data = eventWriteDataSchema.parse({
     operation: plan.operation,
@@ -283,6 +306,7 @@ export async function computeEventWrite(
     diffTruncated: budget,
     untouchedDefinitions: plan.untouchedDefinitions,
     namespaceAdded: plan.namespaceAdded,
+    ...(chain === undefined ? {} : { chain }),
     missing,
   });
   return { plan, file, data, diagnostics };

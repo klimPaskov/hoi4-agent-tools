@@ -31,6 +31,20 @@ interface Envelope {
     untouchedDefinitions: number;
     namespaceAdded: boolean;
     missing: { localisation: string[]; picture: string[] };
+    chain?: {
+      computed: boolean;
+      reason?: string;
+      addedEvents?: string[];
+      removedEvents?: string[];
+      changedEvents?: string[];
+      changedOptions?: number;
+      addedCalls?: number;
+      removedCalls?: number;
+      eventsLosingCallers?: string[];
+      newIssues?: Array<{ code: string; message: string }>;
+      resolvedIssues?: number;
+      newlyUnreachable?: string[];
+    };
   };
 }
 
@@ -247,4 +261,85 @@ describe('hoi4.event_write through an MCP client', () => {
       expect(refused.status).toBe('error');
     }
   });
+});
+
+// Three events, each fired by the one before: ch.1 fires ch.2, which fires ch.3.
+const CHAIN = [
+  'add_namespace = ch',
+  '',
+  'country_event = {',
+  '\tid = ch.1',
+  '\ttitle = ch.1.t',
+  '\tis_triggered_only = yes',
+  '\toption = {',
+  '\t\tname = ch.1.a',
+  '\t\tcountry_event = ch.2',
+  '\t}',
+  '}',
+  '',
+  'country_event = {',
+  '\tid = ch.2',
+  '\ttitle = ch.2.t',
+  '\tis_triggered_only = yes',
+  '\toption = {',
+  '\t\tname = ch.2.a',
+  '\t\tcountry_event = ch.3',
+  '\t}',
+  '}',
+  '',
+  'country_event = {',
+  '\tid = ch.3',
+  '\ttitle = ch.3.t',
+  '\tis_triggered_only = yes',
+  '\toption = {',
+  '\t\tname = ch.3.a',
+  '\t}',
+  '}',
+  '',
+].join('\n');
+
+describe('hoi4.event_write chain report', () => {
+  it('reports no chain unless asked, and the effect of cutting a call when asked', async () => {
+    const { call, put, read } = await fixture();
+    await put('events/chain.txt', CHAIN);
+    const cut = {
+      operation: 'replace',
+      id: 'ch.2',
+      body: 'title = ch.2.t\nis_triggered_only = yes\noption = { name = ch.2.a }',
+    };
+    const plain = await call(cut);
+    expect(plain.code).toBe('EVENT_WRITE_PREVIEW');
+    expect(plain.data.chain).toBeUndefined();
+
+    const report = await call({ ...cut, chain: true });
+    expect(report.code).toBe('EVENT_WRITE_PREVIEW');
+    // Hand-counted: ch.2 no longer fires ch.3, so one call goes, ch.3 loses its one caller, the
+    // option of ch.2 changes, and the option is left firing nothing, which the graph flags.
+    expect(report.data.chain).toMatchObject({
+      computed: true,
+      addedEvents: [],
+      removedEvents: [],
+      changedEvents: [],
+      changedOptions: 1,
+      addedCalls: 0,
+      removedCalls: 1,
+      eventsLosingCallers: ['ch.3'],
+      resolvedIssues: 0,
+      newlyUnreachable: [],
+    });
+    expect(report.data.chain?.newIssues?.map(({ code }) => code)).toEqual([
+      'EVENT_OPTION_DANGLING',
+    ]);
+    // A preview writes nothing.
+    expect(await read('events/chain.txt')).toBe(CHAIN);
+  }, 120_000);
+
+  it('reports a removed event and the call that now points nowhere', async () => {
+    const { call, put } = await fixture();
+    await put('events/chain.txt', CHAIN);
+    const removed = await call({ operation: 'remove', id: 'ch.3', chain: true });
+    expect(removed.data.chain?.computed).toBe(true);
+    expect(removed.data.chain?.removedEvents).toEqual(['ch.3']);
+    expect(removed.data.chain?.newIssues?.length ?? 0).toBeGreaterThan(0);
+  }, 120_000);
 });
