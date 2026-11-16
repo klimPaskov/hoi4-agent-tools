@@ -38,7 +38,10 @@ import {
   type SplitStateDistributionPolicy,
 } from '../../src/hoi4_agent_tools/map/operations.js';
 import { renderMap, renderMapDiff } from '../../src/hoi4_agent_tools/map/render.js';
-import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
+import {
+  AgentNudger,
+  attributeMapValidationDiagnostics,
+} from '../../src/hoi4_agent_tools/map/service.js';
 import { validateMap, validateMapAsync } from '../../src/hoi4_agent_tools/map/validation.js';
 import { mapOperationSchema } from '../../src/hoi4_agent_tools/schemas/map.js';
 
@@ -886,6 +889,78 @@ describe('Agent Nudger map model and operations', () => {
       'MAP_BMP_HEADER_CHANGED',
     ])
       expect(codes).toContain(code);
+  });
+
+  it('reports a strategic region none of whose provinces touches another (issue 223)', async () => {
+    // Bands left to right: 1 | 4 | 2 | 3. 1 and 2 do not touch; 1 and 4 do.
+    const region = (id: number, provinces: string) =>
+      `strategic_region = {
+	id = ${id}
+	name = "STRATEGICREGION_${id}"
+	provinces = { ${provinces} }
+}
+`;
+    const apart = await setup({
+      'map/strategicregions/1-REGION.txt': region(1, '1 2'),
+      'map/strategicregions/2-REGION.txt': region(2, '3'),
+      'map/strategicregions/3-REGION.txt': region(3, '4'),
+    });
+    const found = validateMap(apart.snapshot.index).diagnostics.filter(
+      ({ code }) => code === 'MAP_STRATEGIC_REGION_PROVINCES_APART',
+    );
+    expect(found).toMatchObject([
+      { severity: 'error', details: { provinceIds: [1, 2], provinceCount: 2 } },
+    ]);
+    expect(found[0]?.location?.path).toContain('1-REGION.txt');
+    // One pair that touches is enough, and a single-province region is never reported.
+    const touching = await setup({
+      'map/strategicregions/1-REGION.txt': region(1, '1 4 2'),
+      'map/strategicregions/2-REGION.txt': region(2, '3'),
+    });
+    expect(validateMap(touching.snapshot.index).diagnostics.map(({ code }) => code)).not.toContain(
+      'MAP_STRATEGIC_REGION_PROVINCES_APART',
+    );
+  });
+
+  it('attributes a region left with no touching provinces to the move that made it', async () => {
+    const region = (id: number, provinces: string) =>
+      `strategic_region = {
+	id = ${id}
+	name = "STRATEGICREGION_${id}"
+	provinces = { ${provinces} }
+}
+`;
+    const { snapshot } = await setup({
+      'map/strategicregions/1-REGION.txt': region(1, '1 4 2'),
+      'map/strategicregions/2-REGION.txt': region(2, '3'),
+    });
+    const operations = [
+      {
+        id: 'take-the-bridge',
+        kind: 'move_region_provinces' as const,
+        sourceRegionId: 1,
+        targetRegionId: 2,
+        provinceIds: [4],
+        distribution: 'move-membership' as const,
+      },
+    ];
+    const plan = planMapOperations(snapshot.index, operations);
+    expect(plan.blockers).toEqual([]);
+    const baseline = validateMap(snapshot.index).diagnostics;
+    expect(baseline.map(({ code }) => code)).not.toContain('MAP_STRATEGIC_REGION_PROVINCES_APART');
+    const attributed = attributeMapValidationDiagnostics({
+      diagnostics: validateMap(plan.finalIndex, { baseline: snapshot.index }).diagnostics,
+      operations: plan.operations,
+      changes: plan.changes,
+      baselineDiagnostics: baseline,
+    });
+    expect(attributed).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
+        severity: 'error',
+        operationId: 'take-the-bridge',
+      }),
+    );
   });
 
   it('moves state provinces with explicit policies while preserving unrelated source text', async () => {

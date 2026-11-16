@@ -390,6 +390,7 @@ Without a `distribution` (or with `"distribution": "proportional"`) the values f
 Level buildings (infrastructure, air bases, anti-air, radar) stay at their level in the source, and the target takes the higher level of the two.
 Victory points and province buildings follow their province, and the moved provinces take the target's owner, controller, cores and claims because they are now part of the target.
 The provinces must share the target's strategic region, or the operation stops; set `strategicRegion: "move-to-target-region"` in a full `distribution` to move them to the target's region.
+A region the move leaves behind must keep at least two provinces that touch, if it keeps two or more: game 1.19.4 crashed at load on a strategic region in which no province borders another province of the region. Map validation reports such a region as `MAP_STRATEGIC_REGION_PROVINCES_APART` (an error), so a write that would create one is refused; the base game has none.
 Pass a full `distribution` with `stateValues: "retain-in-current-states"` to leave manpower, resources and buildings where they are, or `"proportional-by-land-pixels"` to write the automatic choice out.
 
 ```json
