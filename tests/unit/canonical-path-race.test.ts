@@ -2,13 +2,14 @@ import { mkdir, mkdtemp, rm, rmdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as FsPromises from 'node:fs/promises';
 
 // The workspace lock directory can be released by another rewrite between canonicalPath's
 // existence check and its realpath call. Simulate that window: the first realpath of a marked
 // path removes the directory and fails with ENOENT, as the real race does.
 const vanishing = new Set<string>();
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const actual = await importOriginal<typeof FsPromises>();
   return {
     ...actual,
     realpath: async (target: string) => {
