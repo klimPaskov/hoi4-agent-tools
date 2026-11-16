@@ -37,4 +37,20 @@ target=${CARGO_TARGET_DIR:-$checkout/engine/target}
 (cd engine && CARGO_TARGET_DIR="$target" cargo build --release --locked --quiet -p hoi4-engine-cli)
 binary=$target/release/hoi4-engine
 [ -f "$binary.exe" ] && binary=$binary.exe
-HOI4_ENGINE=$binary npm run --silent bench -- --suite real --watch-game --accept-if-clean
+
+# Record what else keeps the machine busy while the suite runs (Windows): the nightly read several
+# times slower than the same command by hand, with nothing scheduled at that hour.
+sampler=
+if command -v powershell >/dev/null 2>&1; then
+  (
+    while :; do
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bench/load-sample.ps1 || true
+      sleep 120
+    done
+  ) &
+  sampler=$!
+fi
+status=0
+HOI4_ENGINE=$binary npm run --silent bench -- --suite real --watch-game --accept-if-clean || status=$?
+[ -n "$sampler" ] && kill "$sampler" 2>/dev/null || true
+exit "$status"
