@@ -891,7 +891,7 @@ describe('Agent Nudger map model and operations', () => {
       expect(codes).toContain(code);
   });
 
-  it('reports a strategic region none of whose provinces touches another (issue 223)', async () => {
+  it('reports a strategic region of exactly two provinces that do not touch (issue 223)', async () => {
     // Bands left to right: 1 | 4 | 2 | 3. 1 and 2 do not touch; 1 and 4 do.
     const region = (id: number, provinces: string) =>
       `strategic_region = {
@@ -912,7 +912,44 @@ describe('Agent Nudger map model and operations', () => {
       { severity: 'error', details: { provinceIds: [1, 2], provinceCount: 2 } },
     ]);
     expect(found[0]?.location?.path).toContain('1-REGION.txt');
-    // One pair that touches is enough, and a single-province region is never reported.
+    // Three provinces none of which touches another loaded in game, so only exactly two count.
+    // Six bands, 1 | 4 | 2 | 5 | 3 | 6 (wrapping), so 1, 2 and 3 touch none of each other.
+    const bands = [1, 4, 2, 5, 3, 6];
+    const sixColours: Record<number, RgbColor> = {
+      ...provinceColors,
+      5: { r: 90, g: 30, b: 0 },
+      6: { r: 30, g: 0, b: 90 },
+    };
+    const pixels: RgbColor[] = [];
+    for (let y = 0; y < 64; y += 1)
+      for (let x = 0; x < 384; x += 1) pixels.push(sixColours[bands[Math.floor(x / 64)]!]!);
+    const three = await setup({
+      'map/provinces.bmp': createBmp({
+        width: 384,
+        height: 64,
+        bitsPerPixel: 24,
+        dibSize: 124,
+        rgbPixels: pixels,
+      }),
+      'map/definition.csv': [
+        '0;0;0;0;sea;false;ocean;0',
+        '1;10;0;0;land;true;plains;1',
+        '2;0;0;200;land;true;plains;1',
+        '3;0;160;220;sea;true;ocean;0',
+        '4;0;180;0;land;false;forest;1',
+        '5;90;30;0;land;false;forest;1',
+        '6;30;0;90;land;false;forest;1',
+        '',
+      ].join('\n'),
+      'map/strategicregions/1-REGION.txt': region(1, '1 2 3'),
+      'map/strategicregions/2-REGION.txt': region(2, '4 5 6'),
+    });
+    expect(three.snapshot.index.raster?.adjacency.get(1)?.has(2)).toBe(false);
+    expect(three.snapshot.index.raster?.adjacency.get(2)?.has(3)).toBe(false);
+    expect(validateMap(three.snapshot.index).diagnostics.map(({ code }) => code)).not.toContain(
+      'MAP_STRATEGIC_REGION_PROVINCES_APART',
+    );
+    // A pair that touches is fine, and a single-province region is never reported.
     const touching = await setup({
       'map/strategicregions/1-REGION.txt': region(1, '1 4 2'),
       'map/strategicregions/2-REGION.txt': region(2, '3'),

@@ -963,10 +963,11 @@ function* validateStatesAndRegions(
       });
     }
   }
-  // A region of two or more provinces in which no province borders another province of the same
-  // region crashed game 1.19.4 at load (a division by zero in a loader thread, issue 223). The base
-  // game has no such region; a region whose provinces are in separate pieces, with at least one
-  // piece of two touching provinces, loads.
+  // A region of exactly two provinces that do not border each other crashed game 1.19.4 at load
+  // (a division by zero in a loader thread, issue 223). Game starts: two touching provinces load,
+  // three provinces none of which touches another load, a region in separate pieces with one
+  // two-province piece loads; weather positions and supply nodes do not matter. The base game
+  // has no such region.
   const raster = index.raster;
   if (raster !== undefined)
     for (const [regionIndex, region] of index.regions.entries()) {
@@ -974,7 +975,7 @@ function* validateStatesAndRegions(
       const provinces = [...new Set(region.provinces)].filter((province) =>
         index.definitionsById.has(province),
       );
-      if (provinces.length < 2) continue;
+      if (provinces.length !== 2) continue;
       const members = new Set(provinces);
       const touching = provinces.some((province) =>
         [...(raster.adjacency.get(province) ?? [])].some(
@@ -986,7 +987,7 @@ function* validateStatesAndRegions(
         code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
         severity: 'error',
         category: 'map',
-        message: `No province of strategic region ${region.id} borders another province of the region (${provinces.length} provinces, each alone). Game 1.19.4 crashed at load on such a region; give the region at least two provinces that touch, or move these provinces into the regions around them.`,
+        message: `Strategic region ${region.id} has exactly two provinces, ${provinces[0]} and ${provinces[1]}, and they do not border each other. Game 1.19.4 crashed at load on such a region; give the region a province that joins them, or move them into the regions around them.`,
         location: regionLocation(region),
         details: {
           provinceIds: provinces.slice(0, MAP_DIAGNOSTIC_DETAIL_SAMPLE_LIMIT),
