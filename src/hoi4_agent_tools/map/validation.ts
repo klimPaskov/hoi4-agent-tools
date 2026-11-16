@@ -963,6 +963,38 @@ function* validateStatesAndRegions(
       });
     }
   }
+  // A region of exactly two provinces that do not border each other crashed game 1.19.4 at load
+  // (a division by zero in a loader thread, issue 223). Game starts: two touching provinces load,
+  // three provinces none of which touches another load, a region in separate pieces with one
+  // two-province piece loads; weather positions and supply nodes do not matter. The base game
+  // has no such region.
+  const raster = index.raster;
+  if (raster !== undefined)
+    for (const [regionIndex, region] of index.regions.entries()) {
+      yield* cancellationCheckpoint(options.signal, regionIndex, 64);
+      const provinces = [...new Set(region.provinces)].filter((province) =>
+        index.definitionsById.has(province),
+      );
+      if (provinces.length !== 2) continue;
+      const members = new Set(provinces);
+      const touching = provinces.some((province) =>
+        [...(raster.adjacency.get(province) ?? [])].some(
+          (neighbour) => neighbour !== province && members.has(neighbour),
+        ),
+      );
+      if (touching) continue;
+      addDiagnostic(diagnostics, options, {
+        code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
+        severity: 'error',
+        category: 'map',
+        message: `Strategic region ${region.id} has exactly two provinces, ${provinces[0]} and ${provinces[1]}, and they do not border each other. Game 1.19.4 crashed at load on such a region; give the region a province that joins them, or move them into the regions around them.`,
+        location: regionLocation(region),
+        details: {
+          provinceIds: provinces.slice(0, MAP_DIAGNOSTIC_DETAIL_SAMPLE_LIMIT),
+          provinceCount: provinces.length,
+        },
+      });
+    }
   for (const [stateIndex, state] of index.states.entries()) {
     yield* cancellationCheckpoint(options.signal, stateIndex, 64);
     const regionIds = new Set(
