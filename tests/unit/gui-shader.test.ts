@@ -300,7 +300,7 @@ describe('source-backed GUI colour shaders', () => {
     const files = [
       scanned(
         'interface/pixels.gui',
-        'guiTypes = { containerWindowType = { name = "pixels" size = { width = 100 height = 80 } iconType = { name = "image" position = { x = 20 y = 20 } size = { width = 8 height = 4 } spriteType = "GFX_pixels" } } }',
+        'guiTypes = { containerWindowType = { name = "pixels" size = { width = 100 height = 80 } iconType = { name = "image" position = { x = 20 y = 20 } scale = 4 spriteType = "GFX_pixels" } } }',
       ),
       scanned(
         'interface/pixels.gfx',

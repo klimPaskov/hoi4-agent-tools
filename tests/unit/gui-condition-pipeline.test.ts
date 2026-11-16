@@ -23,10 +23,10 @@ async function fixture() {
       ${['inclusive', 'compound', 'negation', 'helper', 'scoped', 'unknown', 'dated', 'controlled'].map((name, index) => `instantTextBoxType = { name = "${name}" position = { x = 5 y = ${index * 30} } size = { width = 600 height = 25 } text = "LABEL_${name}" }`).join('\n')}
       buttonType = { name = "controlled_action" position = { x = 5 y = 245 } size = { width = 100 height = 25 } }
       buttonType = { name = "scoped_action" position = { x = 115 y = 245 } size = { width = 100 height = 25 } }
-      iconType = { name = "controlled_visibility" position = { x = 225 y = 245 } size = { width = 50 height = 25 } }
-      iconType = { name = "scoped_visibility" position = { x = 285 y = 245 } size = { width = 50 height = 25 } }
+      containerWindowType = { name = "controlled_visibility" position = { x = 225 y = 245 } size = { width = 50 height = 25 } }
+      containerWindowType = { name = "scoped_visibility" position = { x = 285 y = 245 } size = { width = 50 height = 25 } }
       buttonType = { name = "visibility_action" position = { x = 345 y = 245 } size = { width = 100 height = 25 } }
-      iconType = { name = "dynamic_visibility" position = { x = 455 y = 245 } size = { width = 50 height = 25 } }
+      containerWindowType = { name = "dynamic_visibility" position = { x = 455 y = 245 } size = { width = 50 height = 25 } }
       buttonType = { name = "dynamic_enablement" position = { x = 515 y = 245 } size = { width = 100 height = 25 } }
     } }`,
     'common/scripted_guis/conditions.txt': `scripted_gui = { condition_gui = { context_type = player_context window_name = condition_window effects = { controlled_action_click = { } scoped_action_click = { } visibility_action_click = { } dynamic_enablement_click = { } } triggers = { controlled_action_click_enabled = { controls_state = 87 } scoped_action_click_enabled = { FROM = { a > 0 } } controlled_visibility_visible = { controls_state = 87 } scoped_visibility_visible = { FROM = { a > 0 } } visibility_action_visible = { controls_state = 87 } } properties = { dynamic_visibility = { visible = "[?show_dynamic]" } dynamic_enablement = { enabled = "[?allow_dynamic]" } } } }`,

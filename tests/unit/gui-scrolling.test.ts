@@ -308,7 +308,7 @@ describe('native container scrolling', () => {
       name = "viewport" position = { x = 20 y = 30 } size = { width = 100 height = 80 }
       background = { name = "panel" spriteType = "GFX_tile" }
       margin = { top = 5 bottom = 5 } verticalScrollbar = "vertical"
-      iconType = { name = "fixed_header" spriteType = "GFX_thumb" size = { width = 50 height = 4 } }
+      buttonType = { name = "fixed_header" spriteType = "GFX_thumb" size = { width = 50 height = 4 } }
       gridBoxType = { name = "rows" size = { width = 90 height = 75 } slotsize = { width = 80 height = 30 } max_slots_horizontal = 1
         containerWindowType = { name = "row" size = { width = 80 height = 30 }
           iconType = { name = "row_icon" spriteType = "GFX_thumb" position = { x = 3 y = 5 } }
