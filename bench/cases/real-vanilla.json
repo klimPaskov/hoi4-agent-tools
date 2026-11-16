@@ -210,8 +210,8 @@
       "surface": "probability",
       "corpus": "vanilla",
       "problem": 14,
-      "title": "The probability adapters are verified for the installed 1.19.4.1 build",
-      "evidence": "launcher-settings.json reports Operation Postern v1.19.4.1.99a5 (f584); the adapters are pinned to 1.19.2.0 (d245).",
+      "title": "The answer says the probability adapters are verified for the installed build",
+      "evidence": "launcher-settings.json reports Operation Postern v1.19.4.2.2da5 (0bdb), the build the adapters are pinned to; the inline answer must say so (gameBuild) without opening the artifact.",
       "tool": "hoi4.probability_inspect",
       "arguments": {
         "path": "common/national_focus/germany.txt",

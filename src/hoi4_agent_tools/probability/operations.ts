@@ -141,6 +141,9 @@ export function probabilityAnalysisData(
     analysisId: result.analysisId,
     analysisStatus: result.status,
     adapterId: result.adapter.id,
+    // Whether the installed build is the one the weighting rules were checked against; an
+    // unverified build also gets the PROBABILITY_GAME_BUILD_UNVERIFIED warning.
+    gameBuild: result.metadata.gameVersionVerification.status,
     sourceRevision: result.metadata.sourceRevision,
     sourceHash: result.metadata.sourceHash,
     scenarioHash: result.metadata.scenarioHash,

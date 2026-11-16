@@ -32,6 +32,9 @@ const analysisDataSchema = z
     analysisId: z.string().max(256),
     analysisStatus: z.enum(['complete', 'partial', 'blocked', 'cancelled', 'stale']),
     adapterId: z.string().max(256),
+    gameBuild: z
+      .enum(['workspace_verified', 'workspace_observed', 'version_unknown', 'adapter_target_only'])
+      .optional(),
     sourceRevision: sha256Schema,
     sourceHash: sha256Schema,
     scenarioHash: sha256Schema,
