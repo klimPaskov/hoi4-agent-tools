@@ -6,6 +6,7 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { probabilityAdapter } from '../../src/hoi4_agent_tools/probability/adapters.js';
+import { probabilityAnalysisData } from '../../src/hoi4_agent_tools/probability/operations.js';
 import {
   Rational,
   uniformRaceProbabilities,
@@ -246,6 +247,9 @@ describe('AI and MTTH analyzer', () => {
     expect(verifiedResult.diagnostics.map(({ code }) => code)).not.toContain(
       'PROBABILITY_GAME_BUILD_UNVERIFIED',
     );
+    // The inline answer says which it is, so an agent need not open the artifact.
+    expect(probabilityAnalysisData(verifiedResult).gameBuild).toBe('workspace_verified');
+    expect(probabilityAnalysisData(laterResult).gameBuild).toBe('workspace_observed');
   });
 
   it('evaluates focus score races and event option proportional pools independently', async () => {
