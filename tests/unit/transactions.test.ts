@@ -1170,6 +1170,47 @@ describe('transaction manager', () => {
     expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('value = before\n');
   });
 
+  it('verifies a journal again in full once its bytes change after a verified load', async () => {
+    const { mod, manager } = await setup();
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('planned bytes\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    // Two loads of unchanged bytes agree, and a caller changing what it loaded does not reach
+    // the next load.
+    const first = await manager.status('test', plan.transactionId);
+    (first.files[0] as { relativePath: string }).relativePath = 'common/changed-by-caller.txt';
+    const second = await manager.status('test', plan.transactionId);
+    expect(second.files[0]?.relativePath).toBe('common/one.txt');
+    const manifestPath = path.join(
+      mod,
+      '.hoi4-agent',
+      'cache',
+      'transactions',
+      plan.transactionId,
+      'manifest.json',
+    );
+    await tamperJournal(manifestPath, (manifest) => {
+      const files = manifest.files as Array<Record<string, unknown>>;
+      files[0]!.relativePath = 'common/tampered.txt';
+    });
+    await expect(manager.status('test', plan.transactionId)).rejects.toMatchObject({
+      code: 'TRANSACTION_MANIFEST_AUTHENTICATION_FAILED',
+    });
+    await expect(manager.apply('test', plan.transactionId, plan.planHash)).rejects.toMatchObject({
+      code: 'TRANSACTION_MANIFEST_AUTHENTICATION_FAILED',
+    });
+    expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('value = before\n');
+  });
+
   it('recomputes the plan hash and rejects a changed persisted file set', async () => {
     const { mod, manager } = await setup();
     const plan = await manager.plan({

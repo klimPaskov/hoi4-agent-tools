@@ -410,8 +410,15 @@ export function transactionRootFingerprint(workspace: ResolvedWorkspace): string
   return resolvedWorkspaceIdentity(workspace);
 }
 
+/** Verified journal manifests kept per manager: the journal retention limit, with room to spare. */
+const VERIFIED_MANIFEST_CACHE_ENTRIES = 256;
+
 export class TransactionManager {
   readonly #manifestByteCache = new Map<string, TransactionManifestByteCacheEntry>();
+  readonly #verifiedManifests = new Map<
+    string,
+    { manifest: TransactionManifest; manifestHash: string }
+  >();
   #manifestByteCacheBytes = 0;
 
   public constructor(
@@ -2197,6 +2204,77 @@ export class TransactionManager {
       throw new ServiceError('TRANSACTION_NOT_FOUND', 'Transaction was not found');
     }
     signal?.throwIfAborted();
+    // A journal whose exact bytes this manager already verified, under the same workspace roots,
+    // is not parsed, schema-checked and authenticated again: the prune at the start of every
+    // rewrite loads each retained journal, so a session's rewrites cost more and more. Any change
+    // to the bytes misses the cache and is verified in full; the head check below always runs.
+    const verifiedKey = [
+      workspace.workspaceIdentity,
+      transactionId,
+      rootBinding,
+      rootBinding === 'required' ? this.rootFingerprint(workspace) : '',
+      sha256Bytes(manifestText),
+    ].join('\0');
+    let manifest: TransactionManifest;
+    let manifestHash: string;
+    const verified = this.#verifiedManifests.get(verifiedKey);
+    if (verified !== undefined) {
+      this.#verifiedManifests.delete(verifiedKey);
+      this.#verifiedManifests.set(verifiedKey, verified);
+      // Callers change the manifest they load, so each gets its own copy.
+      manifest = structuredClone(verified.manifest);
+      manifestHash = verified.manifestHash;
+    } else {
+      ({ manifest, manifestHash } = this.verifyManifestText(
+        manifestText,
+        workspace,
+        transactionId,
+        rootBinding,
+        signal,
+      ));
+      this.#verifiedManifests.set(verifiedKey, {
+        manifest: structuredClone(manifest),
+        manifestHash,
+      });
+      while (this.#verifiedManifests.size > VERIFIED_MANIFEST_CACHE_ENTRIES) {
+        const oldest = this.#verifiedManifests.keys().next().value;
+        if (oldest === undefined) break;
+        this.#verifiedManifests.delete(oldest);
+      }
+    }
+    if (headMode !== 'none') {
+      await this.verifyManifestHead(workspace, manifest, headMode, signal, manifestHash);
+    }
+    signal?.throwIfAborted();
+    if (cacheBytes) {
+      const canonicalBytes = Buffer.from(`${canonicalJson(manifest)}\n`, 'utf8');
+      if (canonicalBytes.length > TRANSACTION_MAX_MANIFEST_BYTES) {
+        throw new ServiceError(
+          'TRANSACTION_MANIFEST_LIMIT',
+          'Transaction manifest exceeds its fixed byte limit',
+        );
+      }
+      this.storeManifestByteCache(this.manifestCacheKey(workspace, transactionId), {
+        identity: manifestIdentity,
+        bytes: canonicalBytes,
+        principal: manifest.principal ?? null,
+        revision: manifest.revision,
+        authenticationTag: manifest.authenticationTag,
+        manifestHash,
+      });
+    }
+    return manifest;
+  }
+
+  /** Parse, schema-check, authenticate and integrity-check one journal manifest's text. */
+  private verifyManifestText(
+    manifestText: string,
+    workspace: ResolvedWorkspace,
+    transactionId: string,
+    rootBinding: 'required' | 'ignored',
+    signal: AbortSignal | undefined,
+  ): { manifest: TransactionManifest; manifestHash: string } {
+    signal?.throwIfAborted();
     let parsed: unknown;
     try {
       parsed = JSON.parse(manifestText) as unknown;
@@ -2290,28 +2368,7 @@ export class TransactionManager {
     signal?.throwIfAborted();
     const manifestHash = hashCanonical(manifest);
     signal?.throwIfAborted();
-    if (headMode !== 'none') {
-      await this.verifyManifestHead(workspace, manifest, headMode, signal, manifestHash);
-    }
-    signal?.throwIfAborted();
-    if (cacheBytes) {
-      const canonicalBytes = Buffer.from(`${canonicalJson(manifest)}\n`, 'utf8');
-      if (canonicalBytes.length > TRANSACTION_MAX_MANIFEST_BYTES) {
-        throw new ServiceError(
-          'TRANSACTION_MANIFEST_LIMIT',
-          'Transaction manifest exceeds its fixed byte limit',
-        );
-      }
-      this.storeManifestByteCache(this.manifestCacheKey(workspace, transactionId), {
-        identity: manifestIdentity,
-        bytes: canonicalBytes,
-        principal: manifest.principal ?? null,
-        revision: manifest.revision,
-        authenticationTag: manifest.authenticationTag,
-        manifestHash,
-      });
-    }
-    return manifest;
+    return { manifest, manifestHash };
   }
 
   /**
