@@ -204,7 +204,27 @@ async function exists(value: string, signal?: AbortSignal): Promise<boolean> {
   }
 }
 
+/** How often {@link canonicalPath} walks again after a path vanished during the walk. */
+const CANONICAL_PATH_ATTEMPTS = 4;
+
+/**
+ * The real path of `input`, or of its nearest existing ancestor followed by the missing segments.
+ * A path can vanish between the existence check and `realpath` (another rewrite releasing the
+ * workspace lock directory); the walk then starts again and resolves it through its ancestor. A
+ * path that keeps failing (a dangling link) still throws `ENOENT`.
+ */
 export async function canonicalPath(input: string, signal?: AbortSignal): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await canonicalPathOnce(input, signal);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || attempt >= CANONICAL_PATH_ATTEMPTS)
+        throw error;
+    }
+  }
+}
+
+async function canonicalPathOnce(input: string, signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted();
   const absolute = path.resolve(input);
   if (await exists(absolute, signal)) {
