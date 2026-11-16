@@ -9,8 +9,8 @@ import { GUI_POINT_BLOCK_KEYS, guiElementKeyUses, type GuiElementKeyUse } from '
  * blocks (issue 220). The game refuses a key it does not parse there ("Unexpected token: size"
  * for `size` on an `iconType`, `alwaystransparent` on a `containerWindowType`,
  * `quadTextureSprite` inside a `scrollbarType`'s `slider`), refuses `width` and `height` where it
- * reads `x` and `y` ("Malformed token: height"), and loads the element without them. A
- * `scrollbarType` written with an `extendedScrollbarType` body crashed the game on load.
+ * reads `x` and `y` ("Malformed token: height"), and loads the element without them, so the
+ * window lays out differently in game than the source asks.
  *
  * The allowed keys are evidence, not a guess: the keys the installed game's own `.gui` files
  * write at the same place (element type and enclosing blocks), from the game and DLC roots, plus
