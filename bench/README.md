@@ -47,26 +47,17 @@ The one-time head-to-head with cpntodd/HOI4-MCP (decision M-7) has its own drive
 ## Gates
 
 - **CI:** `tests/integration/bench-synthetic.test.ts` runs the synthetic suite on Linux, Windows and macOS. It fails when a case that passed in `baselines/synthetic.json` fails, an inline answer moves into an artifact, or a sweep finds more false positives. It also fails when a case newly passes but the baseline was not updated, so a fix cannot silently regress later. Latency is not gated in CI, because CI machines vary.
-- **Nightly:** `scripts/bench/nightly.sh` runs the real suite on a dedicated worktree at `origin/main`. It accepts the run as the new baseline only when nothing regressed. It also flags a warm p95 above 1.5 times the baseline and at least 50 ms slower. When a corpus changed since the baseline, for example after a Workshop update, a game patch or new mod commits, cases that moved on it are listed for a look instead of failing the run.
+- **On demand:** the real suite runs by hand, not on a schedule (maintainer decision D-79): before every release and on pull requests that touch speed, in a quiet slot on the benchmark worktree. `scripts/bench/nightly.sh` moves that worktree to `origin/main`, runs the suite and accepts the run as the new baseline only when nothing regressed. It also flags a warm p95 above 1.5 times the baseline and at least 50 ms slower. When a corpus changed since the baseline, for example after a Workshop update, a game patch or new mod commits, cases that moved on it are listed for a look instead of failing the run. While it runs it logs the machine's CPU, free memory and busiest processes every two minutes (Windows), so a slow run shows what else was busy.
 - **Cold disks:** a case timed after other work pushed the corpus out of memory measures the disk, not the tool. Before timing, the real suite therefore reads once every file the content hash covers, then `map/`, `gfx/flags/` and `gfx/interface/`, up to 2 GB per corpus. It skips the rest of `gfx`, `sound` and `dlc`, which come to several gigabytes for vanilla alone. `--no-warm-up` skips this pass. The report header gives the free memory at the start and what the warm-up read. A `cold` case times the first call after the server starts: after the warm-up, that is the cost of a user's first call on cached files. Process start makes it noisier, so it counts as slower only above twice the baseline and at least 500 ms more; a smaller slowdown is listed under cold starts without failing the run. A case still slower than its baseline is rerun once on a fresh server, and it counts as slower only when the rerun is slow too. A case slow on the first pass alone is listed with both numbers, and the baseline keeps the faster pass. `--no-rerun` skips the rerun.
 
-Register the nightly run once per machine. It starts at 03:17, off the hour when other scheduled jobs start. The benchmark worktree builds its own `hoi4-engine` in its `engine/target` unless `CARGO_TARGET_DIR` is set, so it never replaces a build another worktree is testing. On Windows (Task Scheduler), from Git Bash:
+Run it from a quiet machine, never as a scheduled task: on 2026-11-16 and 2026-11-17 the Task Scheduler runs (03:17, task priority 7) were 3 to 30 times slower on the same cases than the same command run by hand on the same machine, even with nothing else busy, so their regressions were not real. Set up the worktree once and run it:
 
 ```sh
 git worktree add --detach ../hoi4-agent-tools-wt-bench origin/main
-MSYS_NO_PATHCONV=1 schtasks /Create /TN "hoi4-agent-tools nightly benchmark" /SC DAILY /ST 03:17 /TR "\"C:\Program Files\Git\bin\sh.exe\" -lc 'C:/Users/<you>/Documents/Projects/hoi4-agent-tools-wt-bench/scripts/bench/nightly.sh >> C:/Users/<you>/AppData/Local/hoi4-agent-tools/bench/nightly.log 2>&1'"
+../hoi4-agent-tools-wt-bench/scripts/bench/nightly.sh >> "$LOCALAPPDATA/hoi4-agent-tools/bench/nightly.log" 2>&1
 ```
 
-Check it with `schtasks /Query /TN "hoi4-agent-tools nightly benchmark" /V /FO LIST`, start it once by hand with `schtasks /Run /TN "hoi4-agent-tools nightly benchmark"`, and remove it with:
-
-```sh
-MSYS_NO_PATHCONV=1 schtasks /Delete /TN "hoi4-agent-tools nightly benchmark" /F
-git worktree remove ../hoi4-agent-tools-wt-bench
-```
-
-The benchmark data folder stays until you delete it.
-
-On macOS, add a `launchd` agent in `~/Library/LaunchAgents` whose `ProgramArguments` are `/bin/sh` and the path to `nightly.sh`, with `StartCalendarInterval` set to hour 3 and minute 17. Remove it with `launchctl bootout gui/$(id -u) <plist>` and by deleting the plist.
+The benchmark worktree builds its own `hoi4-engine` in its `engine/target` unless `CARGO_TARGET_DIR` is set, so it never replaces a build another worktree is testing. Remove it with `git worktree remove ../hoi4-agent-tools-wt-bench`; the benchmark data folder stays until you delete it.
 
 ## Writing a case
 
