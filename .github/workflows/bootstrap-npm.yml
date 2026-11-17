@@ -48,7 +48,11 @@ jobs:
           test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
           test "$REMOTE_COMMIT" = "$GITHUB_SHA"
       - run: npm ci --ignore-scripts
-      - run: npm audit --audit-level=high
+      # What users install: strict, no exceptions.
+      - run: npm audit --omit=dev --audit-level=high
+      # Everything, development tools included: strict except reviewed exceptions in
+      # scripts/audit-exceptions.json, each for one package with a reason and a review date.
+      - run: npm run audit:gate
       - name: Cryptographically verify dependency registry signatures and provenance
         run: npm audit signatures --ignore-scripts
       - run: npm run check
