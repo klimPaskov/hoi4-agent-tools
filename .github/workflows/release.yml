@@ -47,7 +47,11 @@ jobs:
           test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
           test "$(npm --version)" = "$RELEASE_NPM_VERSION"
       - run: npm ci --ignore-scripts
-      - run: npm audit --audit-level=high
+      # What users install: strict, no exceptions.
+      - run: npm audit --omit=dev --audit-level=high
+      # Everything, development tools included: strict except reviewed exceptions in
+      # scripts/audit-exceptions.json, each for one package with a reason and a review date.
+      - run: npm run audit:gate
       - name: Cryptographically verify dependency registry signatures and provenance
         run: npm audit signatures --ignore-scripts
       - name: Verify tag, main ancestry, remote peel, and canonical release identity

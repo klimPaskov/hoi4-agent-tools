@@ -70,7 +70,8 @@ The local cut-over installs a packed 4.0.0 build and pins its tarball integrity 
    npm run check
    npm run test:coverage
    npm run inspector
-   npm audit --omit=dev
+   npm audit --omit=dev --audit-level=high
+   npm run audit:gate
    npm audit signatures
    ```
 
