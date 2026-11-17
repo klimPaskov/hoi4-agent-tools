@@ -1,0 +1,11 @@
+{
+  "exceptions": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "Reaches only development tools (vitest, vite through @modelcontextprotocol/inspector, typescript-eslint); the published package does not depend on picomatch. The advisory lists every version up to 4.0.7, the newest published, and no fixed version.",
+      "approved": "2026-11-17",
+      "reviewBy": "2026-12-01"
+    }
+  ]
+}

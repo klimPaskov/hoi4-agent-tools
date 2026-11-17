@@ -93,6 +93,7 @@
     "test:coverage": "vitest run --coverage",
     "benchmark": "node --expose-gc --import tsx scripts/benchmark.ts",
     "benchmark:cold": "tsx scripts/benchmark-cold-paths.ts",
+    "audit:gate": "tsx scripts/audit-gate.ts",
     "bench": "tsx scripts/bench/cli.ts",
     "docs:tools": "tsx scripts/generate-tool-docs.ts",
     "docs:examples": "tsx scripts/generate-readme-examples.ts",

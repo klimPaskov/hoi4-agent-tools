@@ -37,7 +37,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # What users install: strict, no exceptions.
+      - run: npm audit --omit=dev --audit-level=high
+      # Everything, development tools included: strict except reviewed exceptions in
+      # scripts/audit-exceptions.json, each for one package with a reason and a review date.
+      - run: npm run audit:gate
       # Tools on the shared Rust engine (hoi4.mod_index and the inspect tools) need a
       # hoi4-engine binary; tests/helpers/engine-binary.ts finds this build, and the real-engine
       # tests that skip without one run too. A release build keeps those tests fast.
