@@ -113,7 +113,7 @@ describe('probability arithmetic and adapters', () => {
       true,
     );
     expect(probabilityAdapter('event_mean_time_to_happen')).toMatchObject({
-      supportedGameVersions: ['Operation Postern 1.19.4.2 (0bdb)'],
+      supportedGameVersions: ['Operation Postern 1.19.5.0 (c184)'],
     });
     expect(
       probabilityAdapter('event_mean_time_to_happen').candidateDiscoveryRules.length,
@@ -196,7 +196,7 @@ describe('AI and MTTH analyzer', () => {
   });
 
   it('records the installed game identity and analyzes any game version', async () => {
-    const verified = await fixture({ rawVersion: '1.19.4.2', checksum: '0bdb' });
+    const verified = await fixture({ rawVersion: '1.19.5.0', checksum: 'c184' });
     const verifiedResult = await new ProbabilityAnalyzer(verified.engine).evaluate({
       workspaceId: verified.workspaceId,
       adapter: 'direct_random',
@@ -211,8 +211,8 @@ describe('AI and MTTH analyzer', () => {
     });
     expect(verifiedResult.metadata.gameVersionVerification).toMatchObject({
       status: 'workspace_verified',
-      observedRawVersion: '1.19.4.2',
-      observedChecksum: '0bdb',
+      observedRawVersion: '1.19.5.0',
+      observedChecksum: 'c184',
     });
     expect(verifiedResult.metadata.requestedMetrics).toEqual(['raw_value']);
 

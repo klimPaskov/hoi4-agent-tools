@@ -1,6 +1,15 @@
 # Probability adapter evidence
 
-The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.4.2 (checksum 0bdb)**. Adapter behavior is versioned as `hoi4-1.19.4.2.v1`. Results always include that adapter version and game build. When the installed build differs, results carry the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`, and the nightly game-update watcher lists the adapters under "Checked against another build" on every run until the pin moves.
+The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.5.0 (checksum c184)**. Adapter behavior is versioned as `hoi4-1.19.5.0.v1`. Results always include that adapter version and game build. When the installed build differs, results carry the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`, and the nightly game-update watcher lists the adapters under "Checked against another build" on every run until the pin moves.
+
+## Re-check for 1.19.5.0 (2026-11-17)
+
+Steam updated the installed game to 1.19.5.0 on 2026-11-17. Against the recorded 1.19.4.2 build, the update rewrote only the executable, the version files (`launcher-settings.json`, `hoi4_rev.txt`, `clausewitz_rev.txt`) and one music localisation file per language (`localisation/<language>/expansion_pass_3_music_l_<language>.yml`).
+
+- **Unchanged:** the six reviewed documentation files and every vanilla example file listed below, so each construct stays at the line given above.
+- **Installed build:** `launcher-settings.json` reads `Operation Postern v1.19.5.0.7c6c (c184)`, raw version `1.19.5.0`.
+
+No adapter rule changed, so only the version pin moved.
 
 ## Re-check for 1.19.4.2 (2026-11-08)
 
