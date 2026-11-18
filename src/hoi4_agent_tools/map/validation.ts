@@ -98,6 +98,27 @@ function definitionLocation(definition: ProvinceDefinition): SourceLocation {
   return requiredLineLocation(definition.document, definition.line);
 }
 
+/** Whether two land provinces are joined by a path of bordering land provinces. */
+function sameLandmass(
+  from: number,
+  to: number,
+  index: MapWorkspaceIndex,
+  adjacency: ReadonlyMap<number, ReadonlySet<number>>,
+): boolean {
+  const seen = new Set<number>([from]);
+  const queue = [from];
+  // An array iterator also visits the provinces pushed during the loop.
+  for (const current of queue) {
+    for (const neighbour of adjacency.get(current) ?? []) {
+      if (neighbour === to) return true;
+      if (seen.has(neighbour) || index.definitionsById.get(neighbour)?.type !== 'land') continue;
+      seen.add(neighbour);
+      queue.push(neighbour);
+    }
+  }
+  return false;
+}
+
 function addDiagnostic(
   diagnostics: Diagnostic[],
   options: MapValidationOptions,
@@ -963,11 +984,13 @@ function* validateStatesAndRegions(
       });
     }
   }
-  // A region of exactly two provinces that do not border each other crashed game 1.19.4 at load
-  // (a division by zero in a loader thread, issue 223). Game starts: two touching provinces load,
-  // three provinces none of which touches another load, a region in separate pieces with one
-  // two-province piece loads; weather positions and supply nodes do not matter. The base game
-  // has no such region.
+  // A region of exactly two land provinces that do not border each other but lie on one landmass
+  // (separated by other regions' provinces) crashed game 1.19.4 at load (a division by zero in a
+  // loader thread, issue 223). Game starts: two touching provinces load, three provinces none of
+  // which touches another load, a region in separate pieces with one two-province piece loads,
+  // and two lone provinces on different landmasses load; weather positions and supply nodes do
+  // not matter. Only the one-landmass shape is known to crash, and the exact cause is not, so
+  // this is a warning. The base game has no such region.
   const raster = index.raster;
   if (raster !== undefined)
     for (const [regionIndex, region] of index.regions.entries()) {
@@ -976,6 +999,8 @@ function* validateStatesAndRegions(
         index.definitionsById.has(province),
       );
       if (provinces.length !== 2) continue;
+      if (provinces.some((province) => index.definitionsById.get(province)?.type !== 'land'))
+        continue;
       const members = new Set(provinces);
       const touching = provinces.some((province) =>
         [...(raster.adjacency.get(province) ?? [])].some(
@@ -983,11 +1008,12 @@ function* validateStatesAndRegions(
         ),
       );
       if (touching) continue;
+      if (!sameLandmass(provinces[0]!, provinces[1]!, index, raster.adjacency)) continue;
       addDiagnostic(diagnostics, options, {
         code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
-        severity: 'error',
+        severity: 'warning',
         category: 'map',
-        message: `Strategic region ${region.id} has exactly two provinces, ${provinces[0]} and ${provinces[1]}, and they do not border each other. Game 1.19.4 crashed at load on such a region; give the region a province that joins them, or move them into the regions around them.`,
+        message: `Strategic region ${region.id} has exactly two land provinces, ${provinces[0]} and ${provinces[1]}, on one landmass with other provinces between them. Game 1.19.4 crashed at load on regions of this shape; give the region a province that joins them, or move them into the regions around them.`,
         location: regionLocation(region),
         details: {
           provinceIds: provinces.slice(0, MAP_DIAGNOSTIC_DETAIL_SAMPLE_LIMIT),

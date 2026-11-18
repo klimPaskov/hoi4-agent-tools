@@ -891,8 +891,8 @@ describe('Agent Nudger map model and operations', () => {
       expect(codes).toContain(code);
   });
 
-  it('reports a strategic region of exactly two provinces that do not touch (issue 223)', async () => {
-    // Bands left to right: 1 | 4 | 2 | 3. 1 and 2 do not touch; 1 and 4 do.
+  it('warns on a strategic region of two provinces apart on one landmass (issue 223)', async () => {
+    // Bands left to right: 1 | 4 | 2 | 3. 1 and 2 do not touch; land province 4 joins them.
     const region = (id: number, provinces: string) =>
       `strategic_region = {
 	id = ${id}
@@ -909,7 +909,7 @@ describe('Agent Nudger map model and operations', () => {
       ({ code }) => code === 'MAP_STRATEGIC_REGION_PROVINCES_APART',
     );
     expect(found).toMatchObject([
-      { severity: 'error', details: { provinceIds: [1, 2], provinceCount: 2 } },
+      { severity: 'warning', details: { provinceIds: [1, 2], provinceCount: 2 } },
     ]);
     expect(found[0]?.location?.path).toContain('1-REGION.txt');
     // Three provinces none of which touches another loaded in game, so only exactly two count.
@@ -949,6 +949,23 @@ describe('Agent Nudger map model and operations', () => {
     expect(validateMap(three.snapshot.index).diagnostics.map(({ code }) => code)).not.toContain(
       'MAP_STRATEGIC_REGION_PROVINCES_APART',
     );
+    // Two lone provinces on different landmasses loaded in game (V9): with 4 a sea, no land joins
+    // 1 and 2, so the pair is not reported.
+    const islands = await setup({
+      'map/definition.csv': [
+        '0;0;0;0;sea;false;ocean;0',
+        '1;10;0;0;land;true;plains;1',
+        '2;0;0;200;land;true;plains;1',
+        '3;0;160;220;sea;true;ocean;0',
+        '4;0;180;0;sea;false;ocean;0',
+        '',
+      ].join('\n'),
+      'map/strategicregions/1-REGION.txt': region(1, '1 2'),
+      'map/strategicregions/2-REGION.txt': region(2, '3 4'),
+    });
+    expect(validateMap(islands.snapshot.index).diagnostics.map(({ code }) => code)).not.toContain(
+      'MAP_STRATEGIC_REGION_PROVINCES_APART',
+    );
     // A pair that touches is fine, and a single-province region is never reported.
     const touching = await setup({
       'map/strategicregions/1-REGION.txt': region(1, '1 4 2'),
@@ -959,7 +976,7 @@ describe('Agent Nudger map model and operations', () => {
     );
   });
 
-  it('attributes a region left with no touching provinces to the move that made it', async () => {
+  it('warns on, but does not refuse, a move that leaves a region apart on one landmass', async () => {
     const region = (id: number, provinces: string) =>
       `strategic_region = {
 	id = ${id}
@@ -985,19 +1002,27 @@ describe('Agent Nudger map model and operations', () => {
     expect(plan.blockers).toEqual([]);
     const baseline = validateMap(snapshot.index).diagnostics;
     expect(baseline.map(({ code }) => code)).not.toContain('MAP_STRATEGIC_REGION_PROVINCES_APART');
-    const attributed = attributeMapValidationDiagnostics({
-      diagnostics: validateMap(plan.finalIndex, { baseline: snapshot.index }).diagnostics,
+    const after = validateMap(plan.finalIndex, { baseline: snapshot.index }).diagnostics;
+    // The move leaves 1 and 2 apart on one landmass: a warning in the result, not a refusal, since
+    // two lone provinces on different landmasses loaded in game (issue 223, V9).
+    expect(after).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
+        severity: 'warning',
+      }),
+    );
+    const blocking = attributeMapValidationDiagnostics({
+      diagnostics: after,
       operations: plan.operations,
       changes: plan.changes,
       baselineDiagnostics: baseline,
     });
-    expect(attributed).toContainEqual(
-      expect.objectContaining({
-        code: 'MAP_STRATEGIC_REGION_PROVINCES_APART',
-        severity: 'error',
-        operationId: 'take-the-bridge',
-      }),
-    );
+    // Attribution passes warnings through unchanged; only errors and blockers refuse a write.
+    expect(
+      blocking
+        .filter(({ code }) => code === 'MAP_STRATEGIC_REGION_PROVINCES_APART')
+        .map(({ severity }) => severity),
+    ).toEqual(['warning']);
   });
 
   it('moves state provinces with explicit policies while preserving unrelated source text', async () => {
