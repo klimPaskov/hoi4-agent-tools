@@ -131,7 +131,10 @@ jobs:
           mkdir -p "$RELEASE_ARTIFACT_DIR"
           npm pack --ignore-scripts --json \
             --pack-destination "$RELEASE_ARTIFACT_DIR" \
-            > "$RELEASE_ARTIFACT_DIR/npm-pack.json"
+            > "$RELEASE_ARTIFACT_DIR/npm-pack.raw.json"
+          # npm 12 prints an object keyed by package name; the release asset keeps the array form.
+          jq --exit-status 'if type == "array" then . elif type == "object" then [.[]] else error("unexpected npm pack output") end' "$RELEASE_ARTIFACT_DIR/npm-pack.raw.json" > "$RELEASE_ARTIFACT_DIR/npm-pack.json"
+          rm "$RELEASE_ARTIFACT_DIR/npm-pack.raw.json"
           npm run release:artifact:verify
           TARBALL="$(jq --exit-status --raw-output 'if length == 1 then .[0].filename else error("expected one tarball") end' "$RELEASE_ARTIFACT_DIR/npm-pack.json")"
           test "$(basename "$TARBALL")" = "$TARBALL"

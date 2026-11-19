@@ -1,0 +1,1 @@
+- The package checks, the install test and the release workflows now read `npm pack --json` from npm 12, which prints an object keyed by package name instead of an array. The published `npm-pack.json` release asset keeps the array form. Nothing changes in the published package.

@@ -12,6 +12,7 @@ import {
   type PackedFile,
 } from '../../scripts/distribution/engine-bundle.js';
 import { engineBundleManifestSchema } from '../../src/hoi4_agent_tools/core/engine-client.js';
+import { npmPackResults } from '../../scripts/distribution/npm-pack-json.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -151,7 +152,7 @@ describe('engine bundle', () => {
           code === 0 ? resolve(stdout) : reject(new Error(`npm pack exited ${code}`)),
         );
       });
-      const files = (JSON.parse(output) as Array<{ files: PackedFile[] }>)[0]?.files ?? [];
+      const files = (npmPackResults(output) as Array<{ files: PackedFile[] }>)[0]?.files ?? [];
       const packed = files.find((file) => file.path === 'engine/bin/linux-x64/hoi4-engine');
       expect(packed).toBeDefined();
       expect((packed?.mode ?? 0) & 0o111).toBe(0o111);
