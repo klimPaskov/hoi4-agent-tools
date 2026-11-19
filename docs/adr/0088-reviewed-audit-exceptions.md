@@ -27,3 +27,4 @@ Adding an entry needs the maintainer's approval, recorded in the pull request.
 - A development-only advisory with no fix no longer blocks pull requests or releases. The production audit stays as strict as before.
 - No entry can outlive its reason: a published fix, a review date, or the advisory going away each fail the gate.
 - The first entry is GHSA-fc5q-39xc-vjpf in picomatch, to be reviewed by 2026-12-01.
+- GitHub withdrew that advisory on 2026-11-18. The gate then failed on the stale entry, as designed, and the entry was removed, leaving the list empty.
