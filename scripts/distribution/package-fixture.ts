@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { access, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { npmPackResults } from './npm-pack-json.js';
 
 export const PACKAGE_BIN_TARGETS = {
   'hoi4-agent-tools': './dist/bin/stdio.js',
@@ -250,8 +251,8 @@ export async function packagedWorkspaceLeaks(
 }
 
 function parsePackOutput(output: string): NpmPackResult {
-  const parsed = JSON.parse(output) as unknown;
-  if (!Array.isArray(parsed) || parsed.length !== 1) {
+  const parsed = npmPackResults(output);
+  if (parsed.length !== 1) {
     throw new Error('npm pack did not return exactly one package result');
   }
   const [pack] = parsed as NpmPackResult[];

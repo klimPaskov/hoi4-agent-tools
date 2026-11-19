@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
+import { npmPackResults } from './distribution/npm-pack-json.js';
 import { REQUIRED_PACKAGE_FILES } from './distribution/package-fixture.js';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -26,7 +27,11 @@ const output = await new Promise<string>((resolve, reject) => {
     else reject(new Error(`npm pack failed (${code}): ${stderr}`));
   });
 });
-const packed = JSON.parse(output) as Array<{ files: Array<{ path: string }>; filename: string }>;
+const packed = npmPackResults(output) as Array<{
+  files: Array<{ path: string }>;
+  filename: string;
+}>;
+if (packed.length !== 1) throw new Error('npm pack did not return exactly one package result');
 const paths = new Set(
   packed[0]?.files.map(({ path: filePath }) => filePath.replaceAll('\\', '/')) ?? [],
 );

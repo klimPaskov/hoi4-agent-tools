@@ -9,6 +9,7 @@ import {
   PACKAGE_BIN_TARGETS,
   REQUIRED_PACKAGE_FILES,
 } from '../../scripts/distribution/package-fixture.js';
+import { npmPackResults } from '../../scripts/distribution/npm-pack-json.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -414,7 +415,7 @@ describe('offline package and Registry metadata', () => {
         env: npmEnvironment,
       });
       expect(pack.status, pack.stderr).toBe(0);
-      const result = JSON.parse(pack.stdout) as Array<{ filename?: string }>;
+      const result = npmPackResults(pack.stdout) as Array<{ filename?: string }>;
       const filename = result[0]?.filename;
       expect(filename).toBeTruthy();
       if (filename === undefined) throw new Error('npm pack omitted the tarball filename');
