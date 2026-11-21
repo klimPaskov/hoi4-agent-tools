@@ -178,9 +178,7 @@ for (const id of values.corpus) {
   const check = (label: string, result: Awaited<ReturnType<typeof server.call>>) => {
     const status = result.structured.status;
     if (result.isError || status !== 'ok')
-      failures.push(
-        `${label}: ${status} ${result.structured.code} ${result.text.slice(0, 300)}`,
-      );
+      failures.push(`${label}: ${status} ${result.structured.code} ${result.text.slice(0, 300)}`);
   };
   try {
     const cold = await server.call('hoi4.focus_inspect', 'cold', inspectArgs);
