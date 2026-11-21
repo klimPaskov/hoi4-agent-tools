@@ -1,1 +1,0 @@
-- `hoi4.script_validate` reports a parser warning as a warning, not an error, so a quoted string longer than 255 characters or a file whose encoding does not round-trip no longer marks valid script invalid. The long-string warning now says no game limit is recorded for it.
