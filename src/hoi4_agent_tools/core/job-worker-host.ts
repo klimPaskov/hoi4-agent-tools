@@ -27,6 +27,12 @@ const WORKER_EXIT_MESSAGE =
 const STDERR_TAIL_BYTES = 16_384;
 /** Standard-error logs of workers that exited unexpectedly kept for diagnosis. */
 const RETAINED_STDERR_LOGS = 10;
+/**
+ * Longest wait for the worker that holds a workspace's newest index while it finishes a rewrite's
+ * after-edit check (decision D-98). That check rebuilds the same index a second worker would
+ * rebuild, so waiting for it is the cheaper path; past this bound the job takes another worker.
+ */
+export const WORKSPACE_WORKER_WAIT_MS = 15_000;
 // Native and IPC codes are fixed vocabulary. Error messages can contain paths or source
 // text, so only an allowlisted code and the fixed coordination stage are reported.
 const nativeFailureCodes = new Set([
@@ -109,6 +115,23 @@ function readTail(file: string): string {
 }
 
 /** Keep only the newest few worker logs; the rest are older diagnostics. */
+/** A started worker whose process and channel are still up. */
+function usableWorker(child: ChildProcess): boolean {
+  return (
+    child.connected &&
+    child.exitCode === null &&
+    child.signalCode === null &&
+    child.pid !== undefined
+  );
+}
+
+/** Let a worker taken from the idle list keep the event loop alive while it runs a job. */
+function refWorker(child: ChildProcess): ChildProcess {
+  child.ref();
+  child.channel?.ref();
+  return child;
+}
+
 function pruneWorkerLogs(logRoot: string): void {
   try {
     const logs = readdirSync(logRoot)
@@ -207,6 +230,10 @@ export class JobWorkerHost {
         'This domain has not yet been registered for worker execution',
       );
     const signal = new AbortController().signal;
+    // A rewrite that answered before its after-edit check is still building the workspace's new
+    // index in its worker; the next call on that workspace waits for it and reads that index.
+    if (this.engine.resolver.config().jobWorkerIdleSeconds > 0)
+      await this.awaitWorkspaceWorker(workspaceId, WORKSPACE_WORKER_WAIT_MS);
     const recovered = new Set<string>();
     const progress: { stage: WorkerStage } = { stage: 'admission' };
     let preDispatchRecoveries = 0;
@@ -331,7 +358,7 @@ export class JobWorkerHost {
     };
     const warm = configuration.jobWorkerIdleSeconds > 0;
     progress.stage = 'startup';
-    const reused = warm ? this.takeIdleWorker() : undefined;
+    const reused = warm ? this.takeIdleWorker(workspaceId) : undefined;
     const child = reused ?? (await this.startWorker(configuration.jobWorkerMaxHeapMiB));
     try {
       progress.stage = 'handoff';
@@ -348,6 +375,8 @@ export class JobWorkerHost {
     }
     progress.stage = 'dispatch';
     await this.dispatch(child, message, reused !== undefined);
+    // After this job the worker holds the workspace's newest scan and index.
+    if (warm) this.workspaceWorkers.set(workspaceId, { child, mutation: current.request.mutation });
     // Without warm reuse the persistent job, not the launcher's lifetime, owns execution once
     // the child confirmed receipt, so close the channel.
     if (!warm && child.connected) child.disconnect();
@@ -432,21 +461,64 @@ export class JobWorkerHost {
     for (const child of this.idleWorkers.splice(0)) if (child.connected) child.disconnect();
   }
 
-  private takeIdleWorker(): ChildProcess | undefined {
+  /** The worker that ran each workspace's last job, and whether that job was a rewrite. */
+  private readonly workspaceWorkers = new Map<string, { child: ChildProcess; mutation: boolean }>();
+  /** Jobs waiting for a busy worker to finish, by worker. */
+  private readonly idleWaiters = new Map<ChildProcess, Set<(idle: boolean) => void>>();
+
+  /**
+   * An idle warm worker for a job on `workspaceId`: the one that ran the workspace's last job, which
+   * holds its newest scan and index, else the most recently used one. A reused index is still
+   * checked against the files: the worker scans again and rebuilds whatever changed (D-98).
+   */
+  private takeIdleWorker(workspaceId?: string): ChildProcess | undefined {
+    const preferred =
+      workspaceId === undefined ? undefined : this.workspaceWorkers.get(workspaceId)?.child;
+    const position = preferred === undefined ? -1 : this.idleWorkers.indexOf(preferred);
+    if (position >= 0) {
+      this.idleWorkers.splice(position, 1);
+      if (usableWorker(preferred!)) return refWorker(preferred!);
+    }
     for (;;) {
       const child = this.idleWorkers.pop();
       if (child === undefined) return undefined;
-      if (
-        child.connected &&
-        child.exitCode === null &&
-        child.signalCode === null &&
-        child.pid !== undefined
-      ) {
-        child.ref();
-        child.channel?.ref();
-        return child;
-      }
+      if (usableWorker(child)) return refWorker(child);
     }
+  }
+
+  /**
+   * Wait, at most `limitMs`, while the worker that last ran a rewrite on `workspaceId` is still busy
+   * with it, typically the after-edit check of a rewrite that answered early. Returns whether that
+   * worker is idle now. A read that is still running is not waited for: it may run for minutes.
+   */
+  private async awaitWorkspaceWorker(workspaceId: string, limitMs: number): Promise<boolean> {
+    const newest = this.workspaceWorkers.get(workspaceId);
+    if (newest === undefined || !usableWorker(newest.child)) return false;
+    if (this.idleWorkers.includes(newest.child)) return true;
+    if (!newest.mutation) return false;
+    const { child } = newest;
+    return new Promise<boolean>((resolve) => {
+      const waiters = this.idleWaiters.get(child) ?? new Set<(idle: boolean) => void>();
+      this.idleWaiters.set(child, waiters);
+      const timer = setTimeout(() => finish(false), limitMs);
+      const onExit = (): void => finish(false);
+      function finish(idle: boolean): void {
+        clearTimeout(timer);
+        waiters.delete(finish);
+        child.off('exit', onExit);
+        resolve(idle);
+      }
+      waiters.add(finish);
+      child.once('exit', onExit);
+    });
+  }
+
+  /** Tell the jobs waiting for `child` that it finished its job, kept warm or not. */
+  private notifyIdleWaiters(child: ChildProcess, idle: boolean): void {
+    const waiters = this.idleWaiters.get(child);
+    if (waiters === undefined) return;
+    this.idleWaiters.delete(child);
+    for (const finish of [...waiters]) finish(idle);
   }
 
   /** Start a fixed-entry worker and wait for its readiness handshake. */
@@ -606,7 +678,17 @@ export class JobWorkerHost {
    * and keep it for the next job. A worker that does not report idle is left to exit.
    */
   private async keepWarm(child: ChildProcess, lease: SharedCapacityLease): Promise<void> {
-    if (!child.connected || child.exitCode !== null || child.signalCode !== null) return;
+    let idle = false;
+    try {
+      idle = await this.parkWorker(child, lease);
+    } finally {
+      this.notifyIdleWaiters(child, idle);
+    }
+  }
+
+  /** Put a worker that finished its job into the idle list; returns whether it is there. */
+  private async parkWorker(child: ChildProcess, lease: SharedCapacityLease): Promise<boolean> {
+    if (!child.connected || child.exitCode !== null || child.signalCode !== null) return false;
     const idle = await new Promise<boolean>((resolve) => {
       if (this.reportedIdle.has(child)) {
         resolve(true);
@@ -631,12 +713,13 @@ export class JobWorkerHost {
     const connected = (): boolean => child.connected;
     if (!idle || !connected()) {
       if (connected()) child.disconnect();
-      return;
+      return false;
     }
     await lease.reclaimFromProcess();
     // An idle worker must not keep this server's event loop alive.
     child.unref();
     child.channel?.unref();
     this.idleWorkers.push(child);
+    return true;
   }
 }

@@ -19,8 +19,8 @@ import {
   layoutFocusTreeAsync,
   lintContinuousFocusPalette,
   lintFocusTree,
-  type FocusReferenceCatalog,
 } from '../focus/index.js';
+import { referenceCatalog } from '../focus/tool-support.js';
 import { ScriptedGuiStudio } from '../gui/index.js';
 import { AgentNudger, attributeMapValidationDiagnostics } from '../map/index.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -28,25 +28,6 @@ import { PACKAGE_VERSION } from '../version.js';
 function sourcePathComparisonKey(value: string): string {
   const normalized = value.replaceAll('\\', '/');
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
-}
-
-function focusReferences(
-  engineSnapshot: Awaited<ReturnType<CoreEngine['scan']>>,
-): FocusReferenceCatalog {
-  const active = (kind: Parameters<typeof engineSnapshot.index.findAll>[0]): string[] =>
-    engineSnapshot.index
-      .findAll(kind)
-      .filter(({ overridden }) => !overridden)
-      .map(({ id }) => id);
-  return {
-    decision: active('decision'),
-    decision_category: active('decision_category'),
-    event: active('event'),
-    idea: active('idea'),
-    leader: active('leader'),
-    formable: active('formable'),
-    helper: active('scripted_effect'),
-  };
 }
 
 export async function postValidateTransaction(
@@ -90,7 +71,8 @@ export async function postValidateTransaction(
   const checks: { id: string; passed: boolean; message: string }[] = [];
 
   if (transaction.operationKind === 'focus-plan-changes') {
-    const catalog = focusReferences(snapshot);
+    // The catalog the inspect after this rewrite reads too, so it is built once per snapshot.
+    const catalog = referenceCatalog(snapshot);
     for (const file of snapshot.files.filter(
       ({ shadowedBy, relativePath }) =>
         shadowedBy === undefined &&
