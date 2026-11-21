@@ -284,7 +284,7 @@ pub fn resolve(roots: &[Root], root_kinds: Option<&[String]>, reserved: &[PathBu
     let mut order: Vec<usize> = (0..roots.len())
         .filter(|&index| {
             let root = &roots[index];
-            root_kinds.is_none_or(|kinds| kinds.iter().any(|kind| *kind == root.kind)) && (access == Access::Read || root.writable)
+            root_kinds.is_none_or(|kinds| kinds.contains(&root.kind)) && (access == Access::Read || root.writable)
         })
         .collect();
     // A stable sort, highest load order first, as the TypeScript `sort` is.
