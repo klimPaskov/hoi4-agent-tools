@@ -33,6 +33,7 @@ pub mod symbol_index;
 pub mod system;
 pub mod vocab;
 pub mod workspace;
+pub mod workspace_paths;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

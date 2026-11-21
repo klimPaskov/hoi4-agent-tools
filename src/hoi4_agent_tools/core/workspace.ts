@@ -7,6 +7,8 @@ import {
   type WorkspaceRegistration,
 } from './configuration.js';
 import { compareCodeUnits, hashCanonical, sha256Bytes } from './canonical.js';
+import { z } from 'zod/v4';
+import { sharedResidentEngine } from './resident-engine.js';
 import { ServiceError } from './result.js';
 import { ServerState } from './server-state.js';
 import { parseClausewitz } from './source/parser.js';
@@ -396,41 +398,102 @@ export async function containedGeneratedPath(root: string, ...segments: string[]
   return candidate;
 }
 
-function assertRelative(relativePath: string): void {
-  if (relativePath.length === 0)
-    throw new ServiceError('PATH_EMPTY', 'Workspace-relative path cannot be empty');
-  if (relativePath.includes('\0')) throw new ServiceError('PATH_NUL', 'Path contains a NUL byte');
-  if (path.isAbsolute(relativePath)) {
-    throw new ServiceError('PATH_ABSOLUTE_REJECTED', 'Only workspace-relative paths are accepted');
-  }
-  const segments = relativePath.replaceAll('\\', '/').split('/');
-  if (segments.some((segment) => segment === '..')) {
-    throw new ServiceError('PATH_TRAVERSAL', 'Parent path segments are not allowed', {
-      relativePath,
-    });
-  }
-  if (segments.some((segment) => segment.includes(':'))) {
+/** The refusals that name the offending relative path in their details. */
+const PATH_REFUSALS_WITH_PATH = new Set([
+  'PATH_TRAVERSAL',
+  'PATH_ALTERNATE_STREAM',
+  'PATH_WINDOWS_DEVICE',
+]);
+
+const enginePathAnswerSchema = z.union([
+  z
+    .object({
+      resolved: z
+        .object({ path: z.string().min(1), root: z.number().int().nonnegative() })
+        .strict()
+        .nullable(),
+    })
+    .strict(),
+  z
+    .object({ refusal: z.object({ code: z.string().min(1), message: z.string() }).strict() })
+    .strict(),
+]);
+
+type EnginePathAnswer =
+  { path: string; root: number } | { refusal: { code: string; message: string } } | undefined;
+
+/**
+ * Resolve a workspace-relative path in `roots` with the engine's `paths.resolve` (ADR 0089): its
+ * refusal, its real path and the index of the root it resolved in, or `undefined` when no root
+ * holds it. A missing engine is `ENGINE_UNAVAILABLE`; a file system failure is rethrown with its
+ * error code, as the TypeScript walk threw it.
+ */
+async function engineResolvePath(request: {
+  relativePath: string;
+  access: RootAccess;
+  roots: readonly Pick<ResolvedRoot, 'path' | 'kind' | 'loadOrder' | 'writable'>[];
+  rootKinds?: RootKind[];
+  reserved?: string[];
+  inRoot?: boolean;
+}): Promise<EnginePathAnswer> {
+  const outcome = await sharedResidentEngine().request('paths.resolve', {
+    relativePath: request.relativePath,
+    access: request.access,
+    roots: request.roots.map(({ path: rootPath, kind, loadOrder, writable }) => ({
+      path: rootPath,
+      kind,
+      loadOrder,
+      writable,
+    })),
+    ...(request.rootKinds === undefined ? {} : { rootKinds: request.rootKinds }),
+    ...(request.reserved === undefined ? {} : { reserved: request.reserved }),
+    ...(request.inRoot === true ? { inRoot: true } : {}),
+  });
+  if (!outcome.ok) {
+    if (outcome.kind === 'error' && outcome.code === 'io_error')
+      throw Object.assign(new Error(outcome.message), {
+        code: typeof outcome.details.errno === 'string' ? outcome.details.errno : 'EIO',
+      });
     throw new ServiceError(
-      'PATH_ALTERNATE_STREAM',
-      'Colon characters and alternate data streams are not allowed',
-      {
-        relativePath,
-      },
+      'ENGINE_UNAVAILABLE',
+      outcome.message,
+      outcome.kind === 'unavailable' ? { reason: outcome.reason } : { code: outcome.code },
     );
   }
+  const parsed = enginePathAnswerSchema.safeParse(outcome.response.result);
+  if (!parsed.success)
+    throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine paths.resolve answered out of shape');
+  const answer = parsed.data;
+  if ('refusal' in answer) return { refusal: answer.refusal };
+  if (answer.resolved === null) return undefined;
+  if (answer.resolved.root >= request.roots.length)
+    throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine paths.resolve named an unknown root');
+  return answer.resolved;
+}
+
+function pathRefusal(
+  refusal: { code: string; message: string },
+  relativePath: string,
+): ServiceError {
+  return new ServiceError(
+    refusal.code,
+    refusal.message,
+    PATH_REFUSALS_WITH_PATH.has(refusal.code) ? { relativePath } : undefined,
+  );
+}
+
+/**
+ * Refuse a relative path that could leave a root or is not portable, without resolving it. The
+ * `.hoi4-agent` rule needs a workspace, so it is left to the resolution itself.
+ */
+async function refuseUnsafeRelativePath(relativePath: string): Promise<void> {
+  const checked = await engineResolvePath({ relativePath, access: 'read', roots: [] });
   if (
-    segments.some(
-      (segment) => segment !== '.' && segment.length > 0 && !isPortablePathSegment(segment),
-    )
-  ) {
-    throw new ServiceError(
-      'PATH_WINDOWS_DEVICE',
-      'Portable paths cannot contain device names, control characters, or ambiguous characters',
-      {
-        relativePath,
-      },
-    );
-  }
+    checked !== undefined &&
+    'refusal' in checked &&
+    checked.refusal.code !== 'PATH_GENERATED_STORAGE_RESERVED'
+  )
+    throw pathRefusal(checked.refusal, relativePath);
 }
 
 export class WorkspaceResolver {
@@ -818,46 +881,21 @@ export class WorkspaceResolver {
     rootKinds?: readonly RootKind[],
     principal?: string,
   ): Promise<{ path: string; root: ResolvedRoot }> {
-    assertRelative(relativePath);
-    const workspace = this.get(workspaceId, principal);
-    const firstSegment = path.posix
-      .normalize(relativePath.replaceAll('\\', '/'))
-      .split('/')
-      .find((segment) => segment !== '.' && segment.length > 0)
-      ?.toLowerCase();
-    // Server storage holds other principals' proposals and journals; it is never mod source,
-    // for reads as well as writes.
-    if (firstSegment === '.hoi4-agent') {
-      throw new ServiceError(
-        'PATH_GENERATED_STORAGE_RESERVED',
-        'Generated .hoi4-agent storage cannot be targeted as mod source',
-      );
-    }
-    const roots = workspace.roots.filter(
-      (root) =>
-        (rootKinds === undefined || rootKinds.includes(root.kind)) &&
-        (access === 'read' || root.writable),
-    );
-    for (const root of roots.sort((a, b) => b.loadOrder - a.loadOrder)) {
-      const candidate = await canonicalPath(path.join(root.path, relativePath));
-      if (!isWithin(root.path, candidate)) continue;
-      if (access === 'read' && !(await exists(candidate))) continue;
-      if (
-        root.kind === 'mod' &&
-        (pathsOverlap(workspace.artifactRoot, candidate) ||
-          pathsOverlap(workspace.cacheRoot, candidate))
-      ) {
-        throw new ServiceError(
-          'PATH_GENERATED_STORAGE_RESERVED',
-          'Artifact and cache storage cannot be targeted as mod source',
-        );
-      }
-      if (access === 'write') {
-        const existingParent = await canonicalPath(path.dirname(candidate));
-        if (!isWithin(root.path, existingParent)) continue;
-      }
-      return { path: candidate, root };
-    }
+    // The engine checks the path, resolves it in the roots and refuses an escape (ADR 0089). Server
+    // storage (`.hoi4-agent`, artifacts, cache) holds other principals' proposals and journals; it
+    // is never mod source, for reads as well as writes.
+    const workspace = await this.getAfterPathCheck(workspaceId, relativePath, principal);
+    const resolved = await engineResolvePath({
+      relativePath,
+      access,
+      roots: workspace.roots,
+      ...(rootKinds === undefined ? {} : { rootKinds: [...rootKinds] }),
+      reserved: [workspace.artifactRoot, workspace.cacheRoot],
+    });
+    if (resolved !== undefined && 'refusal' in resolved)
+      throw pathRefusal(resolved.refusal, relativePath);
+    if (resolved !== undefined)
+      return { path: resolved.path, root: workspace.roots[resolved.root]! };
     throw new ServiceError(
       access === 'write' ? 'PATH_WRITE_OUTSIDE_ROOTS' : 'PATH_NOT_FOUND_IN_ROOTS',
       `Path cannot be resolved for ${access} access`,
@@ -872,32 +910,54 @@ export class WorkspaceResolver {
     loadOrder: number,
     principal?: string,
   ): Promise<{ path: string; root: ResolvedRoot }> {
-    assertRelative(relativePath);
-    const workspace = this.get(workspaceId, principal);
+    const workspace = await this.getAfterPathCheck(workspaceId, relativePath, principal);
     const root = workspace.roots.find(
       (candidate) => candidate.kind === rootKind && candidate.loadOrder === loadOrder,
     );
     if (root === undefined) {
+      await refuseUnsafeRelativePath(relativePath);
       throw new ServiceError('PATH_ROOT_NOT_FOUND', 'Configured source root no longer exists', {
         workspaceId,
         rootKind,
         loadOrder,
       });
     }
-    const candidate = await canonicalPath(path.join(root.path, relativePath));
-    if (!isWithin(root.path, candidate) || !(await exists(candidate))) {
-      throw new ServiceError(
-        'PATH_NOT_FOUND_IN_ROOT',
-        'Path cannot be resolved in the selected source root',
-        {
-          workspaceId,
-          relativePath,
-          rootKind,
-          loadOrder,
-        },
-      );
+    const resolved = await engineResolvePath({
+      relativePath,
+      access: 'read',
+      roots: [root],
+      inRoot: true,
+    });
+    if (resolved !== undefined && 'refusal' in resolved)
+      throw pathRefusal(resolved.refusal, relativePath);
+    if (resolved !== undefined) return { path: resolved.path, root };
+    throw new ServiceError(
+      'PATH_NOT_FOUND_IN_ROOT',
+      'Path cannot be resolved in the selected source root',
+      {
+        workspaceId,
+        relativePath,
+        rootKind,
+        loadOrder,
+      },
+    );
+  }
+
+  /**
+   * `get`, except that an unsafe relative path is refused first, as the path check ran before the
+   * workspace lookup when it was TypeScript.
+   */
+  private async getAfterPathCheck(
+    workspaceId: string,
+    relativePath: string,
+    principal?: string,
+  ): Promise<ResolvedWorkspace> {
+    try {
+      return this.get(workspaceId, principal);
+    } catch (error) {
+      await refuseUnsafeRelativePath(relativePath);
+      throw error;
     }
-    return { path: candidate, root };
   }
 
   private allowedWorkspaceIds(principal: string): Set<string> {

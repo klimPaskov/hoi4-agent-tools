@@ -106,7 +106,7 @@ fn focus_render(request: &Value) -> Response {
 fn handle(request: &Value, payload: &[u8]) -> Response {
     match request["op"].as_str() {
         Some("hello") => Response::ok(
-            json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "map.provinces", "index.files"] }),
+            json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "map.provinces", "index.files", "paths.resolve"] }),
         ),
         Some("texture.decode") => texture_decode(request, payload),
         Some("focus.render") => focus_render(request),
@@ -117,6 +117,10 @@ fn handle(request: &Value, payload: &[u8]) -> Response {
         Some("index.files") => match hoi4_engine::symbol_index::records::respond(request, payload) {
             // The answer can be far larger than a header line may be, so it travels as the payload.
             Ok(result) => Response { result: Ok(json!({ "format": "json" })), payload: result },
+            Err(error) => Response { result: Err(error), payload: Vec::new() },
+        },
+        Some("paths.resolve") => match hoi4_engine::workspace_paths::respond(request) {
+            Ok(result) => Response::ok(result),
             Err(error) => Response { result: Err(error), payload: Vec::new() },
         },
         Some(other) => Response::error("unknown_op", format!("unknown op {other}")),
