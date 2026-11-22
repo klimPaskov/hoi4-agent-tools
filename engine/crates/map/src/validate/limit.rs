@@ -59,7 +59,8 @@ fn add_omitted(marker: &mut Diagnostic, omitted: &Diagnostic) {
 
 fn truncation_marker(omitted: &[Diagnostic], limit: usize) -> Diagnostic {
     let hard = omitted.iter().any(is_hard);
-    let mut marker = Diagnostic::new(TRUNCATED, if hard { Severity::Blocker } else { Severity::Info }, Category::Map, if hard { HARD_MESSAGE } else { SOFT_MESSAGE });
+    let mut marker =
+        Diagnostic::new(TRUNCATED, if hard { Severity::Blocker } else { Severity::Info }, Category::Map, if hard { HARD_MESSAGE } else { SOFT_MESSAGE });
     let mut details = Map::new();
     details.insert("limit".into(), json!(limit));
     details.insert("retained".into(), json!(limit - 1));

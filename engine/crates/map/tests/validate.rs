@@ -30,7 +30,8 @@ fn map_files() -> Vec<ScannedFile> {
         (false, true) => [0, 255, 0],
         (false, false) => [0, 0, 255],
     });
-    let definitions = "0;0;0;0;land;false;unknown;0\n1;255;0;0;land;true;plains;1\n2;0;255;0;land;false;plains;1\n3;0;0;255;sea;true;ocean;0\n5;9;9;9;land;false;plains;1\n";
+    let definitions =
+        "0;0;0;0;land;false;unknown;0\n1;255;0;0;land;true;plains;1\n2;0;255;0;land;false;plains;1\n3;0;0;255;sea;true;ocean;0\n5;9;9;9;land;false;plains;1\n";
     let state = "state = { id = 1 name = STATE_1 provinces = { 1 2 } history = { owner = AAA victory_points = { 7 1 } } }\n";
     let region = "strategic_region = { id = 1 name = R provinces = { 1 2 3 } }\n";
     let mut localisation = vec![0xEF, 0xBB, 0xBF];
@@ -77,7 +78,19 @@ fn validates_a_synthetic_map() {
     let failed: Vec<_> = result.checks.iter().filter(|c| !c.passed).map(|c| c.id).collect();
     assert_eq!(failed, ["map-files-and-definitions", "map-state-region-membership", "map-networks-adjacencies"]);
     // Sorted: errors before warnings before information.
-    let ranks: Vec<u8> = result.diagnostics.iter().map(|d| if d.severity.blocks() { 0 } else if d.severity == Severity::Warning { 1 } else { 2 }).collect();
+    let ranks: Vec<u8> = result
+        .diagnostics
+        .iter()
+        .map(|d| {
+            if d.severity.blocks() {
+                0
+            } else if d.severity == Severity::Warning {
+                1
+            } else {
+                2
+            }
+        })
+        .collect();
     assert!(ranks.windows(2).all(|w| w[0] <= w[1]));
 }
 

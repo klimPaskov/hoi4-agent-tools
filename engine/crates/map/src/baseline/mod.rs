@@ -42,7 +42,8 @@ pub fn fingerprint(sources: &[FingerprintSource], tool_version: &str) -> String 
 
 /// The fingerprint of an index's scanned files.
 pub fn index_fingerprint(index: &MapIndex, tool_version: &str) -> String {
-    let sources: Vec<FingerprintSource> = index.files.iter().map(|f| FingerprintSource { display_path: &f.display_path, load_order: f.load_order, sha256: &f.sha256 }).collect();
+    let sources: Vec<FingerprintSource> =
+        index.files.iter().map(|f| FingerprintSource { display_path: &f.display_path, load_order: f.load_order, sha256: &f.sha256 }).collect();
     fingerprint(&sources, tool_version)
 }
 
@@ -175,11 +176,14 @@ mod tests {
 
     #[test]
     fn fingerprints_ignore_source_order_and_follow_every_hash() {
-        let a = [FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }, FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "2" }];
-        let b = [FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "2" }, FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }];
+        let a =
+            [FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }, FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "2" }];
+        let b =
+            [FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "2" }, FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }];
         assert_eq!(fingerprint(&a, "4.20.0"), fingerprint(&b, "4.20.0"));
         assert!(is_fingerprint(&fingerprint(&a, "4.20.0")));
-        let c = [FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "3" }, FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }];
+        let c =
+            [FingerprintSource { display_path: "mod:a", load_order: 1, sha256: "3" }, FingerprintSource { display_path: "mod:b", load_order: 1, sha256: "1" }];
         assert_ne!(fingerprint(&a, "4.20.0"), fingerprint(&c, "4.20.0"));
         assert_ne!(fingerprint(&a, "4.20.0"), fingerprint(&a, "4.21.0"));
         assert!(!is_fingerprint("ABC"));

@@ -5,9 +5,8 @@ Sources this crate adapts, one row per adapted file. Every source is in
 
 | Rust file | Adapted from | Functions |
 | --------- | ------------ | --------- |
-| `src/parse/source.rs` | `src/hoi4_agent_tools/core/source/encoding.ts`, `lexer.ts`, `parser.ts`, `limits.ts` | `decodeSource`, `createSourceLineIndex`, `positionAt`, `locationFor`, `lexClausewitz`, `parseClausewitz`, `assignments`, `childBlocks`, `firstScalar`, `nodeLocation`, `SourceDiagnosticCollector` |
+| `src/parse/script.rs` | `src/hoi4_agent_tools/core/source/parser.ts` | `nodeLocation`; script and localisation come from the engine's reader (`hoi4_engine::symbol_index::reader`), which this crate does not copy |
 | `src/parse/text.rs` | `src/hoi4_agent_tools/map/model.ts` | `parseTextDocument`, `lineLocation`, `splitDelimitedRow`, `whitespaceRow`, `parseInteger`, `parseNumber`, `parseMapDate` |
-| `src/parse/localisation.rs` | `src/hoi4_agent_tools/core/source/localisation.ts` | `parseLocalisation`, `decodeLocalisationValue` |
 | `src/parse/bmp.rs` | `src/hoi4_agent_tools/map/bmp.ts`, `src/hoi4_agent_tools/core/render-budget.ts` | `BmpImage.decode`, `rgbAt`, `paletteIndexAt`, `diffBounds`, `offsetAt`, `rgbKey`, `renderDimensionViolation` |
 | `src/parse/records.rs` | `src/hoi4_agent_tools/map/model.ts` | `parseDefinitions`, `parseState`, `parseTerrainCategories`, `parseBuildingDefinitions`, `parseContinents`, `parseStrategicRegion`, `parseAdjacencies`, `parseSupplyNodes`, `parseRailways`, `parseBuildingPositions`, `parseUnitPositions`, `parseWeatherPositions`, `parseEntityLocators`, `defaultMapSelectorValue`, `earliestBookmarkDate`, `derivedStateCapital` |
 | `src/model/mod.rs` | `src/hoi4_agent_tools/map/model.ts` | `MapWorkspaceIndex`, `MapModelBudget`, `selectActiveFiles`, `definitionFilesAcrossRoots`, `fileInRoots`, `inConfiguredRoot`, `provinceAtMapCoordinate` |

@@ -19,8 +19,10 @@ use super::{EdgeMode, Findings};
 use crate::model::{MAP_PROVINCE_ENGINE_MAX_PIXELS, MapIndex, as_id, normalized_path};
 use crate::parse::bmp::BmpImage;
 use crate::parse::records::n;
-use crate::parse::source::{self, SourceEntry, assignments, first_scalar};
+use crate::parse::script::{assignments, with_script};
+use crate::parse::text::is_js_space;
 use crate::parse::text::json_number;
+use hoi4_engine::symbol_index::reader::Value as Node;
 
 const SEA: u8 = 0;
 const LAND: u8 = 1;
@@ -328,31 +330,34 @@ fn graphical_terrain(index: &MapIndex) -> Option<Vec<TerrainEntry>> {
         .active
         .iter()
         .copied()
-        .filter(|&f| normalized_path(&index.file(f).relative_path).strip_prefix("common/terrain/").is_some_and(|rest| !rest.contains('/') && rest.len() > 4 && rest.ends_with(".txt")))
+        .filter(|&f| {
+            normalized_path(&index.file(f).relative_path)
+                .strip_prefix("common/terrain/")
+                .is_some_and(|rest| !rest.contains('/') && rest.len() > 4 && rest.ends_with(".txt"))
+        })
         .collect();
     if files.is_empty() {
         return None;
     }
     let mut entries = Vec::new();
     for file in files {
-        let document = source::parse(&index.file(file).bytes, &index.file(file).display_path);
-        for section in assignments(&document.root, Some("terrain")) {
-            let Some(block) = section.value.as_block() else { continue };
-            for entry in assignments(block, None) {
-                let Some(inner) = entry.value.as_block() else { continue };
-                let kind = first_scalar(inner, "type");
-                let texture = first_scalar(inner, "texture").and_then(|s| digits(&s.value));
-                let colors = assignments(inner, Some("color")).next().and_then(|a| a.value.as_block());
-                let (Some(_), Some(colors)) = (kind, colors) else { continue };
-                for color in &colors.entries {
-                    if let SourceEntry::Scalar(s) = color
-                        && let Some(value) = digits(&s.value)
-                    {
-                        entries.push(TerrainEntry { name: entry.key.value.clone(), index: value, texture });
+        with_script(&index.file(file).bytes, &index.file(file).display_path, |script| {
+            for section in assignments(script.root(), "terrain") {
+                let Node::Block(block) = &section.value else { continue };
+                for entry in block.assignments() {
+                    let Node::Block(inner) = &entry.value else { continue };
+                    let kind = inner.first_scalar("type");
+                    let texture = inner.first_scalar("texture").and_then(|s| digits(&s.value));
+                    let colors = assignments(inner, "color").next().map(|a| &a.value);
+                    let (Some(_), Some(Node::Block(colors))) = (kind, colors) else { continue };
+                    for color in colors.scalars() {
+                        if let Some(value) = digits(&color.value) {
+                            entries.push(TerrainEntry { name: entry.key.value.to_string(), index: value, texture });
+                        }
                     }
                 }
             }
-        }
+        });
     }
     (!entries.is_empty()).then_some(entries)
 }
@@ -439,7 +444,9 @@ fn validate_rivers(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
         out.map(
             "MAP_RIVER_PALETTE_COUNT",
             Severity::Warning,
-            format!("{path} declares {colors_used} palette colours; the engine logs \"Palette in rivers.bmp is probably not correct\" unless the header count is 0"),
+            format!(
+                "{path} declares {colors_used} palette colours; the engine logs \"Palette in rivers.bmp is probably not correct\" unless the header count is 0"
+            ),
             location(),
             Some(json!({ "colorsUsed": colors_used })),
         );
@@ -520,7 +527,13 @@ fn validate_rivers(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
         );
     }
     if on_sea > 0 {
-        out.map("MAP_RIVER_ON_WATER", Severity::Warning, format!("{on_sea} river pixels lie on sea provinces"), location(), Some(json!({ "pixels": on_sea, "samples": sea_samples })));
+        out.map(
+            "MAP_RIVER_ON_WATER",
+            Severity::Warning,
+            format!("{on_sea} river pixels lie on sea provinces"),
+            location(),
+            Some(json!({ "pixels": on_sea, "samples": sea_samples })),
+        );
     }
     if river_pixels > RIVER_PIXEL_LIMIT || (kinds.land_pixels > 0 && river_pixels as f64 / kinds.land_pixels as f64 > RIVER_LAND_SHARE_LIMIT) {
         out.map(
@@ -616,7 +629,9 @@ fn validate_river_sources(index: &MapIndex, file: usize, image: &BmpImage, out: 
         out.map(
             "MAP_RIVER_SOURCE_COUNT",
             Severity::Warning,
-            format!("{none} connected river(s) have no green source (index 0) and {several} have several; each river wants exactly one source on its main branch"),
+            format!(
+                "{none} connected river(s) have no green source (index 0) and {several} have several; each river wants exactly one source on its main branch"
+            ),
             locate(index, file),
             Some(json!({ "withoutSource": none, "withSeveralSources": several, "samples": samples })),
         );
@@ -942,12 +957,12 @@ fn city_color_indices(text: &str) -> HashSet<u64> {
             continue;
         }
         let mut j = i + needle.len();
-        while j < units.len() && source::is_js_space(units[j]) {
+        while j < units.len() && is_js_space(units[j]) {
             j += 1;
         }
         if units.get(j) == Some(&u16::from(b'=')) {
             j += 1;
-            while j < units.len() && source::is_js_space(units[j]) {
+            while j < units.len() && is_js_space(units[j]) {
                 j += 1;
             }
             let start = j;
@@ -1083,7 +1098,11 @@ fn validate_lakes_and_edge(index: &MapIndex, kinds: &Kinds, out: &mut Findings, 
             out.map(
                 "MAP_EDGE_WALL_OPEN",
                 Severity::Error,
-                format!("Water reaches the first or last column at {open} pixels ({} on the west edge, {} on the east); ships can cross the seam there", height - left, height - right),
+                format!(
+                    "Water reaches the first or last column at {open} pixels ({} on the west edge, {} on the east); ships can cross the seam there",
+                    height - left,
+                    height - right
+                ),
                 location(),
                 Some(json!({ "west": height - left, "east": height - right })),
             );
@@ -1100,12 +1119,8 @@ fn validate_lakes_and_edge(index: &MapIndex, kinds: &Kinds, out: &mut Findings, 
         );
     }
     if !pairs.is_empty() {
-        let covered: HashSet<(i64, i64)> = index
-            .adjacencies
-            .iter()
-            .filter(|a| a.kind == "impassable")
-            .filter_map(|a| Some((as_id(a.from.min(a.to))?, as_id(a.from.max(a.to))?)))
-            .collect();
+        let covered: HashSet<(i64, i64)> =
+            index.adjacencies.iter().filter(|a| a.kind == "impassable").filter_map(|a| Some((as_id(a.from.min(a.to))?, as_id(a.from.max(a.to))?))).collect();
         let open = pairs.iter().filter(|p| !covered.contains(p)).count();
         out.map(
             "MAP_SEAM_LAND_ADJACENCY",

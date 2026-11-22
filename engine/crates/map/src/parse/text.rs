@@ -7,7 +7,6 @@
 
 use hoi4_core::diagnostics::{SourceLocation, SourcePosition};
 
-use super::source::{self, Decoded, is_js_space, js_trim, string};
 use crate::model::MapError;
 
 pub const MAP_TEXT_MAX_BYTES: usize = 16_777_216;
@@ -27,13 +26,14 @@ pub struct TextLine {
 #[derive(Clone, Debug)]
 pub struct TextDocument {
     pub path: String,
-    pub decoded: Decoded,
+    /// The decoded text as UTF-16 code units, the unit of the TypeScript offsets.
+    pub text: Vec<u16>,
     pub lines: Vec<TextLine>,
 }
 
 impl TextDocument {
     pub fn line_text(&self, line: &TextLine) -> &[u16] {
-        &self.decoded.text[line.start..line.end]
+        &self.text[line.start..line.end]
     }
 
     /// `lineLocation` of the model: the line's text, columns from one.
@@ -70,8 +70,8 @@ pub fn parse_text_document(bytes: &[u8], display_path: &str, relative_path: &str
             serde_json::json!({ "relativePath": relative_path, "bytes": bytes.len(), "maximumBytes": MAP_TEXT_MAX_BYTES }),
         ));
     }
-    let decoded = source::decode(bytes);
-    let text = &decoded.text;
+    let (decoded, _) = hoi4_engine::symbol_index::reader::decode(bytes);
+    let text: Vec<u16> = decoded.encode_utf16().collect();
     let (cr, lf) = (u16::from(b'\r'), u16::from(b'\n'));
     let mut lines = Vec::new();
     let mut start = 0;
@@ -107,7 +107,27 @@ pub fn parse_text_document(bytes: &[u8], display_path: &str, relative_path: &str
         lines.push(TextLine { index: lines.len(), start, end, full_end });
         start = full_end;
     }
-    Ok(TextDocument { path: display_path.to_string(), decoded, lines })
+    Ok(TextDocument { path: display_path.to_string(), text, lines })
+}
+
+/// The characters of the JavaScript `\s` class, on a UTF-16 code unit.
+pub fn is_js_space(unit: u16) -> bool {
+    char::from_u32(u32::from(unit)).is_some_and(hoi4_engine::symbol_index::reader::is_js_space)
+}
+
+/// `String.prototype.trim` on code units.
+pub fn js_trim(text: &[u16]) -> &[u16] {
+    let start = text.iter().position(|&u| !is_js_space(u)).unwrap_or(text.len());
+    let end = text.iter().rposition(|&u| !is_js_space(u)).map_or(start, |i| i + 1);
+    &text[start..end]
+}
+
+pub fn utf16(text: &str) -> Vec<u16> {
+    text.encode_utf16().collect()
+}
+
+pub fn string(units: &[u16]) -> String {
+    String::from_utf16_lossy(units)
 }
 
 /// `splitDelimitedRow`: at most `maximum` trimmed fields, the last holding the rest.
@@ -149,7 +169,7 @@ pub fn whitespace_fields(text: &[u16]) -> Option<Vec<String>> {
 }
 
 fn js_trim_str(value: &str) -> String {
-    string(js_trim(&source::utf16(value)))
+    string(js_trim(&utf16(value)))
 }
 
 /// `parseInteger`: an optionally signed decimal integer within the safe-integer range.
@@ -205,11 +225,7 @@ pub fn parse_map_date(value: &str) -> Option<i64> {
 
 /// A number as JavaScript prints it in a template string.
 pub fn js_number(value: f64) -> String {
-    if value.is_finite() && value.fract() == 0.0 && value.abs() < 1e21 {
-        format!("{}", value as i64)
-    } else {
-        format!("{value}")
-    }
+    if value.is_finite() && value.fract() == 0.0 && value.abs() < 1e21 { format!("{}", value as i64) } else { format!("{value}") }
 }
 
 /// A number as `JSON.stringify` writes it: integral values without a fraction.
@@ -248,8 +264,8 @@ mod tests {
         assert_eq!(parse_map_date("1936.1.1"), Some(1_936_010_100));
         assert_eq!(parse_map_date("1936.13.1"), None);
         assert_eq!(parse_map_date("1936.1.1.12"), Some(1_936_010_112));
-        assert_eq!(split_delimited(&source::utf16("1; 2 ;3;4"), 3), ["1", "2", "3;4"]);
-        assert_eq!(whitespace_fields(&source::utf16(" 1  2 # x")), Some(vec!["1".to_string(), "2".to_string()]));
+        assert_eq!(split_delimited(&utf16("1; 2 ;3;4"), 3), ["1", "2", "3;4"]);
+        assert_eq!(whitespace_fields(&utf16(" 1  2 # x")), Some(vec!["1".to_string(), "2".to_string()]));
         assert_eq!(js_number(3.0), "3");
         assert_eq!(js_number(1.25), "1.25");
     }

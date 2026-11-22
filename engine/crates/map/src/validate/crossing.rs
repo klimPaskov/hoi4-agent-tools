@@ -12,7 +12,8 @@ use serde_json::json;
 use super::Findings;
 use crate::model::{MapIndex, as_id, normalized_path};
 use crate::parse::records::n;
-use crate::parse::source::{self, SourceEntry, assignments, first_scalar};
+use crate::parse::script::{assignments, with_script};
+use hoi4_engine::symbol_index::reader::Value as Node;
 
 /// Widest land-to-land crossing the validator accepts as a strait (the base game's is 30).
 pub const STRAIT_VALIDATOR_LIMIT_PX: f64 = 48.0;
@@ -34,32 +35,27 @@ fn digits(value: &str) -> Option<i64> {
 
 /// `parseAdjacencyRules`: the rules and the names defined more than once.
 pub fn parse_adjacency_rules(bytes: &[u8], path: &str) -> (Vec<AdjacencyRule>, Vec<String>) {
-    let document = source::parse(bytes, path);
     let mut rules = Vec::new();
     let mut seen = HashSet::new();
     let mut duplicates = Vec::new();
-    for entry in assignments(&document.root, Some("adjacency_rule")) {
-        let Some(block) = entry.value.as_block() else { continue };
-        let name = first_scalar(block, "name").map_or_else(String::new, |s| s.value.clone());
-        let mut required = Vec::new();
-        if let Some(list) = assignments(block, Some("required_provinces")).next().and_then(|a| a.value.as_block()) {
-            for item in &list.entries {
-                if let SourceEntry::Scalar(s) = item
-                    && let Some(id) = digits(&s.value)
-                {
-                    required.push(id);
+    with_script(bytes, path, |script| {
+        for entry in assignments(script.root(), "adjacency_rule") {
+            let Node::Block(block) = &entry.value else { continue };
+            let name = block.first_scalar("name").map_or_else(String::new, |s| s.value.to_string());
+            let mut required = Vec::new();
+            if let Some(Node::Block(list)) = assignments(block, "required_provinces").next().map(|a| &a.value) {
+                required.extend(list.scalars().filter_map(|s| digits(&s.value)));
+            }
+            let icon = block.first_scalar("icon").and_then(|s| digits(&s.value));
+            if !name.is_empty() {
+                if seen.contains(&name) {
+                    duplicates.push(name.clone());
                 }
+                seen.insert(name.clone());
             }
+            rules.push(AdjacencyRule { name, required, icon });
         }
-        let icon = first_scalar(block, "icon").and_then(|s| digits(&s.value));
-        if !name.is_empty() {
-            if seen.contains(&name) {
-                duplicates.push(name.clone());
-            }
-            seen.insert(name.clone());
-        }
-        rules.push(AdjacencyRule { name, required, icon });
-    }
+    });
     (rules, duplicates)
 }
 
@@ -79,7 +75,13 @@ fn check_rules(index: &MapIndex, out: &mut Findings) {
     let origin = SourcePosition { line: 1, column: 1, offset: 0 };
     let location = || Some(SourceLocation { path: file.display_path.clone(), start: origin, end: origin, symbol: None });
     for name in bounded(&duplicates, 8) {
-        out.map("MAP_ADJACENCY_RULE_DUPLICATE", Severity::Error, format!("Adjacency rule {name} is defined more than once"), location(), Some(json!({ "rule": name })));
+        out.map(
+            "MAP_ADJACENCY_RULE_DUPLICATE",
+            Severity::Error,
+            format!("Adjacency rule {name} is defined more than once"),
+            location(),
+            Some(json!({ "rule": name })),
+        );
     }
     let defined: HashSet<&str> = rules.iter().map(|r| r.name.as_str()).collect();
     for rule in &rules {
@@ -365,7 +367,10 @@ mod tests {
 
     #[test]
     fn reads_rules_and_duplicates() {
-        let (rules, duplicates) = parse_adjacency_rules(b"adjacency_rule = { name = A required_provinces = { 1 2 x } icon = 3 }\nadjacency_rule = { name = A }", "mod:map/adjacency_rules.txt");
+        let (rules, duplicates) = parse_adjacency_rules(
+            b"adjacency_rule = { name = A required_provinces = { 1 2 x } icon = 3 }\nadjacency_rule = { name = A }",
+            "mod:map/adjacency_rules.txt",
+        );
         assert_eq!(rules[0], AdjacencyRule { name: "A".into(), required: vec![1, 2], icon: Some(3) });
         assert_eq!(duplicates, ["A"]);
     }

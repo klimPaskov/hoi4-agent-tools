@@ -22,9 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::parse::bmp::BmpImage;
-use crate::parse::localisation::parse_localisation;
 use crate::parse::records::{self, *};
-use crate::parse::source::{self, Document};
+use crate::parse::script::{self, Script, with_script};
 use crate::parse::text::{TextDocument, parse_text_document};
 use crate::validate::limit::add_map_diagnostic;
 
@@ -238,18 +237,22 @@ struct Budget {
 
 impl Budget {
     fn block(kind: &str, observed: usize, limit: usize) -> MapError {
-        MapError::new("MAP_MODEL_BUDGET_BLOCKED", format!("Map workspace model exceeds the fixed {kind} ceiling"), json!({ "kind": kind, "observed": observed, "limit": limit }))
+        MapError::new(
+            "MAP_MODEL_BUDGET_BLOCKED",
+            format!("Map workspace model exceeds the fixed {kind} ceiling"),
+            json!({ "kind": kind, "observed": observed, "limit": limit }),
+        )
     }
 
     fn script_files(count: usize) -> Result<(), MapError> {
         if count > MAP_MODEL_MAX_SCRIPT_FILES { Err(Self::block("script files", count, MAP_MODEL_MAX_SCRIPT_FILES)) } else { Ok(()) }
     }
 
-    fn document(&mut self, document: &Document) -> Result<(), MapError> {
-        if !self.documents.insert(document.path.clone()) {
+    fn document(&mut self, script: &Script) -> Result<(), MapError> {
+        if !self.documents.insert(script.path.to_string()) {
             return Ok(());
         }
-        self.tokens += document.tokens.len();
+        self.tokens += script.token_count();
         if self.tokens > MAP_MODEL_MAX_SOURCE_TOKENS { Err(Self::block("retained source tokens", self.tokens, MAP_MODEL_MAX_SOURCE_TOKENS)) } else { Ok(()) }
     }
 
@@ -260,7 +263,11 @@ impl Budget {
 
     fn positions(&mut self, count: usize) -> Result<(), MapError> {
         self.positions += count;
-        if self.positions > MAP_MODEL_MAX_POSITION_RECORDS { Err(Self::block("position records", self.positions, MAP_MODEL_MAX_POSITION_RECORDS)) } else { Ok(()) }
+        if self.positions > MAP_MODEL_MAX_POSITION_RECORDS {
+            Err(Self::block("position records", self.positions, MAP_MODEL_MAX_POSITION_RECORDS))
+        } else {
+            Ok(())
+        }
     }
 
     fn localisation(&mut self, count: usize) -> Result<(), MapError> {
@@ -386,7 +393,7 @@ pub struct MapIndex {
     pub weather_positions: Vec<WeatherPositionRecord>,
     pub entity_locators: Vec<EntityLocatorRecord>,
     /// The parsed `default.map`, for the selectors of the appearance checks.
-    pub default_map: Option<Document>,
+    pub default_map: Option<records::Selectors>,
 }
 
 fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
@@ -410,13 +417,7 @@ impl MapIndex {
 
     /// `defaultMapSelectorValue` on the active `default.map`.
     pub fn selector(&self, key: &str, fallback: &str) -> Result<String, MapError> {
-        let file = self.default_map_file.map(|i| &self.files[i]);
-        records::default_map_selector(
-            self.default_map.as_ref(),
-            file.map(|f| (f.display_path.as_str(), f.relative_path.as_str(), root_kind_name(f.root_kind), f.load_order)),
-            key,
-            fallback,
-        )
+        records::default_map_selector(self.default_map.as_ref(), key, fallback)
     }
 
     pub fn definition(&self, id: i64) -> Option<&ProvinceDefinition> {
@@ -483,7 +484,8 @@ impl MapIndex {
             by_relative.insert(normalized_path(&files[i].relative_path), i);
         }
         let mut active: Vec<usize> = by_relative.values().copied().collect();
-        active.sort_by(|&a, &b| files[a].load_order.cmp(&files[b].load_order).then_with(|| compare_code_units(&files[a].relative_path, &files[b].relative_path)));
+        active
+            .sort_by(|&a, &b| files[a].load_order.cmp(&files[b].load_order).then_with(|| compare_code_units(&files[a].relative_path, &files[b].relative_path)));
 
         let mut index = MapIndex {
             files,
@@ -541,8 +543,10 @@ impl MapIndex {
         &self.files[file].display_path
     }
 
-    fn parse_script(&self, file: usize) -> Document {
-        source::parse(&self.files[file].bytes, &self.files[file].display_path)
+    /// The selectors of a `default.map` file.
+    fn selectors_of(&self, file: usize) -> records::Selectors {
+        let f = &self.files[file];
+        with_script(&f.bytes, &f.display_path, |s| records::read_selectors(s, (&f.display_path, &f.relative_path, root_kind_name(f.root_kind), f.load_order)))
     }
 
     fn text_document(&mut self, file: usize) -> Result<usize, MapError> {
@@ -558,7 +562,9 @@ impl MapIndex {
     }
 
     fn is_locator_asset(file: &ScannedFile) -> bool {
-        matches!(file.root_kind, RootKind::Mod | RootKind::Fixture) && normalized_path(&file.relative_path).ends_with(".asset") && contains_bytes(&file.bytes, b"locator")
+        matches!(file.root_kind, RootKind::Mod | RootKind::Fixture)
+            && normalized_path(&file.relative_path).ends_with(".asset")
+            && contains_bytes(&file.bytes, b"locator")
     }
 
     fn load(&mut self) -> Result<(), MapError> {
@@ -568,8 +574,8 @@ impl MapIndex {
             if !(path.starts_with("common/bookmarks/") && path.ends_with(".txt")) {
                 continue;
             }
-            let document = self.parse_script(file);
-            for (value, ordinal) in records::bookmark_dates(&document) {
+            let f = &self.files[file];
+            for (value, ordinal) in with_script(&f.bytes, &f.display_path, records::bookmark_dates) {
                 if self.earliest_bookmark.as_ref().is_none_or(|e| ordinal < e.ordinal) {
                     self.earliest_bookmark = Some(BookmarkDate { value, ordinal, source_path: self.files[file].display_path.clone() });
                 }
@@ -584,7 +590,7 @@ impl MapIndex {
         Budget::script_files(script_files)?;
 
         self.default_map_file = self.roots.map.iter().find_map(|root| self.active_file(&posix_join(root, "default.map")));
-        self.default_map = self.default_map_file.map(|f| self.parse_script(f));
+        self.default_map = self.default_map_file.map(|f| self.selectors_of(f));
         let definitions_name = self.selector("definitions", "definition.csv")?;
         let provinces_name = self.selector("provinces", "provinces.bmp")?;
         self.definition_file = self.map_file(&definitions_name);
@@ -603,21 +609,16 @@ impl MapIndex {
             }
             for root in &self.roots.map {
                 let default_map = by_path.get(&normalized_path(&posix_join(root, "default.map"))).copied();
-                let document = default_map.map(|f| self.parse_script(f));
-                let file = default_map.map(|f| &self.files[f]);
-                let name = records::default_map_selector(
-                    document.as_ref(),
-                    file.map(|f| (f.display_path.as_str(), f.relative_path.as_str(), root_kind_name(f.root_kind), f.load_order)),
-                    "definitions",
-                    &definitions_name,
-                )?;
+                let selectors = default_map.map(|f| self.selectors_of(f));
+                let name = records::default_map_selector(selectors.as_ref(), "definitions", &definitions_name)?;
                 if let Some(&definition) = by_path.get(&normalized_path(&posix_join(root, &name))) {
                     selected.set(self.files[definition].display_path.clone(), definition);
                 }
             }
         }
         let mut definition_files: Vec<usize> = selected.iter().map(|(_, &i)| i).collect();
-        definition_files.sort_by(|&a, &b| self.files[a].load_order.cmp(&self.files[b].load_order).then_with(|| compare_code_units(self.display(a), self.display(b))));
+        definition_files
+            .sort_by(|&a, &b| self.files[a].load_order.cmp(&self.files[b].load_order).then_with(|| compare_code_units(self.display(a), self.display(b))));
         let mut parsed: HashMap<String, Vec<ProvinceDefinition>> = HashMap::new();
         let active_definition_path = self.definition_file.map(|f| self.files[f].display_path.clone());
         let mut parse_definitions_of = |index: &mut MapIndex, file: usize, budget: &mut Budget| -> Result<Vec<ProvinceDefinition>, MapError> {
@@ -659,7 +660,9 @@ impl MapIndex {
         if let Some(file) = self.province_bitmap_file {
             match BmpImage::decode(&self.files[file].bytes) {
                 Ok(bitmap) => self.province_bitmap = Some(bitmap),
-                Err(error) => add_map_diagnostic(&mut self.diagnostics, source::diagnostic(&error.code, Severity::Error, Category::Map, error.message, None, None), None),
+                Err(error) => {
+                    add_map_diagnostic(&mut self.diagnostics, script::diagnostic(&error.code, Severity::Error, Category::Map, error.message, None, None), None)
+                }
             }
         }
         if let Some(bitmap) = &self.province_bitmap {
@@ -692,12 +695,16 @@ impl MapIndex {
             if let Some(cached) = parsed_states.get(&path) {
                 return Ok(cached.clone());
             }
-            let document = index.parse_script(file);
             let mut sink = Vec::new();
             let target = if active_state_paths.contains(&path) { &mut index.diagnostics } else { &mut sink };
-            let state = records::parse_state(&document, target, earliest.as_ref());
+            let f = &index.files[file];
+            let (state, documented) = with_script(&f.bytes, &f.display_path, |s| {
+                let state = records::parse_state(s, target, earliest.as_ref());
+                let documented = if state.is_some() { budget.document(s) } else { Ok(()) };
+                (state, documented)
+            });
+            documented?;
             if let Some(state) = &state {
-                budget.document(&document)?;
                 budget.records(1)?;
                 budget.edges(state.provinces.len() + state.victory_points.len() + state.province_buildings.len() + state.cores.len() + state.claims.len())?;
             }
@@ -726,9 +733,15 @@ impl MapIndex {
 
         let region_files: Vec<usize> = self.active.iter().copied().filter(|&f| self.is_region_file(&self.files[f].relative_path)).collect();
         for file in region_files {
-            let document = self.parse_script(file);
-            if let Some(region) = records::parse_strategic_region(&document, &mut self.diagnostics) {
-                budget.document(&document)?;
+            let f = &self.files[file];
+            let diagnostics = &mut self.diagnostics;
+            let (region, documented) = with_script(&f.bytes, &f.display_path, |s| {
+                let region = records::parse_strategic_region(s, diagnostics);
+                let documented = if region.is_some() { budget.document(s) } else { Ok(()) };
+                (region, documented)
+            });
+            documented?;
+            if let Some(region) = region {
                 budget.records(1)?;
                 budget.edges(region.provinces.len())?;
                 self.regions.push(region);
@@ -741,8 +754,9 @@ impl MapIndex {
         let continent_name = self.selector("continent", "continent.txt")?;
         self.continent_file = self.map_file(&continent_name);
         if let Some(file) = self.continent_file {
-            let document = self.parse_script(file);
-            self.continents = records::parse_continents(&document, &mut self.diagnostics);
+            let f = &self.files[file];
+            let diagnostics = &mut self.diagnostics;
+            self.continents = with_script(&f.bytes, &f.display_path, |s| records::parse_continents(s, diagnostics));
         }
         let mut terrain_files: Vec<usize> = self
             .active
@@ -757,8 +771,9 @@ impl MapIndex {
             terrain_files.sort_by(|&a, &b| compare_code_units(&normalized_path(&self.files[a].relative_path), &normalized_path(&self.files[b].relative_path)));
             let mut categories = OrderedMap::default();
             for file in terrain_files {
-                let document = self.parse_script(file);
-                records::add_terrain_categories(&document, &mut categories, &mut self.diagnostics);
+                let f = &self.files[file];
+                let diagnostics = &mut self.diagnostics;
+                with_script(&f.bytes, &f.display_path, |s| records::add_terrain_categories(s, &mut categories, diagnostics));
             }
             self.terrain_categories = Some(categories);
         }
@@ -776,8 +791,9 @@ impl MapIndex {
             .collect();
         building_files.sort_by(|&a, &b| compare_code_units(&normalized_path(&self.files[a].relative_path), &normalized_path(&self.files[b].relative_path)));
         for file in building_files {
-            let document = self.parse_script(file);
-            records::add_building_definitions(&document, &mut self.building_definitions, &mut self.building_spawn_points);
+            let f = &self.files[file];
+            let (definitions, spawn_points) = (&mut self.building_definitions, &mut self.building_spawn_points);
+            with_script(&f.bytes, &f.display_path, |s| records::add_building_definitions(s, definitions, spawn_points));
         }
 
         self.adjacency_file = self.map_file(&self.selector("adjacencies", "adjacencies.csv")?);
@@ -825,11 +841,14 @@ impl MapIndex {
             if !Self::is_locator_asset(&self.files[file]) {
                 continue;
             }
-            let document = self.parse_script(file);
-            let locators = records::parse_entity_locators(&document, &mut self.diagnostics);
-            if !locators.is_empty() {
-                budget.document(&document)?;
-            }
+            let f = &self.files[file];
+            let diagnostics = &mut self.diagnostics;
+            let (locators, documented) = with_script(&f.bytes, &f.display_path, |s| {
+                let locators = records::parse_entity_locators(s, diagnostics);
+                let documented = if locators.is_empty() { Ok(()) } else { budget.document(s) };
+                (locators, documented)
+            });
+            documented?;
             budget.records(locators.len())?;
             self.entity_locators.extend(locators);
         }
@@ -838,16 +857,14 @@ impl MapIndex {
             if !in_roots(&f.relative_path, &self.roots.localisation) || !normalized_path(&f.relative_path).ends_with(".yml") {
                 continue;
             }
-            let document = parse_localisation(&f.bytes, &f.display_path);
+            let (keys, findings) = script::localisation(&f.bytes, &f.display_path);
             if matches!(f.root_kind, RootKind::Mod | RootKind::Fixture) {
-                for d in document.diagnostics {
+                for d in findings {
                     add_map_diagnostic(&mut self.diagnostics, d, None);
                 }
             }
-            budget.localisation(document.entries.len())?;
-            for entry in document.entries {
-                self.localisation_keys.insert(format!("{}:{}", entry.language, entry.key));
-            }
+            budget.localisation(keys.len())?;
+            self.localisation_keys.extend(keys);
         }
         Ok(())
     }

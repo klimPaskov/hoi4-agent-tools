@@ -111,7 +111,11 @@ impl BmpImage {
         }
         let bits = u16_at(bytes, 28);
         if bits != 8 && bits != 24 {
-            return Err(MapError::new("MAP_BMP_BPP_UNSUPPORTED", "HOI4 map BMP codec supports only 8-bit indexed and 24-bit RGB files", json!({ "bitsPerPixel": bits })));
+            return Err(MapError::new(
+                "MAP_BMP_BPP_UNSUPPORTED",
+                "HOI4 map BMP codec supports only 8-bit indexed and 24-bit RGB files",
+                json!({ "bitsPerPixel": bits }),
+            ));
         }
         if u32_at(bytes, 30) != 0 {
             return Err(MapError::plain("MAP_BMP_COMPRESSION_UNSUPPORTED", "Compressed map BMP files are not supported"));
@@ -132,7 +136,11 @@ impl BmpImage {
             let colors_used = u32_at(bytes, 46) as usize;
             let count = if colors_used == 0 { available.min(256) } else { colors_used };
             if count > 256 || count > available {
-                return Err(MapError::new("MAP_BMP_PALETTE_INVALID", "Indexed BMP palette is incomplete", json!({ "colorsUsed": colors_used, "availableEntries": available })));
+                return Err(MapError::new(
+                    "MAP_BMP_PALETTE_INVALID",
+                    "Indexed BMP palette is incomplete",
+                    json!({ "colorsUsed": colors_used, "availableEntries": available }),
+                ));
             }
             for index in 0..count {
                 let at = 14 + dib_size as usize + index * 4;

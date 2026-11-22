@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use crate::model::{MAP_PROVINCE_ENGINE_MAX_PIXELS, MapIndex, OrderedMap, as_id};
 use crate::parse::bmp::BmpImage;
 use crate::parse::records::{ProvinceDefinition, n};
-use crate::parse::source::details;
+use crate::parse::script::details;
 use limit::{add_active_map_diagnostic, add_map_diagnostic};
 
 const DETAIL_SAMPLE_LIMIT: usize = 100;
@@ -168,12 +168,24 @@ fn validate_definitions(index: &MapIndex, out: &mut Findings) {
             continue;
         }
         let first = &index.definitions[rows[0]];
-        out.map("MAP_PROVINCE_COLOR_DUPLICATE", Severity::Error, format!("Province color {color} is assigned more than once"), Some(definition_location(index, first)), None);
+        out.map(
+            "MAP_PROVINCE_COLOR_DUPLICATE",
+            Severity::Error,
+            format!("Province color {color} is assigned more than once"),
+            Some(definition_location(index, first)),
+            None,
+        );
     }
     let ids: Vec<i64> = index.definitions.iter().map(|d| d.id).collect();
     let (sample, total) = contiguous_missing(&ids, 0);
     if total > 0 {
-        out.map("MAP_PROVINCE_ID_GAP", Severity::Error, "Province IDs must remain contiguous from zero", None, Some(json!({ "missing": sample, "total": total })));
+        out.map(
+            "MAP_PROVINCE_ID_GAP",
+            Severity::Error,
+            "Province IDs must remain contiguous from zero",
+            None,
+            Some(json!({ "missing": sample, "total": total })),
+        );
     }
     for definition in &index.definitions {
         // Province 0 is the reserved null row (0;0;0;0;land;false;unknown;0) the game expects.
@@ -204,7 +216,13 @@ fn validate_definitions(index: &MapIndex, out: &mut Findings) {
             );
         }
         if definition.kind == "land" && terrain.is_some_and(|t| t.water) {
-            out.map("MAP_LAND_TERRAIN_WATER", Severity::Error, format!("Land province {} uses water terrain {}", definition.id, definition.terrain), location(), None);
+            out.map(
+                "MAP_LAND_TERRAIN_WATER",
+                Severity::Error,
+                format!("Land province {} uses water terrain {}", definition.id, definition.terrain),
+                location(),
+                None,
+            );
         }
         if definition.kind == "land" && definition.continent == 0 {
             out.map("MAP_LAND_CONTINENT_MISSING", Severity::Error, format!("Land province {} has continent zero", definition.id), location(), None);
@@ -247,7 +265,13 @@ fn validate_geometry(index: &MapIndex, out: &mut Findings) {
                 json!({ "width": before.width, "height": before.height }),
                 json!({ "width": bitmap.width, "height": bitmap.height }),
             ),
-            (before.dib_size != bitmap.dib_size, "MAP_BMP_DIB_CHANGED", "Province bitmap DIB header type changed from the baseline", json!(before.dib_size), json!(bitmap.dib_size)),
+            (
+                before.dib_size != bitmap.dib_size,
+                "MAP_BMP_DIB_CHANGED",
+                "Province bitmap DIB header type changed from the baseline",
+                json!(before.dib_size),
+                json!(bitmap.dib_size),
+            ),
             (
                 before.top_down != bitmap.top_down,
                 "MAP_BMP_ORIENTATION_CHANGED",
@@ -341,8 +365,16 @@ fn validate_geometry(index: &MapIndex, out: &mut Findings) {
         if geometry.count <= 8 {
             out.map("MAP_PROVINCE_TOO_SMALL", Severity::Warning, format!("Province {} has only {} pixels", definition.id, geometry.count), location(), None);
         }
-        if f64::from(geometry.max_x - geometry.min_x + 1) > f64::from(bitmap.width) / 8.0 || f64::from(geometry.max_y - geometry.min_y + 1) > f64::from(bitmap.height) / 8.0 {
-            out.map("MAP_PROVINCE_LARGE_BOUNDS", Severity::Warning, format!("Province {} spans more than one eighth of a map dimension", definition.id), location(), None);
+        if f64::from(geometry.max_x - geometry.min_x + 1) > f64::from(bitmap.width) / 8.0
+            || f64::from(geometry.max_y - geometry.min_y + 1) > f64::from(bitmap.height) / 8.0
+        {
+            out.map(
+                "MAP_PROVINCE_LARGE_BOUNDS",
+                Severity::Warning,
+                format!("Province {} spans more than one eighth of a map dimension", definition.id),
+                location(),
+                None,
+            );
         }
         let components = raster.components.get(&definition.id).copied().unwrap_or(0);
         if components > 1 {
@@ -365,7 +397,13 @@ fn validate_geometry(index: &MapIndex, out: &mut Findings) {
             );
         }
         if raster.thin.contains(&definition.id) {
-            out.map("MAP_PROVINCE_THIN_CORRIDOR_REVIEW", Severity::Warning, format!("Province {} contains a one-pixel corridor", definition.id), location(), None);
+            out.map(
+                "MAP_PROVINCE_THIN_CORRIDOR_REVIEW",
+                Severity::Warning,
+                format!("Province {} contains a one-pixel corridor", definition.id),
+                location(),
+                None,
+            );
         }
         let derived = raster.coastal.contains(&definition.id);
         if (definition.kind == "land" || definition.kind == "sea") && definition.coastal != derived {
@@ -382,18 +420,28 @@ fn validate_geometry(index: &MapIndex, out: &mut Findings) {
     for y in 0..height.saturating_sub(1) {
         for x in 0..width {
             let right = if x == width - 1 { 0 } else { x + 1 };
-            let mut ids = [raster.id_at(y * width + x), raster.id_at(y * width + right), raster.id_at((y + 1) * width + x), raster.id_at((y + 1) * width + right)];
+            let mut ids =
+                [raster.id_at(y * width + x), raster.id_at(y * width + right), raster.id_at((y + 1) * width + x), raster.id_at((y + 1) * width + right)];
             ids.sort_unstable();
             if ids[0] < 0 || ids.windows(2).any(|w| w[0] == w[1]) {
                 continue;
             }
-            out.map("MAP_INVALID_X_CROSSING", Severity::Error, format!("Four provinces meet at one pixel corner near {x},{y}"), None, Some(json!({ "x": x, "y": y, "provinceIds": ids })));
+            out.map(
+                "MAP_INVALID_X_CROSSING",
+                Severity::Error,
+                format!("Four provinces meet at one pixel corner near {x},{y}"),
+                None,
+                Some(json!({ "x": x, "y": y, "provinceIds": ids })),
+            );
         }
     }
     if let (Some(before), Some(expected)) = (baseline_bitmap, out.options.expected_changed_bounds) {
         let bounds = if before.width == bitmap.width && before.height == bitmap.height { before.diff_bounds(bitmap).ok().flatten() } else { None };
         if let Some([min_x, min_y, max_x, max_y, count]) = bounds
-            && (i64::from(min_x) < expected.min_x || i64::from(min_y) < expected.min_y || i64::from(max_x) > expected.max_x || i64::from(max_y) > expected.max_y)
+            && (i64::from(min_x) < expected.min_x
+                || i64::from(min_y) < expected.min_y
+                || i64::from(max_x) > expected.max_x
+                || i64::from(max_y) > expected.max_y)
         {
             out.map(
                 "MAP_PIXELS_CHANGED_OUTSIDE_OPERATION",
@@ -453,7 +501,13 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
             out.map("MAP_STATE_OWNER_MISSING", Severity::Warning, format!("State {} has no owner and is unsafe for many effects", state.id), location(), None);
         }
         if state.controller.is_some() && state.owner.is_none() {
-            out.map("MAP_STATE_CONTROLLER_WITHOUT_OWNER", Severity::Error, format!("State {} defines a controller without an owner", state.id), location(), None);
+            out.map(
+                "MAP_STATE_CONTROLLER_WITHOUT_OWNER",
+                Severity::Error,
+                format!("State {} defines a controller without an owner", state.id),
+                location(),
+                None,
+            );
         }
         if !index.localisation_keys.contains(&format!("l_english:{}", state.name)) {
             let proposed = out.options.baseline.as_ref().is_some_and(|b| !b.state_ids.contains(&state.id));
@@ -468,7 +522,13 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
         if let Some(capital) = state.capital
             && !state.provinces.contains(&capital)
         {
-            out.map("MAP_STATE_CAPITAL_OUTSIDE_STATE", Severity::Error, format!("State {} capital {capital} is not a member province", state.id), location(), None);
+            out.map(
+                "MAP_STATE_CAPITAL_OUTSIDE_STATE",
+                Severity::Error,
+                format!("State {} capital {capital} is not a member province", state.id),
+                location(),
+                None,
+            );
         }
         for &province in &state.provinces {
             state_membership.entry(province).or_default().push(si);
@@ -478,12 +538,24 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
         }
         for point in &state.victory_points {
             if !state.provinces.contains(&point.province_id) {
-                out.map("MAP_VICTORY_POINT_OUTSIDE_STATE", Severity::Error, format!("Victory point {} is not in state {}", point.province_id, state.id), location(), None);
+                out.map(
+                    "MAP_VICTORY_POINT_OUTSIDE_STATE",
+                    Severity::Error,
+                    format!("Victory point {} is not in state {}", point.province_id, state.id),
+                    location(),
+                    None,
+                );
             }
         }
         for province in state.province_buildings.keys() {
             if !state.provinces.contains(province) {
-                out.map("MAP_PROVINCE_BUILDING_OUTSIDE_STATE", Severity::Error, format!("Province building entry {province} is not in state {}", state.id), location(), None);
+                out.map(
+                    "MAP_PROVINCE_BUILDING_OUTSIDE_STATE",
+                    Severity::Error,
+                    format!("Province building entry {province} is not in state {}", state.id),
+                    location(),
+                    None,
+                );
             }
         }
     }
@@ -497,7 +569,12 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
             out.map("MAP_LAND_PROVINCE_STATE_MISSING", Severity::Error, format!("Land province {} is in no state", definition.id), location(), None);
         }
         if memberships.len() > 1 {
-            let mut d = Diagnostic::new("MAP_PROVINCE_STATE_DUPLICATE", Severity::Error, Category::Map, format!("Province {} is assigned to multiple states", definition.id));
+            let mut d = Diagnostic::new(
+                "MAP_PROVINCE_STATE_DUPLICATE",
+                Severity::Error,
+                Category::Map,
+                format!("Province {} is assigned to multiple states", definition.id),
+            );
             d.location = location();
             d.related = Some(memberships.iter().take(DETAIL_SAMPLE_LIMIT).map(|&i| index.states[i].location.clone()).collect());
             d.details = Some(details(json!({ "memberships": memberships.len() })));
@@ -529,7 +606,8 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
         }
     }
     for (id, rows) in duplicates(&index.regions, |r| r.id) {
-        let mut d = Diagnostic::new("MAP_STRATEGIC_REGION_ID_DUPLICATE", Severity::Error, Category::Map, format!("Strategic region ID {id} is defined more than once"));
+        let mut d =
+            Diagnostic::new("MAP_STRATEGIC_REGION_ID_DUPLICATE", Severity::Error, Category::Map, format!("Strategic region ID {id} is defined more than once"));
         d.location = Some(index.regions[rows[0]].location.clone());
         d.related = Some(rows[1..].iter().take(DETAIL_SAMPLE_LIMIT).map(|&i| index.regions[i].location.clone()).collect());
         d.details = Some(details(json!({ "duplicateLocations": rows.len() - 1 })));
@@ -540,7 +618,13 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
         for &province in &region.provinces {
             region_membership.entry(province).or_default().push(ri);
             if index.definition(province).is_none() {
-                out.map("MAP_REGION_PROVINCE_INVALID", Severity::Error, format!("Strategic region {} refers to missing province {province}", region.id), Some(region.location.clone()), None);
+                out.map(
+                    "MAP_REGION_PROVINCE_INVALID",
+                    Severity::Error,
+                    format!("Strategic region {} refers to missing province {province}", region.id),
+                    Some(region.location.clone()),
+                    None,
+                );
             }
         }
     }
@@ -553,7 +637,12 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
         if memberships.is_empty() {
             out.map("MAP_PROVINCE_REGION_MISSING", Severity::Error, format!("Province {} is in no strategic region", definition.id), location, None);
         } else if memberships.len() > 1 {
-            let mut d = Diagnostic::new("MAP_PROVINCE_REGION_DUPLICATE", Severity::Error, Category::Map, format!("Province {} is in multiple strategic regions", definition.id));
+            let mut d = Diagnostic::new(
+                "MAP_PROVINCE_REGION_DUPLICATE",
+                Severity::Error,
+                Category::Map,
+                format!("Province {} is in multiple strategic regions", definition.id),
+            );
             d.location = location;
             d.related = Some(memberships.iter().take(DETAIL_SAMPLE_LIMIT).map(|&i| index.regions[i].location.clone()).collect());
             d.details = Some(details(json!({ "memberships": memberships.len() })));
@@ -606,7 +695,9 @@ fn validate_states_and_regions(index: &MapIndex, out: &mut Findings) {
                 Severity::Error,
                 format!("State {} spans multiple strategic regions", state.id),
                 Some(state.location.clone()),
-                Some(json!({ "strategicRegionIds": region_ids.iter().take(DETAIL_SAMPLE_LIMIT).collect::<Vec<_>>(), "strategicRegionCount": region_ids.len() })),
+                Some(
+                    json!({ "strategicRegionIds": region_ids.iter().take(DETAIL_SAMPLE_LIMIT).collect::<Vec<_>>(), "strategicRegionCount": region_ids.len() }),
+                ),
             );
         }
     }
@@ -627,11 +718,23 @@ fn validate_networks(index: &MapIndex, out: &mut Findings) {
         let from = index.definition_f(adjacency.from);
         let to = index.definition_f(adjacency.to);
         let (Some(from), Some(to)) = (from, to) else {
-            out.map("MAP_ADJACENCY_PROVINCE_INVALID", Severity::Error, format!("Adjacency {}-{} has invalid endpoints", n(adjacency.from), n(adjacency.to)), location, None);
+            out.map(
+                "MAP_ADJACENCY_PROVINCE_INVALID",
+                Severity::Error,
+                format!("Adjacency {}-{} has invalid endpoints", n(adjacency.from), n(adjacency.to)),
+                location,
+                None,
+            );
             continue;
         };
         if adjacency.from == adjacency.to {
-            out.map("MAP_ADJACENCY_PROVINCE_INVALID", Severity::Error, format!("Adjacency {}-{} has invalid endpoints", n(adjacency.from), n(adjacency.to)), location, None);
+            out.map(
+                "MAP_ADJACENCY_PROVINCE_INVALID",
+                Severity::Error,
+                format!("Adjacency {}-{} has invalid endpoints", n(adjacency.from), n(adjacency.to)),
+                location,
+                None,
+            );
             continue;
         }
         if adjacency.kind == "sea" {
@@ -642,11 +745,29 @@ fn validate_networks(index: &MapIndex, out: &mut Findings) {
                 out.map("MAP_ADJACENCY_THROUGH_MISSING", Severity::Error, "Non-border sea adjacency requires a through province", location.clone(), None);
             }
             if adjacency.through >= 0.0 && index.definition_f(adjacency.through).is_none() {
-                out.map("MAP_ADJACENCY_THROUGH_INVALID", Severity::Error, format!("Adjacency through province {} does not exist", n(adjacency.through)), location, None);
+                out.map(
+                    "MAP_ADJACENCY_THROUGH_INVALID",
+                    Severity::Error,
+                    format!("Adjacency through province {} does not exist", n(adjacency.through)),
+                    location,
+                    None,
+                );
             }
         } else if adjacency.kind == "impassable" {
-            if adjacency.through != -1.0 || adjacency.start_x != -1.0 || adjacency.start_y != -1.0 || adjacency.stop_x != -1.0 || adjacency.stop_y != -1.0 || !adjacency.rule.is_empty() {
-                out.map("MAP_IMPASSABLE_FIELDS_INVALID", Severity::Error, "Impassable adjacency must leave through, coordinates, and rule unset", location, None);
+            if adjacency.through != -1.0
+                || adjacency.start_x != -1.0
+                || adjacency.start_y != -1.0
+                || adjacency.stop_x != -1.0
+                || adjacency.stop_y != -1.0
+                || !adjacency.rule.is_empty()
+            {
+                out.map(
+                    "MAP_IMPASSABLE_FIELDS_INVALID",
+                    Severity::Error,
+                    "Impassable adjacency must leave through, coordinates, and rule unset",
+                    location,
+                    None,
+                );
             }
         } else {
             out.map("MAP_ADJACENCY_TYPE_UNKNOWN", Severity::Error, format!("Unknown adjacency type {}", adjacency.kind), location, None);
@@ -681,14 +802,26 @@ fn validate_networks(index: &MapIndex, out: &mut Findings) {
         }
         for &province in &railway.provinces {
             if index.definition(province).is_none_or(|d| d.kind != "land") || index.states_of(province).len() != 1 {
-                out.map("MAP_RAILWAY_PROVINCE_INVALID", Severity::Error, format!("Railway uses missing or stateless non-land province {province}"), location.clone(), None);
+                out.map(
+                    "MAP_RAILWAY_PROVINCE_INVALID",
+                    Severity::Error,
+                    format!("Railway uses missing or stateless non-land province {province}"),
+                    location.clone(),
+                    None,
+                );
             }
         }
         for pair in railway.provinces.windows(2) {
             let (left, right) = (pair[0], pair[1]);
             let joined = index.raster.as_ref().is_some_and(|r| r.adjacent(left, right)) || special_pairs.contains(&(left.to_string(), right.to_string()));
             if !joined {
-                out.map("MAP_RAILWAY_DISJOINT", Severity::Error, format!("Railway jumps between non-adjacent provinces {left} and {right}"), location.clone(), None);
+                out.map(
+                    "MAP_RAILWAY_DISJOINT",
+                    Severity::Error,
+                    format!("Railway jumps between non-adjacent provinces {left} and {right}"),
+                    location.clone(),
+                    None,
+                );
             }
         }
     }
@@ -757,7 +890,13 @@ fn validate_positions(index: &MapIndex, out: &mut Findings) {
             }
             let adjacent = index.definition_f(position.adjacent_sea_province);
             if adjacent.is_none_or(|d| d.kind != "sea") {
-                out.map("MAP_PORT_ADJACENT_SEA_INVALID", Severity::Error, format!("{} must identify an adjacent sea province", position.building), location, None);
+                out.map(
+                    "MAP_PORT_ADJACENT_SEA_INVALID",
+                    Severity::Error,
+                    format!("{} must identify an adjacent sea province", position.building),
+                    location,
+                    None,
+                );
             } else if let Some(province) = province
                 && !index.raster.as_ref().is_some_and(|r| as_id(position.adjacent_sea_province).is_some_and(|sea| r.adjacent(province, sea)))
             {
@@ -770,17 +909,35 @@ fn validate_positions(index: &MapIndex, out: &mut Findings) {
                 );
             }
         } else if position.adjacent_sea_province != 0.0 {
-            out.map("MAP_NON_PORT_ADJACENT_SEA_SET", Severity::Warning, format!("{} should leave adjacent sea province at zero", position.building), location, None);
+            out.map(
+                "MAP_NON_PORT_ADJACENT_SEA_SET",
+                Severity::Warning,
+                format!("{} should leave adjacent sea province at zero", position.building),
+                location,
+                None,
+            );
         }
     }
     for state in &index.states {
         for (province, buildings) in state.province_buildings.iter() {
             if buildings.get(&"naval_base".to_string()).copied().unwrap_or(0.0) > 0.0 {
                 if !index.coastal(*province) {
-                    out.map("MAP_PORT_NOT_COASTAL", Severity::Error, format!("Naval base province {province} is not coastal"), Some(state.location.clone()), None);
+                    out.map(
+                        "MAP_PORT_NOT_COASTAL",
+                        Severity::Error,
+                        format!("Naval base province {province} is not coastal"),
+                        Some(state.location.clone()),
+                        None,
+                    );
                 }
                 if !naval_locators.contains(province) {
-                    out.map("MAP_PORT_LOCATOR_MISSING", Severity::Error, format!("Naval base province {province} has no naval_base_spawn entry"), Some(state.location.clone()), None);
+                    out.map(
+                        "MAP_PORT_LOCATOR_MISSING",
+                        Severity::Error,
+                        format!("Naval base province {province} has no naval_base_spawn entry"),
+                        Some(state.location.clone()),
+                        None,
+                    );
                 }
             }
         }
@@ -792,7 +949,11 @@ fn validate_positions(index: &MapIndex, out: &mut Findings) {
             out.map(
                 "MAP_UNIT_POSITION_INVALID",
                 Severity::Error,
-                format!("Unit position for province {} resolves to {}", n(position.province_id), resolved.map_or_else(|| "no province".to_string(), |r| r.to_string())),
+                format!(
+                    "Unit position for province {} resolves to {}",
+                    n(position.province_id),
+                    resolved.map_or_else(|| "no province".to_string(), |r| r.to_string())
+                ),
                 location.clone(),
                 None,
             );
@@ -805,12 +966,24 @@ fn validate_positions(index: &MapIndex, out: &mut Findings) {
     for position in &index.weather_positions {
         let location = || Some(index.documents[position.document].required_location(position.line));
         if !index.has_region(position.strategic_region_id) {
-            out.map("MAP_WEATHER_REGION_INVALID", Severity::Error, format!("Weather position refers to missing region {}", position.strategic_region_id), location(), None);
+            out.map(
+                "MAP_WEATHER_REGION_INVALID",
+                Severity::Error,
+                format!("Weather position refers to missing region {}", position.strategic_region_id),
+                location(),
+                None,
+            );
         }
         small |= position.size == "small";
         big |= position.size == "big";
         if position.size != "small" && position.size != "big" {
-            out.map("MAP_WEATHER_SIZE_INVALID", Severity::Error, format!("Weather position size must be small or big, not {}", position.size), location(), None);
+            out.map(
+                "MAP_WEATHER_SIZE_INVALID",
+                Severity::Error,
+                format!("Weather position size must be small or big, not {}", position.size),
+                location(),
+                None,
+            );
         }
     }
     if !index.weather_positions.is_empty() && (!small || !big) {

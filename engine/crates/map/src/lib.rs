@@ -97,7 +97,10 @@ fn files_of(request: &MapRequest, payload: &[u8]) -> Result<(Vec<ScannedFile>, u
     let mut files = Vec::with_capacity(request.files.len());
     let mut at = 0usize;
     for entry in &request.files {
-        let end = at.checked_add(entry.length).filter(|&end| end <= payload.len()).ok_or_else(|| invalid(format!("the payload ends inside {}", entry.display_path)))?;
+        let end = at
+            .checked_add(entry.length)
+            .filter(|&end| end <= payload.len())
+            .ok_or_else(|| invalid(format!("the payload ends inside {}", entry.display_path)))?;
         files.push(ScannedFile {
             absolute_path: String::new(),
             display_path: entry.display_path.clone(),
@@ -148,7 +151,11 @@ pub fn validate_op(request: &Value, payload: &[u8]) -> Result<Value, MapError> {
             let province_bitmap = match b.province_bitmap_length {
                 None => None,
                 Some(length) => {
-                    let bytes = used.checked_add(length).filter(|&end| end <= payload.len()).map(|end| &payload[used..end]).ok_or_else(|| invalid("the payload ends inside the baseline bitmap"))?;
+                    let bytes = used
+                        .checked_add(length)
+                        .filter(|&end| end <= payload.len())
+                        .map(|end| &payload[used..end])
+                        .ok_or_else(|| invalid("the payload ends inside the baseline bitmap"))?;
                     parse::bmp::BmpImage::decode(bytes).ok()
                 }
             };
