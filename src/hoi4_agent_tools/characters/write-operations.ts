@@ -194,7 +194,7 @@ export async function computeCharacterWrite(
   let plan: CharacterWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planCharacterWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planCharacterWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll('leader', input.id)
@@ -204,7 +204,7 @@ export async function computeCharacterWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewCharacterFile(target.newPath, planInput);
+    plan = await planNewCharacterFile(target.newPath, planInput);
   }
   const missing: CharacterWriteData['missing'] = { localisation: [], portrait: [] };
   const diagnostics: Diagnostic[] = [];

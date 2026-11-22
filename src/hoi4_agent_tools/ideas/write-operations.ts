@@ -77,7 +77,10 @@ function newIdeaFilePath(file: string): string {
 }
 
 /** The file the operation writes: the one named, the one that defines the idea, or the one with the category. */
-function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): IdeaWriteTarget {
+async function targetFile(
+  snapshot: ScanSnapshot,
+  input: IdeaWriteRequest,
+): Promise<IdeaWriteTarget> {
   const files = modIdeaFiles(snapshot);
   if (input.file !== undefined) {
     const named = files.find(
@@ -112,9 +115,10 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): IdeaWriteT
     if (input.category === undefined)
       fail('IDEA_WRITE_CATEGORY_REQUIRED', 'add needs the category block the idea goes in');
     const category = input.category;
-    const holding = files.filter(({ bytes, relativePath }) =>
-      ideaCategories({ bytes, path: relativePath }).includes(category),
+    const categoriesByFile = await Promise.all(
+      files.map(({ bytes, relativePath }) => ideaCategories({ bytes, path: relativePath })),
     );
+    const holding = files.filter((_, index) => categoriesByFile[index]!.includes(category));
     if (holding.length === 0) {
       if (input.createCategory === true) {
         if (files.length === 1) return { file: files[0]! };
@@ -131,13 +135,7 @@ function targetFile(snapshot: ScanSnapshot, input: IdeaWriteRequest): IdeaWriteT
         `No common/ideas file of the mod has a ${category} category; pass createCategory: true to create it`,
         {
           category,
-          categories: [
-            ...new Set(
-              files.flatMap(({ bytes, relativePath }) =>
-                ideaCategories({ bytes, path: relativePath }),
-              ),
-            ),
-          ],
+          categories: [...new Set(categoriesByFile.flat())],
         },
       );
     }
@@ -206,7 +204,7 @@ export async function computeIdeaWrite(
     context.principal,
     context.signal,
   );
-  const target = targetFile(snapshot, input);
+  const target = await targetFile(snapshot, input);
   const planInput = {
     operation: input.operation,
     id: input.id,
@@ -218,7 +216,7 @@ export async function computeIdeaWrite(
   let plan: IdeaWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planIdeaWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planIdeaWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll('idea', input.id)
@@ -228,7 +226,7 @@ export async function computeIdeaWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewIdeaFile(target.newPath, planInput);
+    plan = await planNewIdeaFile(target.newPath, planInput);
   }
   const missing: IdeaWriteData['missing'] = { localisation: [], picture: [] };
   const diagnostics: Diagnostic[] = [];

@@ -31,9 +31,9 @@ const FILE = [
 const bytes = (text: string) => Buffer.from(text, 'utf8');
 const plan = (input: EventWriteInput, text = FILE) =>
   planEventWrite({ bytes: bytes(text), path: 'events/test.txt' }, input);
-const codeOf = (action: () => unknown): string => {
+const codeOf = async (action: () => unknown): Promise<string> => {
   try {
-    action();
+    await action();
   } catch (error) {
     if (error instanceof ServiceError) return error.code;
     throw error;
@@ -42,8 +42,8 @@ const codeOf = (action: () => unknown): string => {
 };
 
 describe('event_write plan: add', () => {
-  it('appends a new event with its id first, after a blank line, and changes nothing else', () => {
-    const result = plan({
+  it('appends a new event with its id first, after a blank line, and changes nothing else', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'tst.3',
       body: 'title = tst.3.t\nis_triggered_only = yes',
@@ -58,8 +58,8 @@ describe('event_write plan: add', () => {
     expect(result.diff).not.toContain('\n-');
   });
 
-  it('takes the kind asked for, and keeps an id the body already carries', () => {
-    const result = plan({
+  it('takes the kind asked for, and keeps an id the body already carries', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'tst.3',
       kind: 'state_event',
@@ -70,9 +70,9 @@ describe('event_write plan: add', () => {
     );
   });
 
-  it('keeps CRLF line endings and the file indentation', () => {
+  it('keeps CRLF line endings and the file indentation', async () => {
     const crlf = FILE.replaceAll('\n', '\r\n').replaceAll('\t', '  ');
-    const result = plan({ operation: 'add', id: 'tst.3', body: 'title = tst.3.t' }, crlf);
+    const result = await plan({ operation: 'add', id: 'tst.3', body: 'title = tst.3.t' }, crlf);
     expect(
       result.text.endsWith(
         '\r\n\r\ncountry_event = {\r\n  id = tst.3\r\n  title = tst.3.t\r\n}\r\n',
@@ -81,21 +81,21 @@ describe('event_write plan: add', () => {
     expect(result.text.replaceAll('\r\n', '')).not.toContain('\n');
   });
 
-  it('keeps unrelated top-level entries and the file without a final newline', () => {
+  it('keeps unrelated top-level entries and the file without a final newline', async () => {
     const odd = `${FILE.trimEnd()}\n\nsome_other_block = {\n\ta = b\n}`;
-    const result = plan({ operation: 'add', id: 'tst.3', body: 'title = tst.3.t' }, odd);
+    const result = await plan({ operation: 'add', id: 'tst.3', body: 'title = tst.3.t' }, odd);
     expect(result.text.startsWith(odd)).toBe(true);
     expect(result.text.slice(odd.length)).toBe(
       '\n\ncountry_event = {\n\tid = tst.3\n\ttitle = tst.3.t\n}\n',
     );
   });
 
-  it('needs a declared namespace, and writes add_namespace only when told to', () => {
+  it('needs a declared namespace, and writes add_namespace only when told to', async () => {
     const add = (input: Partial<EventWriteInput>) =>
       plan({ operation: 'add', id: 'fresh.1', body: 'title = fresh.1.t', ...input });
-    expect(codeOf(() => add({}))).toBe('EVENT_WRITE_NAMESPACE_MISSING');
+    expect(await codeOf(() => add({}))).toBe('EVENT_WRITE_NAMESPACE_MISSING');
     // Another mod file declares it, so this file need not.
-    expect(codeOf(() => add({ namespaceDeclared: true }))).toBe('NO_ERROR');
+    expect(await codeOf(() => add({ namespaceDeclared: true }))).toBe('NO_ERROR');
     const made = add({ createNamespace: true });
     expect(made.namespaceAdded).toBe(true);
     expect(made.text).toContain('add_namespace = tst\nadd_namespace = fresh\n\n# the first event');
@@ -104,17 +104,17 @@ describe('event_write plan: add', () => {
     );
   });
 
-  it('writes the namespace line above the first entry of a file that has none', () => {
-    const made = plan(
+  it('writes the namespace line above the first entry of a file that has none', async () => {
+    const made = await plan(
       { operation: 'add', id: 'fresh.1', body: 'title = fresh.1.t', createNamespace: true },
       '# header\nsome_block = {\n\ta = b\n}\n',
     );
     expect(made.text.startsWith('# header\nadd_namespace = fresh\n\nsome_block = {')).toBe(true);
   });
 
-  it('refuses a duplicate id, an invalid id, and a missing or broken body', () => {
+  it('refuses a duplicate id, an invalid id, and a missing or broken body', async () => {
     const add = (id: string, body?: string) =>
-      codeOf(() => plan({ operation: 'add', id, ...(body === undefined ? {} : { body }) }));
+      await codeOf(() => plan({ operation: 'add', id, ...(body === undefined ? {} : { body }) }));
     expect(add('tst.1', 'title = x')).toBe('EVENT_WRITE_DUPLICATE_ID');
     expect(add('tst', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
     expect(add('tst.x', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
@@ -124,14 +124,14 @@ describe('event_write plan: add', () => {
     expect(add('tst.3', 'id = tst.9\ntitle = x')).toBe('EVENT_WRITE_ID_MISMATCH');
   });
 
-  it('refuses createNamespace on replace, and a file with syntax errors', () => {
+  it('refuses createNamespace on replace, and a file with syntax errors', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'replace', id: 'tst.1', body: 'title = x', createNamespace: true }),
       ),
     ).toBe('EVENT_WRITE_NAMESPACE_UNEXPECTED');
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan(
           { operation: 'add', id: 'tst.3', body: 'title = x' },
           'country_event = {\n\tid = tst.1\n',
@@ -142,8 +142,8 @@ describe('event_write plan: add', () => {
 });
 
 describe('event_write plan: replace and remove', () => {
-  it('replaces one event and leaves the comment, the namespace and the neighbour as they were', () => {
-    const result = plan({ operation: 'replace', id: 'tst.1', body: 'title = tst.1.new' });
+  it('replaces one event and leaves the comment, the namespace and the neighbour as they were', async () => {
+    const result = await plan({ operation: 'replace', id: 'tst.1', body: 'title = tst.1.new' });
     expect(result.text).toBe(
       FILE.replace(
         /country_event = \{[\s\S]*?\n\}\n/u,
@@ -155,45 +155,47 @@ describe('event_write plan: replace and remove', () => {
     expect(result.kind).toBe('country_event');
   });
 
-  it('refuses to change the kind of an event', () => {
+  it('refuses to change the kind of an event', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'replace', id: 'tst.2', kind: 'country_event', body: 'title = x' }),
       ),
     ).toBe('EVENT_WRITE_KIND_MISMATCH');
   });
 
-  it('removes one event with its blank separator, keeps the namespace, and restores by add', () => {
-    const removed = plan({ operation: 'remove', id: 'tst.2' });
+  it('removes one event with its blank separator, keeps the namespace, and restores by add', async () => {
+    const removed = await plan({ operation: 'remove', id: 'tst.2' });
     expect(removed.text).toBe(
       FILE.replace('\nnews_event = {\n\tid = tst.2\n\ttitle = tst.2.t\n}\n', ''),
     );
     expect(removed.text).toContain('add_namespace = tst');
-    const restored = plan(
+    const restored = await plan(
       { operation: 'add', id: 'tst.2', kind: 'news_event', body: 'title = tst.2.t' },
       removed.text,
     );
     expect(restored.text).toBe(FILE);
   });
 
-  it('refuses an unknown id, a body on remove, and an id defined twice in the file', () => {
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst.9' }))).toBe('EVENT_WRITE_NOT_FOUND');
-    expect(codeOf(() => plan({ operation: 'replace', id: 'tst.9', body: 'a = b' }))).toBe(
+  it('refuses an unknown id, a body on remove, and an id defined twice in the file', async () => {
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst.9' }))).toBe(
       'EVENT_WRITE_NOT_FOUND',
     );
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst.1', body: 'a = b' }))).toBe(
+    expect(await codeOf(() => plan({ operation: 'replace', id: 'tst.9', body: 'a = b' }))).toBe(
+      'EVENT_WRITE_NOT_FOUND',
+    );
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst.1', body: 'a = b' }))).toBe(
       'EVENT_WRITE_BODY_UNEXPECTED',
     );
     const doubled = `${FILE}\ncountry_event = {\n\tid = tst.1\n}\n`;
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst.1' }, doubled))).toBe(
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst.1' }, doubled))).toBe(
       'EVENT_WRITE_DUPLICATE_ID',
     );
   });
 });
 
 describe('event_write plan: a new file and file contents', () => {
-  it('makes a file with the namespace line and one event, in the game style', () => {
-    const result = planNewEventFile('events/new.txt', {
+  it('makes a file with the namespace line and one event, in the game style', async () => {
+    const result = await planNewEventFile('events/new.txt', {
       operation: 'add',
       id: 'fresh.1',
       body: 'title = fresh.1.t',
@@ -205,22 +207,24 @@ describe('event_write plan: a new file and file contents', () => {
     expect(result.namespaceAdded).toBe(true);
   });
 
-  it('leaves the namespace line out when another file declares it, and needs the flag otherwise', () => {
+  it('leaves the namespace line out when another file declares it, and needs the flag otherwise', async () => {
     const input: EventWriteInput = { operation: 'add', id: 'fresh.1', body: 'title = x' };
     expect(
       planNewEventFile('events/new.txt', { ...input, namespaceDeclared: true }).text.startsWith(
         'country_event = {',
       ),
     ).toBe(true);
-    expect(codeOf(() => planNewEventFile('events/new.txt', input))).toBe(
+    expect(await codeOf(() => planNewEventFile('events/new.txt', input))).toBe(
       'EVENT_WRITE_NAMESPACE_MISSING',
     );
     expect(
-      codeOf(() => planNewEventFile('events/new.txt', { operation: 'remove', id: 'fresh.1' })),
+      await codeOf(() =>
+        planNewEventFile('events/new.txt', { operation: 'remove', id: 'fresh.1' }),
+      ),
     ).toBe('EVENT_WRITE_FILE_NOT_FOUND');
   });
 
-  it('reads the ids and namespaces of a file', () => {
+  it('reads the ids and namespaces of a file', async () => {
     expect(eventFileContents({ bytes: bytes(FILE), path: 'events/test.txt' })).toEqual({
       ids: ['tst.1', 'tst.2'],
       namespaces: ['tst'],

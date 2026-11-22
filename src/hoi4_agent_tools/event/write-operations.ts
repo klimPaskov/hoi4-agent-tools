@@ -59,19 +59,20 @@ interface ModEventFile {
 }
 
 /** The mod's own `events` files, the ones this tool may write, with what each holds. */
-function modEventFiles(snapshot: ScanSnapshot): ModEventFile[] {
-  return snapshot.files
-    .filter(
-      ({ rootKind, shadowedBy, relativePath }) =>
-        rootKind === 'mod' &&
-        shadowedBy === undefined &&
-        normalized(relativePath).startsWith('events/') &&
-        relativePath.toLowerCase().endsWith('.txt'),
-    )
-    .map((file) => ({
+async function modEventFiles(snapshot: ScanSnapshot): Promise<ModEventFile[]> {
+  const own = snapshot.files.filter(
+    ({ rootKind, shadowedBy, relativePath }) =>
+      rootKind === 'mod' &&
+      shadowedBy === undefined &&
+      normalized(relativePath).startsWith('events/') &&
+      relativePath.toLowerCase().endsWith('.txt'),
+  );
+  return Promise.all(
+    own.map(async (file) => ({
       file,
-      ...eventFileContents({ bytes: file.bytes, path: file.relativePath }),
-    }));
+      ...(await eventFileContents({ bytes: file.bytes, path: file.relativePath })),
+    })),
+  );
 }
 
 /** The file the operation writes: an existing mod file, or the path of one createFile makes. */
@@ -222,7 +223,7 @@ export async function computeEventWrite(
     context.principal,
     context.signal,
   );
-  const files = modEventFiles(snapshot);
+  const files = await modEventFiles(snapshot);
   const target = targetFile(snapshot, files, input);
   const namespace = namespaceOf(input.id);
   const planInput = {
@@ -237,7 +238,7 @@ export async function computeEventWrite(
   let plan: EventWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planEventWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planEventWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll('event', input.id)
@@ -247,7 +248,7 @@ export async function computeEventWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewEventFile(target.newPath, planInput);
+    plan = await planNewEventFile(target.newPath, planInput);
   }
   const missing: EventWriteData['missing'] = { localisation: [], picture: [] };
   const diagnostics: Diagnostic[] = [];

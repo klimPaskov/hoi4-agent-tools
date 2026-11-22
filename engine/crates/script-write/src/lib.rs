@@ -1,12 +1,23 @@
 //! Script writers: idea, character, event, decision, technology, doctrine and localisation (packet P10).
 //!
-//! Skeleton crate of the parallel port (ADR 0091). It will be ported from
-//! `src/hoi4_agent_tools/ideas/, characters/, localisation/, the *-write modules`; each adapted file names its source in its header and in this
-//! crate's `PROVENANCE.md`. Only this crate's packet edits files under `crates/script-write/`.
+//! Ported from `src/hoi4_agent_tools/ideas/, characters/, localisation/` and the `*-write` modules
+//! of event, decision, technology and doctrine; each adapted file names its source in its header
+//! and in this crate's `PROVENANCE.md`. A writer never touches the disk: it reads the source bytes
+//! it is given and returns the edit and the bytes of the file after it. The caller turns that into
+//! a `hoi4_core::plan::RewritePlan` for the one applier.
+
+pub mod character;
+pub mod decision;
+pub mod doctrine;
+pub mod event;
+pub mod idea;
+pub mod ops;
+pub mod source;
+pub mod tech;
 
 use hoi4_core::ops::Registry;
 
 /// Adds this crate's engine operations to the registry `hoi4-engine serve` dispatches through.
 pub fn register(registry: &mut Registry) {
-    let _ = registry;
+    ops::register(registry);
 }

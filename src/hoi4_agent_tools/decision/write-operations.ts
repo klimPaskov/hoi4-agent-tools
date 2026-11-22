@@ -79,7 +79,10 @@ function newDecisionFilePath(file: string): string {
 }
 
 /** The file the operation writes: the one named, the one that defines the decision, or the one with the category. */
-function targetFile(snapshot: ScanSnapshot, input: DecisionWriteRequest): DecisionWriteTarget {
+async function targetFile(
+  snapshot: ScanSnapshot,
+  input: DecisionWriteRequest,
+): Promise<DecisionWriteTarget> {
   const files = modDecisionFiles(snapshot);
   if (input.file !== undefined) {
     const named = files.find(
@@ -114,9 +117,10 @@ function targetFile(snapshot: ScanSnapshot, input: DecisionWriteRequest): Decisi
     if (input.category === undefined)
       fail('DECISION_WRITE_CATEGORY_REQUIRED', 'add needs the category block the decision goes in');
     const category = input.category;
-    const holding = files.filter(({ bytes, relativePath }) =>
-      decisionCategories({ bytes, path: relativePath }).includes(category),
+    const categoriesByFile = await Promise.all(
+      files.map(({ bytes, relativePath }) => decisionCategories({ bytes, path: relativePath })),
     );
+    const holding = files.filter((_, index) => categoriesByFile[index]!.includes(category));
     if (holding.length === 0) {
       if (input.createCategory === true) {
         if (files.length === 1) return { file: files[0]! };
@@ -133,13 +137,7 @@ function targetFile(snapshot: ScanSnapshot, input: DecisionWriteRequest): Decisi
         `No common/decisions file of the mod has a ${category} category; pass createCategory: true to create it`,
         {
           category,
-          categories: [
-            ...new Set(
-              files.flatMap(({ bytes, relativePath }) =>
-                decisionCategories({ bytes, path: relativePath }),
-              ),
-            ),
-          ],
+          categories: [...new Set(categoriesByFile.flat())],
         },
       );
     }
@@ -217,7 +215,7 @@ export async function computeDecisionWrite(
     context.principal,
     context.signal,
   );
-  const target = targetFile(snapshot, input);
+  const target = await targetFile(snapshot, input);
   const planInput = {
     operation: input.operation,
     id: input.id,
@@ -229,7 +227,7 @@ export async function computeDecisionWrite(
   let plan: DecisionWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planDecisionWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planDecisionWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll('decision', input.id)
@@ -239,7 +237,7 @@ export async function computeDecisionWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewDecisionFile(target.newPath, planInput);
+    plan = await planNewDecisionFile(target.newPath, planInput);
   }
   const missing: DecisionWriteData['missing'] = { localisation: [], icon: [], category: [] };
   const diagnostics: Diagnostic[] = [];
