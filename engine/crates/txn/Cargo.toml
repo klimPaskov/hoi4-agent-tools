@@ -10,8 +10,12 @@ publish.workspace = true
 
 [dependencies]
 hoi4-core.workspace = true
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi-util = "0.1.11"
 
 [lints]
 workspace = true
