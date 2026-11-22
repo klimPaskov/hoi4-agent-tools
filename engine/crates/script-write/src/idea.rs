@@ -572,4 +572,29 @@ mod tests {
         assert_eq!(idea_categories(FILE.as_bytes(), "a.txt"), vec!["country", "hidden_ideas"]);
         assert!(idea_categories(b"ideas = {", "a.txt").is_empty());
     }
+
+    #[test]
+    fn untouched_bytes_round_trip_exactly_in_every_encoding() {
+        // BOM and CRLF: everything outside the new idea is byte-identical.
+        let crlf = format!("\u{feff}{}", FILE.replace('\n', "\r\n"));
+        let added = plan_idea_write(crlf.as_bytes(), "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = x"))).unwrap();
+        let removed = plan_idea_write(&added.bytes, "a.txt", &input(Operation::Remove, "third_spirit", None, None)).unwrap();
+        assert_eq!(removed.bytes, crlf.as_bytes());
+        // Windows-1252: a defined high byte survives, and the new text is encoded in it.
+        let mut latin = FILE.as_bytes().to_vec();
+        latin.extend_from_slice(b"# Gro\xDF\n");
+        let added = plan_idea_write(&latin, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = x"))).unwrap();
+        assert!(added.bytes.windows(4).any(|w| w == b"Gro\xDF"));
+        let removed = plan_idea_write(&added.bytes, "a.txt", &input(Operation::Remove, "third_spirit", None, None)).unwrap();
+        assert_eq!(removed.bytes, latin);
+        // A character Windows-1252 cannot hold is refused, not replaced.
+        assert_eq!(code(plan_idea_write(&latin, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = \u{4e2d}")))), "SOURCE_ENCODING_UNREPRESENTABLE");
+    }
+
+    #[test]
+    fn refuses_a_windows_1252_file_that_would_not_round_trip() {
+        let mut lossy = FILE.as_bytes().to_vec();
+        lossy.extend_from_slice(b"# \x81\n");
+        assert_eq!(code(plan_idea_write(&lossy, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = x")))), "SOURCE_ENCODING_NOT_ROUND_TRIPPABLE");
+    }
 }
