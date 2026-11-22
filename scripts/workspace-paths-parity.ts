@@ -46,6 +46,17 @@ if (!('path' in located)) {
   process.stderr.write(`${located.message}\n`);
   process.exit(2);
 }
+// A binary built from another branch answers every call with unknown_op, and each comparison
+// would then differ for that reason alone. Refuse it before any corpus is read.
+const hello = await sharedResidentEngine().request('hello');
+const ops = hello.ok ? hello.response.result.ops : undefined;
+if (!Array.isArray(ops) || !ops.includes('paths.resolve')) {
+  process.stderr.write(
+    `${located.path} has no paths.resolve operation; build the engine of this branch first\n`,
+  );
+  sharedResidentEngine().close();
+  process.exit(2);
+}
 
 // The TypeScript resolution before ADR 0089, unchanged apart from taking the workspace directly.
 function legacyAssertRelative(relativePath: string): void {
@@ -244,6 +255,7 @@ try {
       }
     }
     let compared = 0;
+    let differing = 0;
     const differences: string[] = [];
     const started = performance.now();
     let index = 0;
@@ -271,6 +283,7 @@ try {
         compared += 1;
         if (before !== after) {
           differs = true;
+          differing += 1;
           if (differences.length < 40)
             differences.push(
               `${JSON.stringify(relativePath)} ${access} ${kinds?.join(',') ?? '*'}: ${before} != ${after}`,
@@ -279,9 +292,17 @@ try {
       }
     }
     const seconds = Math.round((performance.now() - started) / 100) / 10;
-    report[corpus.id] = { roots: sampled, paths: paths.size, compared, seconds, differences };
+    report[corpus.id] = {
+      roots: sampled,
+      paths: paths.size,
+      compared,
+      seconds,
+      differing,
+      differences,
+    };
+    // The total, not the length of the sample list, which stops at 40.
     process.stderr.write(
-      `${corpus.id}: ${compared} resolutions of ${paths.size} paths in ${seconds} s, ${differences.length} differences\n`,
+      `${corpus.id}: ${compared} resolutions of ${paths.size} paths in ${seconds} s, ${differing} differences (first ${differences.length} listed)\n`,
     );
     for (const line of differences) process.stderr.write(`  ${line}\n`);
   }
