@@ -332,6 +332,69 @@ describe('MCP coding-agent workflows', () => {
     expect(final!.data.afterEditCheck).toBeUndefined();
   }, 120_000);
 
+  it('inspects right after an early-answer edit from the new source, and again after a later outside edit', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-focus-reuse-'));
+    const mod = path.join(temporary, 'mod');
+    const relativePath = 'common/national_focus/reuse.txt';
+    const sourcePath = path.join(mod, ...relativePath.split('/'));
+    await mkdir(path.dirname(sourcePath), { recursive: true });
+    await writeFile(
+      sourcePath,
+      [
+        'focus_tree = {',
+        '\tid = reuse_tree',
+        '\tdefault = yes',
+        '\tfocus = {',
+        '\t\tid = reuse_root',
+        '\t\tx = 0',
+        '\t\ty = 0',
+        '\t\tcost = 5',
+        '\t\tcompletion_reward = { add_political_power = 10 }',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const client = await connect(temporary, { id: 'focus', name: 'Index reuse', root: mod });
+    const inspectCost = async (): Promise<unknown> => {
+      const inspected = resultOf(
+        await client.callTool({
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'focus', relativePath, treeId: 'reuse_tree' },
+        }),
+      );
+      expect(inspected).toMatchObject({ status: 'ok', code: 'FOCUS_INSPECTED' });
+      const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
+      const plan = (inspection.plans as Array<Record<string, unknown>>)[0]!;
+      return { plan, cost: (plan.focuses as Array<Record<string, unknown>>)[0]!.cost };
+    };
+    const before = (await inspectCost()) as { plan: Record<string, unknown>; cost: unknown };
+    expect(before.cost).toBe(5);
+    (before.plan.focuses as Array<Record<string, unknown>>)[0]!.cost = 7;
+    const answered = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_rewrite',
+        arguments: {
+          workspaceId: 'focus',
+          relativePath,
+          plan: before.plan,
+          answerBeforeCheck: true,
+        },
+      }),
+    );
+    expect(answered).toMatchObject({ status: 'ok', code: 'FOCUS_CHANGES_APPLIED' });
+    // Sent while the after-edit check may still run: it reads the edited source (D-98).
+    expect(((await inspectCost()) as { cost: unknown }).cost).toBe(7);
+    // A file changed after the rewrite is never answered from the rewrite's index.
+    await writeFile(
+      sourcePath,
+      (await readFile(sourcePath, 'utf8')).replace('\t\tcost = 7', '\t\tcost = 9'),
+      'utf8',
+    );
+    expect(((await inspectCost()) as { cost: unknown }).cost).toBe(9);
+  }, 120_000);
+
   it('inspects, renders, cleans up, and creates scripted GUIs through the composite tools', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-gui-workflow-'));
     const mod = path.join(temporary, 'mod');
