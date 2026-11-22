@@ -11,8 +11,11 @@
 //! - duplicates and aliases of one file are refused;
 //! - under the workspace lock (shared with the TypeScript server), interrupted rewrites are
 //!   restored first, then each source is checked against the hash the writer read;
-//! - the before bytes are journaled, the new bytes staged beside their targets, and each target
-//!   replaced by rename with a write-ahead intent per batch;
+//! - the before and after bytes are journaled in the TypeScript journal format, authenticated
+//!   with the server's journal key and recorded as protected heads in server state, so either
+//!   side recovers the other's journal;
+//! - the new bytes are staged beside their targets, and each target replaced by rename with a
+//!   write-ahead intent per batch;
 //! - the result is verified, and any failure restores every file to its before bytes without
 //!   overwriting bytes the rewrite did not produce.
 //!
@@ -25,12 +28,15 @@ pub mod limits;
 mod lock;
 mod ops;
 pub mod paths;
+mod state;
 
 #[cfg(test)]
 mod tests;
 
-pub use applier::TxnApplier;
+pub use applier::{TEST_ABORT_VARIABLE, TxnApplier};
+pub use journal::Binding;
 pub use paths::Workspace;
+pub use state::ServerState;
 
 use hoi4_core::ops::Registry;
 

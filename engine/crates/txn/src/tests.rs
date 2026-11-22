@@ -20,13 +20,18 @@ use serde_json::json;
 
 use crate::applier::{Hooks, Rule, TxnApplier};
 use crate::fsutil::random_id;
-use crate::journal::{JOURNAL_FOLDER, Journal, State};
+use crate::journal::{Binding, HeadMode, JOURNAL_FOLDER, Journal, State};
 use crate::paths::Workspace;
+use crate::state::ServerState;
+
+const KEY: &str = "5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e";
+const OTHER_KEY: &str = "0badc0de0badc0de0badc0de0badc0de0badc0de0badc0de0badc0de0badc0de";
 
 struct Fixture {
     root: PathBuf,
     mod_root: PathBuf,
     cache: PathBuf,
+    state: PathBuf,
 }
 
 impl Drop for Fixture {
@@ -42,12 +47,38 @@ fn fixture() -> Fixture {
     let root = fs::canonicalize(root).unwrap();
     let mod_root = fs::canonicalize(mod_root).unwrap();
     let cache = mod_root.join(".hoi4-agent").join("cache");
-    Fixture { root, mod_root, cache }
+    let state = root.join("state");
+    fs::create_dir_all(&state).unwrap();
+    Fixture { root, mod_root, cache, state }
 }
 
 impl Fixture {
+    fn binding(&self) -> Binding {
+        Binding { workspace_id: "demo".into(), workspace_identity: sha256_hex(b"demo identity"), root_fingerprint: sha256_hex(b"demo roots"), principal: None }
+    }
+
+    fn server_state(&self, key: &str) -> ServerState {
+        ServerState::open(&self.state, key).unwrap()
+    }
+
+    fn applier_with(&self, mod_root: &Path, cache: &Path, binding: Binding, key: &str) -> TxnApplier {
+        TxnApplier::new(Workspace::open(mod_root, cache, None).unwrap(), binding, self.server_state(key))
+    }
+
     fn applier(&self) -> TxnApplier {
-        TxnApplier::new("demo", Workspace::open(&self.mod_root, &self.cache, None).unwrap())
+        self.applier_with(&self.mod_root, &self.cache, self.binding(), KEY)
+    }
+
+    /// Runs `inspect` with this fixture's journal storage.
+    fn with_journal<T>(&self, inspect: impl FnOnce(&Journal<'_>) -> T) -> T {
+        let state = self.server_state(KEY);
+        let binding = self.binding();
+        let journal = Journal::open(&self.cache, &state, &binding).unwrap();
+        inspect(&journal)
+    }
+
+    fn journal_state(&self, id: &str) -> State {
+        self.with_journal(|journal| journal.load(id, HeadMode::Verify, true).unwrap().state)
     }
 
     fn write(&self, relative: &str, bytes: &[u8]) {
@@ -267,7 +298,7 @@ fn rechecks_each_source_right_before_its_replacement() {
         } else {
             assert_eq!(outcome.unwrap_err().code, "TRANSACTION_STALE");
             assert_eq!(fixture.snapshot(), [("a.txt".to_string(), b"a".to_vec()), ("b.txt".to_string(), b"edited while staging".to_vec())]);
-            assert!(fixture.journals().is_empty());
+            assert_eq!(fixture.journal_state(&fixture.only_journal()), State::RolledBack);
         }
     }
 }
@@ -371,7 +402,7 @@ fn refuses_targets_in_generated_storage() {
     let refusal = fixture.applier().apply(&plan(vec![change(".HOI4-AGENT/x.txt", None, Some(b"x"))])).unwrap_err();
     assert_eq!(refusal.code, "PATH_GENERATED_STORAGE_RESERVED");
     // A cache configured elsewhere inside the mod is reserved as well.
-    let applier = TxnApplier::new("demo", Workspace::open(&fixture.mod_root, &fixture.mod_root.join("state"), None).unwrap());
+    let applier = fixture.applier_with(&fixture.mod_root, &fixture.mod_root.join("state"), fixture.binding(), KEY);
     assert_eq!(applier.apply(&plan(vec![change("state/locks/x", None, Some(b"x"))])).unwrap_err().code, "PATH_GENERATED_STORAGE_RESERVED");
 }
 
@@ -417,7 +448,7 @@ fn restores_every_file_when_a_replacement_fails() {
     let refusal = fixture.applier().with_hooks(Arc::new(hooks)).apply(&rewrite).unwrap_err();
     assert_eq!(refusal.code, "TEST_FAILURE");
     assert_eq!(fixture.snapshot(), before, "every file is back, and no stage or backup remains");
-    assert!(fixture.journals().is_empty());
+    assert_eq!(fixture.journal_state(&fixture.only_journal()), State::RolledBack);
 }
 
 /// "rolls back replaced files when another planned file was edited during apply" and "never
@@ -446,9 +477,7 @@ fn never_overwrites_an_unknown_edit_during_rollback() {
         } else {
             assert_eq!(refusal.code, "TRANSACTION_ROLLBACK_STALE");
             assert_eq!(fixture.read("common/a.txt").unwrap(), b"modder edit during the rewrite");
-            let journal = Journal::open(&fixture.cache).unwrap();
-            let manifest = journal.load(&fixture.only_journal()).unwrap();
-            assert_eq!(manifest.state, State::Failed, "the failed journal stays as evidence");
+            assert_eq!(fixture.journal_state(&fixture.only_journal()), State::Failed, "the failed journal stays as evidence");
         }
     }
 }
@@ -490,14 +519,15 @@ fn recovers_an_interrupted_rewrite_to_the_exact_before_state() {
     let (rewrite, before) = three_file_plan(&fixture);
     crash_after_replace(&fixture, &rewrite, 1);
     assert_ne!(fixture.snapshot(), before, "the crash left a half-written mod");
-    let journal = Journal::open(&fixture.cache).unwrap();
-    assert_eq!(journal.load(&fixture.only_journal()).unwrap().state, State::Applying);
+    let id = fixture.only_journal();
+    assert_eq!(fixture.journal_state(&id), State::Applying);
     // Without recovery the half-written state stays.
     assert_eq!(fixture.applier().dropping(Rule::Recovery).recover().unwrap(), 0);
     assert_ne!(fixture.snapshot(), before);
     assert_eq!(fixture.applier().recover().unwrap(), 1);
     assert_eq!(fixture.snapshot(), before);
-    assert!(fixture.journals().is_empty());
+    assert_eq!(fixture.journal_state(&id), State::RolledBack);
+    assert_eq!(fixture.applier().recover().unwrap(), 0, "a recovered journal is not replayed");
 }
 
 /// Recovery runs before the next rewrite of the workspace, under its lock.
@@ -518,11 +548,12 @@ fn resumes_a_rollback_from_the_journaled_before_bytes() {
     let fixture = fixture();
     let (rewrite, before) = three_file_plan(&fixture);
     crash_after_replace(&fixture, &rewrite, 2);
-    let journal = Journal::open(&fixture.cache).unwrap();
     let id = fixture.only_journal();
-    let mut manifest = journal.load(&id).unwrap();
-    manifest.state = State::RollingBack;
-    journal.write_manifest(&mut manifest).unwrap();
+    fixture.with_journal(|journal| {
+        let mut manifest = journal.load(&id, HeadMode::Verify, true).unwrap();
+        manifest.state = State::RollingBack;
+        journal.write_manifest(&mut manifest).unwrap();
+    });
     // The old rollback stopped after removing the target and its backup.
     fs::remove_file(fixture.mod_root.join("common/a.txt")).unwrap();
     for entry in fs::read_dir(fixture.mod_root.join("common")).unwrap() {
@@ -541,11 +572,12 @@ fn requires_intact_before_bytes_to_recover_a_missing_target() {
     let fixture = fixture();
     let (rewrite, _) = three_file_plan(&fixture);
     crash_after_replace(&fixture, &rewrite, 2);
-    let journal = Journal::open(&fixture.cache).unwrap();
     let id = fixture.only_journal();
-    let mut manifest = journal.load(&id).unwrap();
-    manifest.state = State::RollingBack;
-    journal.write_manifest(&mut manifest).unwrap();
+    fixture.with_journal(|journal| {
+        let mut manifest = journal.load(&id, HeadMode::Verify, true).unwrap();
+        manifest.state = State::RollingBack;
+        journal.write_manifest(&mut manifest).unwrap();
+    });
     fs::remove_file(fixture.mod_root.join("common/a.txt")).unwrap();
     for entry in fs::read_dir(fixture.mod_root.join("common")).unwrap() {
         let path = entry.unwrap().path();
@@ -557,7 +589,7 @@ fn requires_intact_before_bytes_to_recover_a_missing_target() {
     fs::write(&blob, b"a = 9\r\n").unwrap();
     assert_eq!(fixture.applier().recover().unwrap_err().code, "TRANSACTION_BLOB_INTEGRITY_FAILED");
     assert!(fixture.read("common/a.txt").is_none(), "no unverified bytes are restored");
-    assert_eq!(journal.load(&id).unwrap().state, State::Failed);
+    assert_eq!(fixture.journal_state(&id), State::Failed);
 }
 
 /// "fails recovery closed when source no longer matches before or after bytes".
@@ -574,21 +606,96 @@ fn fails_recovery_closed_over_an_unknown_edit() {
 /// "rejects unauthenticated tampering before restart recovery" and "does not recover from a
 /// journal whose hash-bound plan was changed".
 #[test]
-fn refuses_a_tampered_journal() {
+fn refuses_a_tampered_or_truncated_journal_and_writes_nothing() {
     let fixture = fixture();
     let (rewrite, _) = three_file_plan(&fixture);
     crash_after_replace(&fixture, &rewrite, 1);
+    let crashed = fixture.snapshot();
     let path = fixture.cache.join(JOURNAL_FOLDER).join(fixture.only_journal()).join("manifest.json");
     let text = fs::read_to_string(&path).unwrap();
     let tampered = text.replacen("\"common/a.txt\"", "\"common/z.txt\"", 1);
     assert_ne!(text, tampered);
-    fs::write(&path, tampered).unwrap();
-    assert_eq!(fixture.applier().recover().unwrap_err().code, "TRANSACTION_MANIFEST_INVALID");
+    fs::write(&path, &tampered).unwrap();
+    assert_eq!(fixture.applier().recover().unwrap_err().code, "TRANSACTION_MANIFEST_AUTHENTICATION_FAILED");
     let refusal = fixture.applier().apply(&plan(vec![change("other.txt", None, Some(b"x"))])).unwrap_err();
     assert_eq!(refusal.code, "TRANSACTION_RECOVERY_REQUIRED");
-    assert!(refusal.message.contains("integrity"));
-    fs::write(&path, "{\"format\":").unwrap();
+    assert!(refusal.message.contains("authentication"));
+    fs::write(&path, &text[..text.len() / 2]).unwrap();
     assert_eq!(fixture.applier().recover().unwrap_err().code, "TRANSACTION_MANIFEST_INVALID");
+    assert_eq!(fixture.snapshot(), crashed, "no refused journal changed a file");
+    fs::write(&path, &text).unwrap();
+    assert_eq!(fixture.applier().recover().unwrap(), 1);
+}
+
+/// "persists a private journal key": a journal is refused under another server key.
+#[test]
+fn refuses_a_journal_under_another_key() {
+    let fixture = fixture();
+    let (rewrite, _) = three_file_plan(&fixture);
+    crash_after_replace(&fixture, &rewrite, 1);
+    let crashed = fixture.snapshot();
+    let other = fixture.applier_with(&fixture.mod_root, &fixture.cache, fixture.binding(), OTHER_KEY);
+    assert_eq!(other.recover().unwrap_err().code, "TRANSACTION_MANIFEST_AUTHENTICATION_FAILED");
+    assert_eq!(fixture.snapshot(), crashed);
+}
+
+/// "rejects a forged plan and matching public integrity hashes": a journal sealed with another
+/// key that would restore an attacker's bytes. Without authentication the bytes are written.
+#[test]
+fn refuses_a_forged_journal_that_would_restore_other_bytes() {
+    for drop_rule in [false, true] {
+        let fixture = fixture();
+        let (rewrite, _) = three_file_plan(&fixture);
+        crash_after_replace(&fixture, &rewrite, 1);
+        let id = fixture.only_journal();
+        let evil = b"evil = yes\n";
+        let directory = fixture.cache.join(JOURNAL_FOLDER).join(&id);
+        fs::write(directory.join("blobs").join(sha256_hex(evil)), evil).unwrap();
+        for entry in fs::read_dir(fixture.mod_root.join("common")).unwrap() {
+            let path = entry.unwrap().path();
+            if path.to_string_lossy().ends_with(".backup") && path.to_string_lossy().contains("a.txt") {
+                fs::remove_file(path).unwrap();
+            }
+        }
+        let mut manifest = fixture.with_journal(|journal| journal.load(&id, HeadMode::Verify, true).unwrap());
+        for file in manifest.files.iter_mut().chain(manifest.plan_payload.files.iter_mut()).filter(|file| file.relative_path == "common/a.txt") {
+            file.before_sha256 = Some(sha256_hex(evil));
+            file.before_size = Some(evil.len() as u64);
+            file.before_blob = Some(format!("blobs/{}", sha256_hex(evil)));
+        }
+        manifest.plan_hash = hoi4_core::canonical::hash_canonical(&serde_json::to_value(&manifest.plan_payload).unwrap());
+        let attacker = ServerState::open(&fixture.state, OTHER_KEY).unwrap();
+        let binding = fixture.binding();
+        let forged = Journal::open(&fixture.cache, &attacker, &binding).unwrap().seal(&mut manifest).unwrap();
+        fs::write(directory.join("manifest.json"), format!("{forged}\n")).unwrap();
+        let mut applier = fixture.applier();
+        if drop_rule {
+            applier = applier.dropping(Rule::JournalAuthentication);
+        }
+        let outcome = applier.recover();
+        if drop_rule {
+            outcome.unwrap();
+            assert_eq!(fixture.read("common/a.txt").unwrap(), evil, "without authentication the forged bytes are written");
+        } else {
+            assert_eq!(outcome.unwrap_err().code, "TRANSACTION_MANIFEST_AUTHENTICATION_FAILED");
+            assert_eq!(fixture.read("common/a.txt").unwrap(), b"a = 2\r\n");
+        }
+    }
+}
+
+/// "rejects replay of an authenticated planned revision after automatic recovery".
+#[test]
+fn refuses_to_replay_an_older_authenticated_revision() {
+    let fixture = fixture();
+    let (rewrite, before) = three_file_plan(&fixture);
+    crash_after_replace(&fixture, &rewrite, 1);
+    let path = fixture.cache.join(JOURNAL_FOLDER).join(fixture.only_journal()).join("manifest.json");
+    let interrupted = fs::read(&path).unwrap();
+    assert_eq!(fixture.applier().recover().unwrap(), 1);
+    assert_eq!(fixture.snapshot(), before);
+    fs::write(&path, interrupted).unwrap();
+    assert_eq!(fixture.applier().recover().unwrap_err().code, "TRANSACTION_MANIFEST_REPLAY");
+    assert_eq!(fixture.snapshot(), before);
 }
 
 /// "still refuses to replay an interrupted journal against changed roots".
@@ -597,9 +704,9 @@ fn refuses_to_replay_an_interrupted_journal_against_another_root() {
     let fixture = fixture();
     let (rewrite, _) = three_file_plan(&fixture);
     crash_after_replace(&fixture, &rewrite, 1);
-    let other = fixture.root.join("mods").join("other");
-    fs::create_dir_all(&other).unwrap();
-    let applier = TxnApplier::new("demo", Workspace::open(&other, &fixture.cache, None).unwrap());
+    let mut binding = fixture.binding();
+    binding.root_fingerprint = sha256_hex(b"other roots");
+    let applier = fixture.applier_with(&fixture.mod_root, &fixture.cache, binding, KEY);
     assert_eq!(applier.recover().unwrap_err().code, "TRANSACTION_ROOT_CHANGED");
 }
 
@@ -712,17 +819,29 @@ fn applies_and_recovers_through_the_engine_operations() {
     let mut registry = Registry::new();
     crate::register(&mut registry);
     assert_eq!(registry.names(), ["txn.apply", "txn.recover"]);
-    let roots = json!({
-        "op": "txn.apply",
+    let binding = fixture.binding();
+    let workspace = json!({
         "workspaceId": "demo",
+        "workspaceIdentity": binding.workspace_identity,
+        "rootFingerprint": binding.root_fingerprint,
         "modRoot": fixture.mod_root,
         "cacheRoot": fixture.cache,
+        "serverStateRoot": fixture.state,
+        "journalKey": KEY,
+    });
+    let with = |extra: serde_json::Value| {
+        let mut request = workspace.clone();
+        request.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        request
+    };
+    let roots = with(json!({
+        "op": "txn.apply",
         "operationKind": "test",
         "changes": [
             { "path": "a.txt", "beforeSha256": sha256_hex(b"old"), "afterSize": 3 },
             { "path": "b/c.txt", "beforeSha256": null, "afterSize": 2 },
         ],
-    });
+    }));
     let answer = registry.dispatch("txn.apply", &OpContext::default(), &roots, b"newhi").unwrap();
     assert_eq!(answer.result.unwrap(), json!({ "changedPaths": ["a.txt", "b/c.txt"] }));
     assert_eq!(fixture.read("a.txt").unwrap(), b"new");
@@ -735,8 +854,17 @@ fn applies_and_recovers_through_the_engine_operations() {
     assert_eq!(short.result.unwrap_err()["code"], "invalid_request");
     let long = registry.dispatch("txn.apply", &OpContext::default(), &roots, b"newhi!").unwrap();
     assert_eq!(long.result.unwrap_err()["code"], "invalid_request");
-    let recover = registry.dispatch("txn.recover", &OpContext::default(), &json!({ "workspaceId": "demo", "modRoot": fixture.mod_root, "cacheRoot": fixture.cache }), &[]).unwrap();
+    let recover = registry.dispatch("txn.recover", &OpContext::default(), &with(json!({})), &[]).unwrap();
     assert_eq!(recover.result.unwrap(), json!({ "recovered": 0 }));
-    let missing = registry.dispatch("txn.recover", &OpContext::default(), &json!({ "workspaceId": "demo", "modRoot": fixture.root.join("nope"), "cacheRoot": fixture.cache }), &[]).unwrap();
+    let missing = registry.dispatch("txn.recover", &OpContext::default(), &with(json!({ "modRoot": fixture.root.join("nope") })), &[]).unwrap();
+    assert_eq!(missing.result.unwrap_err()["code"], "WORKSPACE_MOD_ROOT_UNSAFE");
+    // A missing or short key is refused, and no refusal echoes the key.
+    for key in [json!(null), json!("abcd"), json!(&KEY[..62])] {
+        let mut request = with(json!({}));
+        request["journalKey"] = key;
+        let refused = registry.dispatch("txn.recover", &OpContext::default(), &request, &[]).unwrap().result.unwrap_err();
+        assert!(!refused.to_string().contains(&KEY[..16]));
+        assert!(refused["code"] == "SERVER_STATE_KEY_INVALID" || refused["code"] == "invalid_request");
+    }
     assert_eq!(missing.result.unwrap_err()["code"], "WORKSPACE_MOD_ROOT_UNSAFE");
 }

@@ -4,13 +4,16 @@
 //! `src/hoi4_agent_tools/core/transactions.ts` (`plan` then `apply`, and `recover`) to the engine,
 //! commit `9b7dc80d`.
 //!
-//! `txn.apply` request: `{ workspaceId, modRoot, cacheRoot, artifactRoot?, lockWaitMs?,
-//! operationKind, diagnostics?, changes: [{ path, beforeSha256, afterSize }] }`, with the new
-//! bytes of every change whose `afterSize` is not null concatenated in the payload, in order.
-//! Answer: `{ changedPaths }`, or an error `{ code, message, diagnostics }`.
+//! Both take the workspace as the TypeScript server resolved it: `{ workspaceId,
+//! workspaceIdentity, rootFingerprint, principal?, modRoot, cacheRoot, artifactRoot?,
+//! serverStateRoot, journalKey, lockWaitMs? }`. `journalKey` is the server's journal key in hex;
+//! it is never logged or echoed.
 //!
-//! `txn.recover` request: `{ workspaceId, modRoot, cacheRoot, artifactRoot?, lockWaitMs? }`.
-//! Answer: `{ recovered }`, the number of interrupted rewrites restored.
+//! `txn.apply` adds `{ operationKind, diagnostics?, changes: [{ path, beforeSha256, afterSize }] }`,
+//! with the new bytes of every change whose `afterSize` is not null concatenated in the payload,
+//! in order. Answer: `{ changedPaths }`, or an error `{ code, message, diagnostics }`.
+//!
+//! `txn.recover` answers `{ recovered }`, the number of interrupted rewrites restored.
 
 use std::path::Path;
 use std::time::Duration;
@@ -22,7 +25,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::applier::TxnApplier;
+use crate::journal::Binding;
 use crate::paths::Workspace;
+use crate::state::{ServerState, is_sha256};
 
 /// The longest lock wait a request may ask for.
 const MAX_LOCK_WAIT_MS: u64 = 600_000;
@@ -31,6 +36,12 @@ const MAX_LOCK_WAIT_MS: u64 = 600_000;
 #[serde(rename_all = "camelCase")]
 struct WorkspaceRequest {
     workspace_id: String,
+    workspace_identity: String,
+    root_fingerprint: String,
+    #[serde(default)]
+    principal: Option<String>,
+    server_state_root: String,
+    journal_key: String,
     mod_root: String,
     cache_root: String,
     #[serde(default)]
@@ -61,24 +72,30 @@ fn refused(refusal: Refusal) -> OpResponse {
 }
 
 fn applier(request: &Value) -> Result<TxnApplier, OpResponse> {
-    let workspace: WorkspaceRequest =
-        serde_json::from_value(request.clone()).map_err(|error| OpResponse::error("invalid_request", format!("txn: bad workspace fields: {error}")))?;
+    // The key is a field of the request, so a parse error names no values.
+    let workspace: WorkspaceRequest = serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn: the workspace fields are missing or malformed"))?;
+    if !is_sha256(&workspace.workspace_identity) || !is_sha256(&workspace.root_fingerprint) {
+        return Err(OpResponse::error("invalid_request", "txn: workspaceIdentity and rootFingerprint must be lowercase SHA-256"));
+    }
+    let state = ServerState::open(Path::new(&workspace.server_state_root), &workspace.journal_key).map_err(refused)?;
     let wait = workspace.lock_wait_ms.unwrap_or(0);
     if wait > MAX_LOCK_WAIT_MS {
         return Err(OpResponse::error("invalid_request", format!("txn: lockWaitMs is above {MAX_LOCK_WAIT_MS}")));
     }
     let opened = Workspace::open(Path::new(&workspace.mod_root), Path::new(&workspace.cache_root), workspace.artifact_root.as_deref().map(Path::new))
         .map_err(refused)?;
-    Ok(TxnApplier::new(workspace.workspace_id, opened).with_lock_wait(Duration::from_millis(wait)))
-}
-
-fn is_sha256(text: &str) -> bool {
-    text.len() == 64 && text.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    let binding = Binding {
+        workspace_id: workspace.workspace_id,
+        workspace_identity: workspace.workspace_identity,
+        root_fingerprint: workspace.root_fingerprint,
+        principal: workspace.principal,
+    };
+    Ok(TxnApplier::new(opened, binding, state).with_lock_wait(Duration::from_millis(wait)))
 }
 
 /// Splits the payload into the plan's new bytes.
 fn plan_from(request: &Value, payload: &[u8]) -> Result<RewritePlan, OpResponse> {
-    let apply: ApplyRequest = serde_json::from_value(request.clone()).map_err(|error| OpResponse::error("invalid_request", format!("txn.apply: {error}")))?;
+    let apply: ApplyRequest = serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn.apply: the plan fields are missing or malformed"))?;
     let workspace_id = request["workspaceId"].as_str().unwrap_or_default().to_owned();
     let mut offset = 0_usize;
     let mut changes = Vec::with_capacity(apply.changes.len());
