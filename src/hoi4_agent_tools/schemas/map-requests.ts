@@ -231,7 +231,7 @@ export const mapRewriteRequestSchema = z
       .regex(MAP_BASELINE_FINGERPRINT_PATTERN)
       .optional()
       .describe(
-        'Opt in to a stated baseline: the baselineFingerprint a full hoi4.map_inspect of the untouched map returned. The server recomputes it and refuses the write when the map changed since. Pre-existing errors outside the objects the write touches then stop blocking and are summarized by code; new errors and pre-existing errors inside the footprint still block. Omit it to have every error block.',
+        'Opt-in: baselineFingerprint from a full hoi4.map_inspect of the untouched map. Pre-existing errors outside the write stop blocking; a changed map is refused.',
       ),
     requestKey: backgroundRequestKeySchema.optional(),
   })

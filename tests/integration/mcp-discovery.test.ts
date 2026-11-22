@@ -15,7 +15,8 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 104_448;
+// 105,472: raised by 1 KiB for the stated map baseline (issue 272, ADR 0090).
+const toolsListByteBudget = 105_472;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
