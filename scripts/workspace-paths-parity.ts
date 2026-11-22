@@ -187,11 +187,14 @@ const UNSAFE = [
   './',
 ];
 
-const corpora = corpusFileSchema
+const allCorpora = corpusFileSchema
   .parse(JSON.parse(await readFile(path.join('bench', 'corpus.json'), 'utf8')))
-  .corpora.filter(({ kind }) => kind !== 'synthetic')
-  .filter(({ id }) => values.corpus === undefined || values.corpus.split(',').includes(id));
-const game = (await locateCorpus(corpora.find(({ kind }) => kind === 'game')!)).root;
+  .corpora.filter(({ kind }) => kind !== 'synthetic');
+const corpora = allCorpora.filter(
+  ({ id }) => values.corpus === undefined || values.corpus.split(',').includes(id),
+);
+// The game is every mod's base root, also when `--corpus` leaves the vanilla corpus out.
+const game = (await locateCorpus(allCorpora.find(({ kind }) => kind === 'game')!)).root;
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-paths-parity-'));
 const report: Record<string, unknown> = {};
 let differs = false;
