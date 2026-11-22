@@ -11,7 +11,6 @@ import {
 } from '../schemas/technology.js';
 import type { TechnologyGraphSnapshot } from './model.js';
 import type { TechnologyRenderBundle } from './render.js';
-import { technologyExplainSummary } from './queries.js';
 import { technologyDiagnostics } from './service.js';
 import type {
   TechnologyTreeViewer,
@@ -156,8 +155,7 @@ export async function inspectTechnologies(
     counts: technologyCounts(output.graph, output.artifacts.length),
     ...(output.helperExpansion === undefined ? {} : { helperExpansion: output.helperExpansion }),
     ...(() => {
-      const technology =
-        input.mode === 'explain' ? technologyExplainSummary(output.report) : undefined;
+      const technology = input.mode === 'explain' ? output.explainSummary : undefined;
       return technology === undefined ? {} : { technology };
     })(),
   });

@@ -89,7 +89,8 @@ fn analyze(request: &Value) -> OpResponse {
     let fragments: Result<Vec<Value>, String> = selected
         .par_iter()
         .map(|file| match std::fs::read(&file.absolute_path) {
-            Ok(bytes) => Ok(source_analysis::analyze_source(file, &bytes, &context)),
+            Ok(bytes) if hoi4_core::canonical::sha256_hex(&bytes) == file.sha256 => Ok(source_analysis::analyze_source(file, &bytes, &context)),
+            Ok(_) => Err(format!("{} changed since it was scanned", file.display_path)),
             Err(e) => Err(format!("cannot read {}: {e}", file.display_path)),
         })
         .collect();
@@ -205,16 +206,19 @@ fn graph_op(request: &Value) -> OpResponse {
     match graph::build_graph(&fragments, &scan, &lookups) {
         Ok(graph) => {
             let revision = graph["revision"].as_str().unwrap_or("").to_string();
-            let result = json!({ "graph": graph });
-            let mut guard = kept().lock().unwrap_or_else(|e| e.into_inner());
-            guard.graphs.retain(|(r, _)| *r != revision);
-            guard.graphs.push((revision, Arc::new(result["graph"].clone())));
-            while guard.graphs.len() > KEPT_GRAPHS {
-                guard.graphs.remove(0);
-            }
-            OpResponse::ok(result)
+            keep_graph(revision, graph.clone());
+            OpResponse::ok(json!({ "graph": graph }))
         }
         Err(r) => refusal(r),
+    }
+}
+
+fn keep_graph(revision: String, graph: Value) {
+    let mut guard = kept().lock().unwrap_or_else(|e| e.into_inner());
+    guard.graphs.retain(|(r, _)| *r != revision);
+    guard.graphs.push((revision, Arc::new(graph)));
+    while guard.graphs.len() > KEPT_GRAPHS {
+        guard.graphs.remove(0);
     }
 }
 
@@ -249,6 +253,9 @@ struct QueryRequest {
     impact: Option<ImpactRequest>,
     #[serde(default)]
     full_graph_record_limit: Option<usize>,
+    /// The graph itself arrives in the payload, because the engine no longer holds it.
+    #[serde(default)]
+    graph_in_payload: bool,
 }
 
 #[derive(Deserialize)]
@@ -262,11 +269,17 @@ struct ImpactRequest {
 }
 
 /// `tech.query`: one read-only query of a kept graph; `explain` also answers its inline summary.
-fn query(request: &Value) -> OpResponse {
+fn query(request: &Value, payload: &[u8]) -> OpResponse {
     let request: QueryRequest = match parse("tech.query", request) {
         Ok(r) => r,
         Err(e) => return e,
     };
+    if request.graph_in_payload {
+        match serde_json::from_slice::<Value>(payload) {
+            Ok(graph) if graph["revision"].as_str() == Some(request.revision.as_str()) => keep_graph(request.revision.clone(), graph),
+            _ => return OpResponse::error("invalid_request", "the payload is not the technology graph of the requested revision"),
+        }
+    }
     let graph = {
         let guard = kept().lock().unwrap_or_else(|e| e.into_inner());
         guard.graphs.iter().find(|(r, _)| *r == request.revision).map(|(_, g)| g.clone())
@@ -292,10 +305,13 @@ fn query(request: &Value) -> OpResponse {
             None => return OpResponse::error("invalid_request", "mode trace requires technologyId"),
         },
         "explain" => match request.technology_id.as_deref() {
-            Some(id) => queries::explain(graph, id).map(|report| {
-                let summary = queries::explain_summary(&report);
-                json!({ "report": report, "summary": summary })
-            }),
+            Some(id) => match queries::explain(graph, id) {
+                Ok(report) => {
+                    let summary = queries::explain_summary(&report);
+                    return OpResponse::ok(json!({ "report": report, "summary": summary }));
+                }
+                Err(r) => Err(r),
+            },
             None => return OpResponse::error("invalid_request", "mode explain requires technologyId"),
         },
         "unlocks" => queries::inspect_unlocks(graph, request.technology_id.as_deref(), request.target_kind.as_deref(), request.target_id.as_deref()),
@@ -325,5 +341,5 @@ fn query(request: &Value) -> OpResponse {
 pub fn register(registry: &mut Registry) {
     registry.add_fn("tech.analyze", |_, request, _| analyze(request));
     registry.add_fn("tech.graph", |_, request, _| graph_op(request));
-    registry.add_fn("tech.query", |_, request, _| query(request));
+    registry.add_fn("tech.query", |_, request, payload| query(request, payload));
 }
