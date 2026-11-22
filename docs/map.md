@@ -322,6 +322,35 @@ The supported kinds are:
 The complete operation schema is [map-operation.schema.json](../schemas/map-operation.schema.json).
 The examples below show single operations; each goes inside the `operations` array.
 
+### Writes over a map that already has errors
+
+Without further input, every validation error blocks a write, including errors the map had before the write.
+Each such error also adds a `MAP_VALIDATION_OPERATION_UNOWNED` blocker.
+On a map with many pre-existing errors, no write can pass.
+
+A write can opt in to a stated baseline ([ADR 0090](adr/0090-stated-map-baseline.md)):
+
+1. Run a full `hoi4.map_inspect` on the untouched map. Its result carries `baselineFingerprint`: a hash of the tool version and of every scanned map source.
+2. Pass that value as `baselineFingerprint` in `hoi4.map_rewrite`.
+
+The server recomputes the fingerprint on the current source.
+If the map changed since the inspect, the write is refused with `MAP_BASELINE_STALE`, so a caller cannot invent a baseline.
+With a matching fingerprint, both validations keep every finding (up to 50,000) instead of 2,000, and each pre-existing error is judged against the write's footprint:
+
+- An error that belongs to nothing the write touches no longer blocks. It is reported as a warning with `attributionStatus: "accepted-baseline"` and `baselineSeverity`. Repeated codes roll up into one entry per code, with its count and samples, so they count once each against the 100-diagnostic review limit.
+- An error inside the footprint still blocks, as before.
+- Every new error still blocks.
+
+An error belongs to the objects its location and related locations name, and to the provinces its details name (`province`, `provinceId`, `provinceIds`, `provinces`).
+
+- A location in a file the write leaves unchanged is untouched.
+- A location on a row of a changed `definition.csv` is the province on that row. That province is touched when the write changes its definition row or any of its pixels.
+- Any other location in a changed file is touched.
+- An error that names no object at all counts as touched.
+
+The result reports `baseline: { stated, matched, accepted, insideFootprint }`.
+A stated baseline does not apply to `create_world`, which replaces the whole map ([ADR 0070](adr/0070-whole-map-validation-and-river-check.md)), and is refused there with `MAP_BASELINE_NOT_APPLICABLE`.
+
 ## Create states
 
 The compact `create_state` form needs selected provinces and a `displayName` or `name`:

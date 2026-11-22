@@ -456,6 +456,9 @@ export async function prepareMapRewrite(
     workspaceId: context.workspaceId,
     operations: input.operations as MapOperation[],
     ...(input.diffScale === undefined ? {} : { diffScale: input.diffScale }),
+    ...(input.baselineFingerprint === undefined
+      ? {}
+      : { baselineFingerprint: input.baselineFingerprint }),
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
@@ -479,6 +482,7 @@ export async function prepareMapRewrite(
           ? {}
           : { territory: planned.plan.territory.map(compactTerritoryReport) }),
         ...worldOutputsData(planned.plan),
+        ...(planned.baseline === undefined ? {} : { baseline: planned.baseline }),
       }),
       filesScanned: planned.filesScanned,
       planBlockers: planned.plan.blockers
@@ -837,6 +841,9 @@ export async function previewMapRewrite(
     workspaceId: context.workspaceId,
     operations: input.operations as MapOperation[],
     ...(input.diffScale === undefined ? {} : { diffScale: input.diffScale }),
+    ...(input.baselineFingerprint === undefined
+      ? {}
+      : { baselineFingerprint: input.baselineFingerprint }),
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
@@ -860,6 +867,7 @@ export async function previewMapRewrite(
     fileCount: planned.plan.changes.length,
     artifactCount: planned.artifacts.length,
     ...worldOutputsData(planned.plan),
+    ...(planned.baseline === undefined ? {} : { baseline: planned.baseline }),
     ...(input.operations.some(({ kind }) => kind === 'create_world') &&
     generatedWorldOperationIds(planned.plan).size === 0
       ? {}
@@ -1300,6 +1308,12 @@ export async function inspectMap(
     ...(scriptReferences === undefined ? {} : { scriptReferences }),
     ...(borderQuality === undefined ? {} : { quality: borderQuality.summary }),
     ...(naturalLands === undefined ? {} : { lands: naturalLands.summary }),
+    // A map write may state this to leave pre-existing errors outside its footprint (ADR 0090).
+    baselineFingerprint: await nudger.baselineFingerprint(
+      context.workspaceId,
+      context.principal,
+      context.signal,
+    ),
   });
   result.code = 'MAP_INSPECTED';
   setInlineFilesScanned(

@@ -72,7 +72,13 @@ import {
   type MapRenderBundle,
   type MapRenderOptions,
 } from './render.js';
-import { validateMapAsync, type MapValidationResult } from './validation.js';
+import { mapValidationChecks, validateMapAsync, type MapValidationResult } from './validation.js';
+import {
+  MAP_BASELINE_DIAGNOSTIC_LIMIT,
+  mapBaselineFingerprint,
+  mapWriteFootprint,
+  type MapWriteFootprint,
+} from './baseline.js';
 import { buildWorldPreviewArtifacts, generatedWorldOperationIds } from './world-preview.js';
 import type { TerritoryReport } from './territory-operations.js';
 import {
@@ -90,7 +96,7 @@ export interface MapScanSnapshot {
   referenceSources?: ReferenceSourceEvidence[];
 }
 
-export interface MapPlanInput {
+export interface MapPlanInput extends MapBaselineOptions {
   workspaceId: string;
   operations: MapOperation[];
   artifacts?: ArtifactLink[];
@@ -122,7 +128,7 @@ export interface StoredMapDiff {
   filesScanned: string[];
 }
 
-export interface MapRewritePlanInput {
+export interface MapRewritePlanInput extends MapBaselineOptions {
   workspaceId: string;
   operations: MapOperation[];
   diffScale?: number;
@@ -130,7 +136,10 @@ export interface MapRewritePlanInput {
   signal?: AbortSignal;
 }
 
-export interface MapRewritePlanResult extends MapPlanResult, StoredMapDiff {}
+export interface MapRewritePlanResult extends MapPlanResult, StoredMapDiff {
+  /** What the stated baseline did, when the write stated one (ADR 0090). */
+  baseline?: MapStatedBaselineReport;
+}
 
 /**
  * Evidence of an imported reference: registered sheets, an exact or frame-fitted picture, or a
@@ -186,6 +195,26 @@ interface PreparedMapOperations {
   territory: { reports: TerritoryReport[]; quality: TerritoryQuality | undefined };
   /** Evidence of imported references: sheets, exact or frame-fitted pictures, or a model beside them. */
   imports: PreparedImport[];
+  /** The stated baseline of the write, when the caller gave one (ADR 0090). */
+  baseline?: MapStatedBaselineReport;
+}
+
+/** What a stated baseline did to a write (ADR 0090). */
+export interface MapStatedBaselineReport {
+  /** The fingerprint the caller stated. */
+  stated: string;
+  /** Whether it equals the fingerprint of the current source; when not, the write is refused. */
+  matched: boolean;
+  /** Pre-existing errors outside the write's footprint that no longer block it. */
+  accepted: number;
+  /** Pre-existing errors inside the footprint, which still block. */
+  insideFootprint: number;
+}
+
+/** Options of a map write with a stated baseline. */
+export interface MapBaselineOptions {
+  /** The fingerprint a prior full validation of the untouched source returned. */
+  baselineFingerprint?: string;
 }
 
 export interface MapValidationAttributionInput {
@@ -193,6 +222,11 @@ export interface MapValidationAttributionInput {
   operations: ReadonlyArray<MapOperationPlan['operations'][number]>;
   changes: readonly Pick<ProposedFileChange, 'relativePath' | 'operationIds'>[];
   baselineDiagnostics?: readonly Diagnostic[];
+  /**
+   * The footprint of a write whose stated baseline matched (ADR 0090): a pre-existing error
+   * outside it no longer blocks. Without it every pre-existing error blocks, as before.
+   */
+  acceptedBaseline?: MapWriteFootprint;
 }
 
 export type ProvinceGeometryRowRun = readonly [y: number, startX: number, endXExclusive: number];
@@ -565,6 +599,23 @@ export function attributeMapValidationDiagnostics(
       continue;
     }
     const fingerprint = diagnosticFingerprint(diagnostic);
+    if (
+      baselineErrors.has(fingerprint) &&
+      input.acceptedBaseline !== undefined &&
+      !input.acceptedBaseline.touches(diagnostic, diagnosticPaths(diagnostic))
+    ) {
+      // A stated baseline leaves this pre-existing error in place: it is reported, not blocking.
+      attributed.push({
+        ...diagnostic,
+        severity: 'warning',
+        details: {
+          ...diagnostic.details,
+          attributionStatus: 'accepted-baseline',
+          baselineSeverity: diagnostic.severity,
+        },
+      });
+      continue;
+    }
     if (baselineErrors.has(fingerprint)) {
       attributed.push({
         ...diagnostic,
@@ -1130,8 +1181,15 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     synthesisCheck = false,
+    baselineOptions: MapBaselineOptions = {},
   ): Promise<PreparedMapOperations> {
     signal?.throwIfAborted();
+    const stated = baselineOptions.baselineFingerprint;
+    // The host's own fingerprint of the current source is the evidence; the stated one only opts in.
+    const current =
+      stated === undefined
+        ? undefined
+        : await this.baselineFingerprint(workspaceId, principal, signal);
     const snapshot = await this.scan(
       workspaceId,
       principal,
@@ -1262,12 +1320,39 @@ export class AgentNudger {
     }
     plan.diagnostics.push(...importDiagnostics);
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
+    const baselineReport: MapStatedBaselineReport | undefined =
+      stated === undefined
+        ? undefined
+        : { stated, matched: stated === current, accepted: 0, insideFootprint: 0 };
+    if (baselineReport !== undefined && !baselineReport.matched)
+      plan.diagnostics.push({
+        code: 'MAP_BASELINE_STALE',
+        severity: 'blocker',
+        category: 'validation',
+        message:
+          'The stated baseline fingerprint does not match the current map source; validate the untouched map again and state its new fingerprint',
+        details: { statedBaselineFingerprint: stated },
+      });
+    if (baselineReport?.matched === true && newWorld)
+      plan.diagnostics.push({
+        code: 'MAP_BASELINE_NOT_APPLICABLE',
+        severity: 'blocker',
+        category: 'validation',
+        message:
+          'A stated baseline cannot apply to create_world: a new world replaces the whole map and has no baseline (ADR 0070)',
+      });
+    // With a matched baseline both validations keep every finding, so none hides behind the cut.
+    const acceptBaseline = baselineReport?.matched === true && !newWorld;
+    const limit = acceptBaseline ? { diagnosticLimit: MAP_BASELINE_DIAGNOSTIC_LIMIT } : {};
     // A new world replaces the whole map: findings of the map it replaces are not its baseline,
     // so every finding of the generated map is judged on its own and belongs to the world
     // operation (ADR 0070).
     const baselineValidation = newWorld
       ? { passed: true, diagnostics: [], checks: [] }
-      : await validateMapAsync(snapshot.index, signal === undefined ? {} : { signal });
+      : await validateMapAsync(snapshot.index, {
+          ...limit,
+          ...(signal === undefined ? {} : { signal }),
+        });
     // A new world has nothing to compare its bitmap format and pixels with.
     const worldOperation = operations.find((operation) => operation.kind === 'create_world');
     // A world that failed to generate left the workspace map unchanged; validating that map would
@@ -1279,6 +1364,7 @@ export class AgentNudger {
     const rawValidation: MapValidationResult = worldFailed
       ? { passed: true, diagnostics: [], checks: [] }
       : await validateMapAsync(plan.finalIndex, {
+          ...limit,
           ...(newWorld ? {} : { baseline: snapshot.index }),
           ...(worldOperation?.kind === 'create_world' && worldOperation.edge !== undefined
             ? { edgeMode: worldOperation.edge.mode ?? 'sea-band' }
@@ -1288,6 +1374,19 @@ export class AgentNudger {
             ? {}
             : { expectedChangedBounds: plan.expectedChangedBounds }),
         });
+    const footprint = acceptBaseline
+      ? mapWriteFootprint(
+          snapshot.index,
+          plan.finalIndex,
+          // Written paths, normalized as attribution matches them (`ownersByPath`).
+          new Set(
+            plan.changes.map(({ relativePath }) =>
+              relativePath.replaceAll('\\', '/').toLowerCase(),
+            ),
+          ),
+          normalizedDiagnosticPath,
+        )
+      : undefined;
     const attributedValidation: MapValidationResult = {
       ...rawValidation,
       diagnostics: attributeMapValidationDiagnostics({
@@ -1295,8 +1394,29 @@ export class AgentNudger {
         operations: plan.operations,
         changes: plan.changes,
         baselineDiagnostics: baselineValidation.diagnostics,
+        ...(footprint === undefined ? {} : { acceptedBaseline: footprint }),
       }),
     };
+    if (footprint !== undefined) {
+      // Accepted pre-existing errors no longer fail their family's check; everything else still does.
+      attributedValidation.checks = mapValidationChecks(attributedValidation.diagnostics);
+      attributedValidation.passed =
+        attributedValidation.checks.every(({ passed }) => passed) &&
+        !attributedValidation.diagnostics.some(
+          ({ severity }) => severity === 'error' || severity === 'blocker',
+        );
+    }
+    if (baselineReport !== undefined)
+      for (const diagnostic of attributedValidation.diagnostics) {
+        const status = diagnostic.details?.attributionStatus;
+        if (status === 'accepted-baseline') baselineReport.accepted += 1;
+        else if (
+          acceptBaseline &&
+          status === 'pre-existing-baseline' &&
+          diagnostic.code !== 'MAP_VALIDATION_OPERATION_UNOWNED'
+        )
+          baselineReport.insideFootprint += 1;
+      }
     return {
       snapshot,
       plan,
@@ -1305,17 +1425,37 @@ export class AgentNudger {
       geography: [...geographyModels.values()],
       territory: { reports: plan.territory ?? [], quality: territoryQuality },
       imports,
+      ...(baselineReport === undefined ? {} : { baseline: baselineReport }),
     };
   }
 
-  async plan(input: MapPlanInput): Promise<MapPlanResult> {
+  /**
+   * The baseline fingerprint of a workspace's current map source (ADR 0090), over the same scan
+   * whatever tool asks: a full validation reports it, and a write that states it is checked
+   * against it.
+   */
+  async baselineFingerprint(
+    workspaceId: string,
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const snapshot = await this.scan(workspaceId, principal, signal);
+    return mapBaselineFingerprint(snapshot.files);
+  }
+
+  async plan(input: MapPlanInput): Promise<MapPlanResult & { baseline?: MapStatedBaselineReport }> {
     const prepared = await this.prepareOperations(
       input.workspaceId,
       input.operations,
       input.principal,
       input.signal,
+      false,
+      input.baselineFingerprint === undefined
+        ? {}
+        : { baselineFingerprint: input.baselineFingerprint },
     );
-    return this.planPrepared(input, prepared);
+    const planned = await this.planPrepared(input, prepared);
+    return prepared.baseline === undefined ? planned : { ...planned, baseline: prepared.baseline };
   }
 
   private async planPrepared(
@@ -1511,6 +1651,10 @@ export class AgentNudger {
       input.operations,
       input.principal,
       input.signal,
+      false,
+      input.baselineFingerprint === undefined
+        ? {}
+        : { baselineFingerprint: input.baselineFingerprint },
     );
     const diff = await this.renderPreparedDiffAndStore(prepared, input.operations, {
       ...(input.diffScale === undefined ? {} : { scale: input.diffScale }),
@@ -1527,7 +1671,11 @@ export class AgentNudger {
       },
       prepared,
     );
-    return { ...diff, ...planned };
+    return {
+      ...diff,
+      ...planned,
+      ...(prepared.baseline === undefined ? {} : { baseline: prepared.baseline }),
+    };
   }
 
   /**
@@ -1568,14 +1716,22 @@ export class AgentNudger {
   }
 
   /** Build validated offline evidence without planning or applying a write transaction. */
-  async previewRewriteWithDiff(
-    input: MapRewritePlanInput,
-  ): Promise<StoredMapDiff & { validation: MapValidationResult; diagnostics: Diagnostic[] }> {
+  async previewRewriteWithDiff(input: MapRewritePlanInput): Promise<
+    StoredMapDiff & {
+      validation: MapValidationResult;
+      diagnostics: Diagnostic[];
+      baseline?: MapStatedBaselineReport;
+    }
+  > {
     const prepared = await this.prepareOperations(
       input.workspaceId,
       input.operations,
       input.principal,
       input.signal,
+      false,
+      input.baselineFingerprint === undefined
+        ? {}
+        : { baselineFingerprint: input.baselineFingerprint },
     );
     const diff = await this.renderPreparedDiffAndStore(prepared, input.operations, {
       ...(input.diffScale === undefined ? {} : { scale: input.diffScale }),
@@ -1585,6 +1741,7 @@ export class AgentNudger {
     return {
       ...diff,
       validation: prepared.validation,
+      ...(prepared.baseline === undefined ? {} : { baseline: prepared.baseline }),
       diagnostics: rollupRepeatedSoftDiagnostics(
         prepared.validation.diagnostics,
         publicArtifactLink(
