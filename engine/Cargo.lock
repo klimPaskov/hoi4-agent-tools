@@ -340,6 +340,9 @@ name = "hoi4-tech"
 version = "0.1.0"
 dependencies = [
  "hoi4-core",
+ "hoi4-engine",
+ "hoi4-syntax",
+ "rayon",
  "serde",
  "serde_json",
 ]

@@ -29,15 +29,57 @@ struct Owner {
 }
 
 const STRUCTURAL: [&str; 29] = [
-    "ai_research_weights", "ai_will_do", "allow", "allow_branch", "categories", "desc", "doctrine", "doctrine_name", "enable_ability", "enable_abilities",
-    "enable_building", "enable_equipment_modules", "enable_equipments", "enable_subunits", "enable_tactic", "folder", "force_use_small_tech_layout",
-    "on_research_complete", "on_research_complete_limit", "path", "research_cost", "show_equipment_icon", "start_year", "sub_technologies", "tags",
-    "xp_boost_cost", "xp_research_bonus", "xp_unlock_cost", "xor",
+    "ai_research_weights",
+    "ai_will_do",
+    "allow",
+    "allow_branch",
+    "categories",
+    "desc",
+    "doctrine",
+    "doctrine_name",
+    "enable_ability",
+    "enable_abilities",
+    "enable_building",
+    "enable_equipment_modules",
+    "enable_equipments",
+    "enable_subunits",
+    "enable_tactic",
+    "folder",
+    "force_use_small_tech_layout",
+    "on_research_complete",
+    "on_research_complete_limit",
+    "path",
+    "research_cost",
+    "show_equipment_icon",
+    "start_year",
+    "sub_technologies",
+    "tags",
+    "xp_boost_cost",
+    "xp_research_bonus",
+    "xp_unlock_cost",
+    "xor",
 ];
 
 const DOCTRINE_STRUCTURAL: [&str; 19] = [
-    "active", "ai_will_do", "allow_in_multiple_tracks", "available", "description", "folder", "icon", "mastery", "max_track_columns", "max_track_rows",
-    "milestones", "name", "rewards", "track", "tracks", "visible", "xp_cost", "xp_type", "xor",
+    "active",
+    "ai_will_do",
+    "allow_in_multiple_tracks",
+    "available",
+    "description",
+    "folder",
+    "icon",
+    "mastery",
+    "max_track_columns",
+    "max_track_rows",
+    "milestones",
+    "name",
+    "rewards",
+    "track",
+    "tracks",
+    "visible",
+    "xp_cost",
+    "xp_type",
+    "xor",
 ];
 
 const EVENT_KEYS: [&str; 5] = ["country_event", "news_event", "state_event", "unit_leader_event", "operative_leader_event"];
@@ -501,7 +543,12 @@ fn parse_technology_definitions(cx: &Ctx, root: &Block, fragment: &mut Fragment)
                 u.insert("resolved".into(), "unknown".into());
                 fragment.unlocks.push(Value::Object(u));
             };
-            for (field, kind) in [("enable_equipments", "equipment"), ("enable_equipment_modules", "equipment_module"), ("enable_subunits", "sub_unit"), ("enable_abilities", "ability")] {
+            for (field, kind) in [
+                ("enable_equipments", "equipment"),
+                ("enable_equipment_modules", "equipment_module"),
+                ("enable_subunits", "sub_unit"),
+                ("enable_abilities", "ability"),
+            ] {
                 for unlock_block in child_blocks(block, field) {
                     for target in unlock_block.scalars() {
                         add_unlock(fragment, kind, target, None);
@@ -835,7 +882,10 @@ fn parse_gridboxes(cx: &Ctx, root: &Block, fragment: &mut Fragment) {
                 set(&mut slot_size, "widthExpression", xy_expression(slot, width, "width"));
                 set(&mut slot_size, "heightExpression", xy_expression(slot, height, "height"));
                 let mut g = Map::new();
-                g.insert("id".into(), deterministic_id("tech-gridbox", &json!({ "name": n.value.to_string(), "path": cx.file.display_path, "offset": id_offset })).into());
+                g.insert(
+                    "id".into(),
+                    deterministic_id("tech-gridbox", &json!({ "name": n.value.to_string(), "path": cx.file.display_path, "offset": id_offset })).into(),
+                );
                 g.insert("name".into(), n.value.to_string().into());
                 set(&mut g, "folderId", s(folder_id.clone()));
                 g.insert("position".into(), Value::Object(pos));
@@ -856,9 +906,8 @@ fn parse_gridboxes(cx: &Ctx, root: &Block, fragment: &mut Fragment) {
             if element == "instanttextboxtype"
                 && let (Some(n), Some(folder)) = (name, &folder_id)
             {
-                let year = first_value(block, "text").filter(|t| {
-                    t.len() == 4 && t.bytes().all(|b| b.is_ascii_digit()) && (t.starts_with("18") || t.starts_with("19") || t.starts_with("20"))
-                });
+                let year = first_value(block, "text")
+                    .filter(|t| t.len() == 4 && t.bytes().all(|b| b.is_ascii_digit()) && (t.starts_with("18") || t.starts_with("19") || t.starts_with("20")));
                 if let (Some(year), Some(_), Some(_)) = (year, local_x, local_y) {
                     let year_number: u32 = year.parse().unwrap_or(0);
                     let mut style = Map::new();
@@ -927,7 +976,8 @@ fn item_layout(cx: &Ctx, item: &ItemLayout) -> Value {
         let sp = child_blocks(cb, "position").first().copied();
         let ss = child_blocks(cb, "size").first().copied();
         let (Some(x), Some(y), Some(w), Some(h)) = (fv_num(sp, "x"), fv_num(sp, "y"), fv_num(ss, "width"), fv_num(ss, "height")) else { continue };
-        let sprite = child_blocks(cb, "iconType").into_iter().find(|i| first_value(i, "name").as_deref() == Some("picture")).and_then(|i| first_value(i, "spriteType"));
+        let sprite =
+            child_blocks(cb, "iconType").into_iter().find(|i| first_value(i, "name").as_deref() == Some("picture")).and_then(|i| first_value(i, "spriteType"));
         let index: u64 = digits.parse().unwrap_or(0);
         let mut slot = Map::new();
         slot.insert("index".into(), index.into());
@@ -961,7 +1011,10 @@ fn item_layout(cx: &Ctx, item: &ItemLayout) -> Value {
     set(&mut sz, "widthExpression", xy_expression(size, width, "width"));
     set(&mut sz, "heightExpression", xy_expression(size, height, "height"));
     let mut l = Map::new();
-    l.insert("id".into(), deterministic_id("tech-item-layout", &json!({ "name": item.name.value.to_string(), "path": cx.file.display_path, "offset": item.id_offset })).into());
+    l.insert(
+        "id".into(),
+        deterministic_id("tech-item-layout", &json!({ "name": item.name.value.to_string(), "path": cx.file.display_path, "offset": item.id_offset })).into(),
+    );
     l.insert("name".into(), item.name.value.to_string().into());
     l.insert("folderId".into(), item.folder.into());
     l.insert("layoutSize".into(), item.layout_size.into());
@@ -1024,7 +1077,8 @@ fn next_owner(cx: &Ctx, a: &Assignment, depth: usize, ancestors: &[String], curr
         return Some(Owner { kind: "on_action", id: key.to_string() });
     }
     if path.starts_with("common/decisions/") && depth == 1 && !DECISION_STRUCTURAL.contains(&key) {
-        let mission = block.first_scalar("days_mission_timeout").is_some() || block.first_scalar("days_remove").is_some() || key.to_lowercase().contains("mission");
+        let mission =
+            block.first_scalar("days_mission_timeout").is_some() || block.first_scalar("days_remove").is_some() || key.to_lowercase().contains("mission");
         return Some(Owner { kind: if mission { "mission" } else { "decision" }, id: key.to_string() });
     }
     if path.starts_with("common/ideas/") && ancestors.first().map(String::as_str) == Some("ideas") && !ancestors.is_empty() {
@@ -1165,7 +1219,17 @@ fn parse_external_references(cx: &Ctx, root: &Block, fragment: &mut Fragment, co
                     };
                     add_external(
                         &mut fragment.external_references,
-                        External { kind, owner: &selected, technology: Some(&target_id), category: None, expression, location, confidence: "confirmed", dynamic: false, metadata: json!({ "value": value }) },
+                        External {
+                            kind,
+                            owner: &selected,
+                            technology: Some(&target_id),
+                            category: None,
+                            expression,
+                            location,
+                            confidence: "confirmed",
+                            dynamic: false,
+                            metadata: json!({ "value": value }),
+                        },
                     );
                 }
             }
@@ -1276,7 +1340,14 @@ pub fn analyze_source(file: &ScannedFile, bytes: &[u8], context: &Context) -> Va
     if !limits.is_empty() {
         let limit_diagnostics: Vec<Value> = limits.iter().map(|d| pos.diagnostic(&file.display_path, d)).collect();
         let location = limit_diagnostics.iter().find_map(|d| d.get("location").cloned());
-        fragment.unresolved.push(unresolved("partial_source", &file.display_path, None, location, "TECH_SOURCE_PARTIAL", "Technology analysis skipped a source that exceeded a shared parser limit"));
+        fragment.unresolved.push(unresolved(
+            "partial_source",
+            &file.display_path,
+            None,
+            location,
+            "TECH_SOURCE_PARTIAL",
+            "Technology analysis skipped a source that exceeded a shared parser limit",
+        ));
         fragment.diagnostics = limit_diagnostics;
         return fragment.into_value(file);
     }
@@ -1300,9 +1371,21 @@ pub fn analyze_source(file: &ScannedFile, bytes: &[u8], context: &Context) -> Va
 /// `technologySourceFiles`: the active files technology analysis reads, by display path.
 pub fn source_files(files: &[ScannedFile]) -> Vec<&ScannedFile> {
     const PREFIXES: [&str; 15] = [
-        "common/technologies/", "common/technology_tags/", "common/technology_sharing/", "common/doctrines/", "common/units/", "common/buildings/",
-        "common/abilities/", "common/national_focus/", "common/decisions/", "common/scripted_effects/", "common/on_actions/", "common/ideas/",
-        "common/characters/", "events/", "history/countries/",
+        "common/technologies/",
+        "common/technology_tags/",
+        "common/technology_sharing/",
+        "common/doctrines/",
+        "common/units/",
+        "common/buildings/",
+        "common/abilities/",
+        "common/national_focus/",
+        "common/decisions/",
+        "common/scripted_effects/",
+        "common/on_actions/",
+        "common/ideas/",
+        "common/characters/",
+        "events/",
+        "history/countries/",
     ];
     let mut selected: Vec<&ScannedFile> = files
         .iter()

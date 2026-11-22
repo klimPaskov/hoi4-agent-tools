@@ -326,7 +326,9 @@ fn query(request: &Value, payload: &[u8]) -> OpResponse {
             },
         )),
         "impact" => match &request.impact {
-            Some(i) => queries::impact(graph, &queries::ImpactInput { kind: &i.kind, id: &i.id, operation: &i.operation, replacement_id: i.replacement_id.as_deref() }),
+            Some(i) => {
+                queries::impact(graph, &queries::ImpactInput { kind: &i.kind, id: &i.id, operation: &i.operation, replacement_id: i.replacement_id.as_deref() })
+            }
             None => return OpResponse::error("invalid_request", "mode impact requires impact"),
         },
         other => return OpResponse::error("invalid_request", format!("unknown technology query mode {other}")),

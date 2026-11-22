@@ -67,8 +67,22 @@ fn grouped_counts<'a>(values: impl Iterator<Item = &'a Value>, key: impl Fn(&Val
 
 fn record_count(graph: &Value) -> usize {
     [
-        "technologies", "folders", "categories", "placements", "gridboxes", "itemLayouts", "yearMarkers", "edges", "unlocks", "unlockTargets",
-        "externalReferences", "helperCalls", "issues", "diagnostics", "unresolved", "doctrineDefinitions",
+        "technologies",
+        "folders",
+        "categories",
+        "placements",
+        "gridboxes",
+        "itemLayouts",
+        "yearMarkers",
+        "edges",
+        "unlocks",
+        "unlockTargets",
+        "externalReferences",
+        "helperCalls",
+        "issues",
+        "diagnostics",
+        "unresolved",
+        "doctrineDefinitions",
     ]
     .iter()
     .map(|k| list(graph, k).len())
@@ -93,8 +107,21 @@ pub fn scan_report(graph: &Value, full_graph_record_limit: Option<usize>) -> Val
     };
     let counts = |keys: &[&str]| -> Value { Value::Object(keys.iter().map(|k| ((*k).to_string(), Value::from(list(graph, k).len()))).collect()) };
     let record_counts = counts(&[
-        "technologies", "folders", "categories", "placements", "gridboxes", "itemLayouts", "yearMarkers", "edges", "unlocks", "unlockTargets",
-        "externalReferences", "issues", "diagnostics", "unresolved", "doctrineDefinitions",
+        "technologies",
+        "folders",
+        "categories",
+        "placements",
+        "gridboxes",
+        "itemLayouts",
+        "yearMarkers",
+        "edges",
+        "unlocks",
+        "unlockTargets",
+        "externalReferences",
+        "issues",
+        "diagnostics",
+        "unresolved",
+        "doctrineDefinitions",
     ]);
     let mut summary = Map::new();
     for key in ["schemaVersion", "parserVersion", "workspaceId", "workspaceIdentity", "revision"] {
@@ -282,9 +309,8 @@ fn edges_where<'a>(graph: &'a Value, predicate: impl Fn(&Value) -> bool) -> Vec<
 pub fn explain(graph: &Value, technology_id: &str) -> Result<Value, Refusal> {
     require_technology(graph, technology_id)?;
     let technology = list(graph, "technologies").iter().find(|t| text(t, "id") == Some(technology_id)).cloned().unwrap_or(Value::Null);
-    let wide = |direction: &'static str| {
-        trace(graph, &TraceInput { technology_id, direction, max_depth: 256, max_nodes: 25_000, include_sub_technologies: false })
-    };
+    let wide =
+        |direction: &'static str| trace(graph, &TraceInput { technology_id, direction, max_depth: 256, max_nodes: 25_000, include_sub_technologies: false });
     let prerequisites = wide("prerequisites")?;
     let descendants = wide("descendants")?;
     let categories: Vec<&str> = technology["categories"].as_array().map_or(vec![], |a| a.iter().filter_map(Value::as_str).collect());
@@ -364,14 +390,21 @@ pub fn bonus_coverage(graph: &Value, category_id: Option<&str>, technology_id: O
             let cid = text(category, "id").unwrap_or("");
             let technology_ids: Vec<&str> = list(graph, "technologies")
                 .iter()
-                .filter(|t| t["categories"].as_array().is_some_and(|a| a.iter().any(|c| c.as_str() == Some(cid))) && technology_id.is_none_or(|id| text(t, "id") == Some(id)))
+                .filter(|t| {
+                    t["categories"].as_array().is_some_and(|a| a.iter().any(|c| c.as_str() == Some(cid)))
+                        && technology_id.is_none_or(|id| text(t, "id") == Some(id))
+                })
                 .filter_map(|t| text(t, "id"))
                 .collect();
             let bonus: Vec<&Value> = references
                 .iter()
-                .filter(|r| text(r, "kind") == Some("research_bonus") && (text(r, "categoryId") == Some(cid) || text(r, "technologyId").is_some_and(|t| technology_ids.contains(&t))))
+                .filter(|r| {
+                    text(r, "kind") == Some("research_bonus")
+                        && (text(r, "categoryId") == Some(cid) || text(r, "technologyId").is_some_and(|t| technology_ids.contains(&t)))
+                })
                 .collect();
-            let sharing: Vec<&Value> = references.iter().filter(|r| text(r, "kind") == Some("technology_sharing") && text(r, "categoryId") == Some(cid)).collect();
+            let sharing: Vec<&Value> =
+                references.iter().filter(|r| text(r, "kind") == Some("technology_sharing") && text(r, "categoryId") == Some(cid)).collect();
             let covered = !bonus.is_empty() || !sharing.is_empty();
             json!({ "category": category, "technologyIds": technology_ids, "bonusSources": bonus, "sharingSources": sharing, "covered": covered })
         })
@@ -409,7 +442,8 @@ pub fn lint(graph: &Value, filter: &LintFilter) -> Value {
                 && filter.codes.is_none_or(|c| c.iter().any(|x| Some(x.as_str()) == text(i, "code")))
                 && filter.folder_id.is_none_or(|f| text(&i["details"], "folderId") == Some(f))
                 && filter.technology_id.is_none_or(|t| {
-                    text(&i["details"], "technologyId") == Some(t) || i["details"]["technologyIds"].as_array().is_some_and(|a| a.iter().any(|v| v.as_str() == Some(t)))
+                    text(&i["details"], "technologyId") == Some(t)
+                        || i["details"]["technologyIds"].as_array().is_some_and(|a| a.iter().any(|v| v.as_str() == Some(t)))
                 })
         })
         .collect();
@@ -481,9 +515,9 @@ pub fn impact(graph: &Value, input: &ImpactInput) -> Result<Value, Refusal> {
         subject.insert("replacementId".into(), r.into());
     }
     let subject = Value::Object(subject);
-    let collision = input.replacement_id.is_some_and(|r| {
-        ["technologies", "categories", "folders"].iter().any(|key| list(graph, key).iter().any(|v| text(v, "id") == Some(r)))
-    });
+    let collision = input
+        .replacement_id
+        .is_some_and(|r| ["technologies", "categories", "folders"].iter().any(|key| list(graph, key).iter().any(|v| text(v, "id") == Some(r))));
     Ok(json!({
         "id": deterministic_id("tech-impact", &subject),
         "subject": subject,
@@ -509,14 +543,20 @@ fn limited(values: impl Iterator<Item = String>) -> (Vec<String>, bool) {
 pub fn explain_summary(report: &Value) -> Option<Value> {
     let technology = report.get("technology")?;
     let id = text(technology, "id")?;
-    let strings = |key: &str, field: &str| -> Vec<String> { report[key].as_array().into_iter().flatten().filter_map(|e| text(e, field)).map(str::to_string).collect() };
+    let strings =
+        |key: &str, field: &str| -> Vec<String> { report[key].as_array().into_iter().flatten().filter_map(|e| text(e, field)).map(str::to_string).collect() };
     let (prerequisites, p_cut) = limited(strings("directPrerequisites", "from").into_iter());
     let (leads_to, l_cut) = limited(strings("directDescendants", "to").into_iter());
     let (exclusive, e_cut) = limited(report["exclusiveChoices"].as_array().into_iter().flatten().map(|e| {
         let (from, to) = (text(e, "from").unwrap_or(""), text(e, "to").unwrap_or(""));
         (if from == id { to } else { from }).to_string()
     }));
-    let mut unlocks: Vec<(String, String)> = report["unlocks"].as_array().into_iter().flatten().map(|u| (text(u, "kind").unwrap_or("").to_string(), text(u, "targetId").unwrap_or("").to_string())).collect();
+    let mut unlocks: Vec<(String, String)> = report["unlocks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|u| (text(u, "kind").unwrap_or("").to_string(), text(u, "targetId").unwrap_or("").to_string()))
+        .collect();
     unlocks.sort_by(|a, b| compare_code_units(&a.0, &b.0).then_with(|| compare_code_units(&a.1, &b.1)));
     let sorted_strings = |key: &str| -> Vec<String> {
         let mut v: Vec<String> = technology[key].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
@@ -527,7 +567,9 @@ pub fn explain_summary(report: &Value) -> Option<Value> {
     out.insert("id".into(), id.into());
     out.insert("path".into(), technology["source"]["path"].clone());
     out.insert("line".into(), technology["source"]["location"]["start"]["line"].clone());
-    for (key, value) in [("name", technology["localisation"].get("name")), ("startYear", technology.get("startYear")), ("researchCost", technology.get("researchCost"))] {
+    for (key, value) in
+        [("name", technology["localisation"].get("name")), ("startYear", technology.get("startYear")), ("researchCost", technology.get("researchCost"))]
+    {
         if let Some(v) = value {
             out.insert(key.into(), v.clone());
         }
@@ -545,7 +587,13 @@ pub fn explain_summary(report: &Value) -> Option<Value> {
     out.insert("issues".into(), report["issues"].as_array().map_or(0, Vec::len).into());
     out.insert(
         "truncated".into(),
-        (p_cut || l_cut || e_cut || unlocks.len() > EXPLAIN_SUMMARY_LIST_LIMIT || report["transitivePrerequisites"]["truncated"] == true || report["descendants"]["truncated"] == true).into(),
+        (p_cut
+            || l_cut
+            || e_cut
+            || unlocks.len() > EXPLAIN_SUMMARY_LIST_LIMIT
+            || report["transitivePrerequisites"]["truncated"] == true
+            || report["descendants"]["truncated"] == true)
+            .into(),
     );
     Some(Value::Object(out))
 }

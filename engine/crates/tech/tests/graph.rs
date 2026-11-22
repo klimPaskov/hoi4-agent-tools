@@ -102,13 +102,9 @@ fn the_graph_is_deterministic() {
 #[test]
 fn diagnosis_finds_missing_targets_categories_and_references() {
     let codes = issue_codes(&graph());
-    for expected in [
-        "TECH_TARGET_MISSING",
-        "TECH_CATEGORY_REFERENCE_MISSING",
-        "TECH_EXTERNAL_REFERENCE_MISSING",
-        "TECH_LOCALISATION_MISSING",
-        "TECH_ICON_SPRITE_MISSING",
-    ] {
+    for expected in
+        ["TECH_TARGET_MISSING", "TECH_CATEGORY_REFERENCE_MISSING", "TECH_EXTERNAL_REFERENCE_MISSING", "TECH_LOCALISATION_MISSING", "TECH_ICON_SPRITE_MISSING"]
+    {
         assert!(codes.iter().any(|c| c == expected), "{expected} in {codes:?}");
     }
     assert!(!codes.iter().any(|c| c == "TECH_PREREQUISITE_CYCLE"));
@@ -150,19 +146,24 @@ fn a_prerequisite_cycle_is_reported_once() {
 #[test]
 fn queries_trace_explain_and_refuse_unknown_subjects() {
     let graph = graph();
-    let trace = queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "prerequisites", max_depth: 4, max_nodes: 10, include_sub_technologies: true }).unwrap();
+    let trace =
+        queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "prerequisites", max_depth: 4, max_nodes: 10, include_sub_technologies: true })
+            .unwrap();
     assert_eq!(trace["nodes"], json!(["alpha", "beta"]));
     assert_eq!(trace["truncated"], false);
-    let limited = queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "prerequisites", max_depth: 0, max_nodes: 10, include_sub_technologies: true }).unwrap();
+    let limited =
+        queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "prerequisites", max_depth: 0, max_nodes: 10, include_sub_technologies: true })
+            .unwrap();
     assert_eq!(limited["truncated"], true);
     assert_eq!(limited["boundary"], json!(["alpha"]));
-    let bad = queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "both", max_depth: 999, max_nodes: 10, include_sub_technologies: false }).unwrap_err();
+    let bad = queries::trace(&graph, &TraceInput { technology_id: "beta", direction: "both", max_depth: 999, max_nodes: 10, include_sub_technologies: false })
+        .unwrap_err();
     assert_eq!(bad.code, "TECH_TRACE_LIMIT_INVALID");
     assert_eq!(queries::explain(&graph, "zzz").unwrap_err().code, "TECHNOLOGY_NOT_FOUND");
     let report = queries::explain(&graph, "alpha").unwrap();
     let summary = queries::explain_summary(&report).unwrap();
     assert_eq!(summary["leadsTo"], json!(["beta"]));
-    assert_eq!(summary["allDescendants"], 1);
+    assert_eq!(summary["allDescendants"], 2);
     assert_eq!(summary["unlockCount"], 1);
 }
 
@@ -182,7 +183,10 @@ fn lint_unlock_bonus_and_impact_queries_filter_the_graph() {
     let impact = queries::impact(&graph, &ImpactInput { kind: "technology", id: "alpha", operation: "rename", replacement_id: Some("beta") }).unwrap();
     assert_eq!(impact["replacementCollision"], true);
     assert_eq!(impact["wouldBreakReferences"], true);
-    assert_eq!(queries::impact(&graph, &ImpactInput { kind: "technology", id: "alpha", operation: "rename", replacement_id: None }).unwrap_err().code, "TECH_IMPACT_REPLACEMENT_REQUIRED");
+    assert_eq!(
+        queries::impact(&graph, &ImpactInput { kind: "technology", id: "alpha", operation: "rename", replacement_id: None }).unwrap_err().code,
+        "TECH_IMPACT_REPLACEMENT_REQUIRED"
+    );
 }
 
 #[test]

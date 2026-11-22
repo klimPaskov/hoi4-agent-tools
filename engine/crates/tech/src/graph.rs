@@ -223,7 +223,11 @@ fn active_by_group(values: Vec<Value>, key: impl Fn(&Value) -> String, order: im
         .into_iter()
         .map(|mut group| {
             group.sort_by(|l, r| {
-                r["loadOrder"].as_i64().cmp(&l["loadOrder"].as_i64()).then_with(|| units(text(l, "sourcePath").unwrap_or(""), text(r, "sourcePath").unwrap_or(""))).then_with(|| offset(l).cmp(&offset(r)))
+                r["loadOrder"]
+                    .as_i64()
+                    .cmp(&l["loadOrder"].as_i64())
+                    .then_with(|| units(text(l, "sourcePath").unwrap_or(""), text(r, "sourcePath").unwrap_or("")))
+                    .then_with(|| offset(l).cmp(&offset(r)))
             });
             group.swap_remove(0)
         })
@@ -289,12 +293,14 @@ fn enrich_placements(placements: Vec<Value>, edges: &[Value], gridboxes: &[Value
             let folder_layouts = layouts_by_folder.get(folder_id);
             let kinds = unlock_kinds.get(technology_id);
             let unlocks_equipment = kinds.is_some_and(|k| k.contains("equipment") || k.contains("equipment_module"));
-            let small = technology.is_some_and(|t| text(t, "layoutSize") == Some("small")) || (folder_layouts.is_some_and(|l| l.contains_key("small")) && !unlocks_equipment);
+            let small = technology.is_some_and(|t| text(t, "layoutSize") == Some("small"))
+                || (folder_layouts.is_some_and(|l| l.contains_key("small")) && !unlocks_equipment);
             let layout_size = if small { "small" } else { "large" };
             let item_layout = folder_layouts.and_then(|l| l.get(layout_size).or_else(|| l.get("large")));
             let (mut pixel_x, mut pixel_y) = (None, None);
             if let (Some(g), Some(x), Some(y)) = (gridbox, num(&placement["x"]), num(&placement["y"]))
-                && let (Some(gx), Some(gy), Some(w), Some(h)) = (num(&g["position"]["x"]), num(&g["position"]["y"]), num(&g["slotSize"]["width"]), num(&g["slotSize"]["height"]))
+                && let (Some(gx), Some(gy), Some(w), Some(h)) =
+                    (num(&g["position"]["x"]), num(&g["position"]["y"]), num(&g["slotSize"]["width"]), num(&g["slotSize"]["height"]))
             {
                 match text(g, "format").unwrap_or("UP").to_uppercase().as_str() {
                     "LEFT" => {
@@ -324,7 +330,12 @@ fn enrich_placements(placements: Vec<Value>, edges: &[Value], gridboxes: &[Value
             out.insert("layoutSize".into(), layout_size.into());
             if let Some(l) = item_layout {
                 out.insert("itemLayoutId".into(), l["id"].clone());
-                for (key, value) in [("layoutWidth", &l["size"]["width"]), ("layoutHeight", &l["size"]["height"]), ("layoutOffsetX", &l["position"]["x"]), ("layoutOffsetY", &l["position"]["y"])] {
+                for (key, value) in [
+                    ("layoutWidth", &l["size"]["width"]),
+                    ("layoutHeight", &l["size"]["height"]),
+                    ("layoutOffsetX", &l["position"]["x"]),
+                    ("layoutOffsetY", &l["position"]["y"]),
+                ] {
                     if !value.is_null() {
                         out.insert(key.into(), value.clone());
                     }
@@ -376,7 +387,15 @@ fn add_issue(issues: &mut Vec<Value>, issue: Issue) {
     issues.push(Value::Object(out));
 }
 
-fn issue(code: &'static str, classification: &'static str, severity: &'static str, message: String, confidence: &str, location: Option<Value>, details: Value) -> Issue {
+fn issue(
+    code: &'static str,
+    classification: &'static str,
+    severity: &'static str,
+    message: String,
+    confidence: &str,
+    location: Option<Value>,
+    details: Value,
+) -> Issue {
     Issue { code, classification, severity, message, confidence: confidence.into(), location, related: None, blockers: vec![], details }
 }
 
@@ -384,7 +403,9 @@ fn stable_issues(issues: Vec<Value>) -> Vec<Value> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<Value> = Vec::new();
     for issue in issues {
-        let key = hash_canonical(&json!({ "code": issue["code"], "classification": issue["classification"], "location": issue.get("location"), "details": issue["details"] }));
+        let key = hash_canonical(
+            &json!({ "code": issue["code"], "classification": issue["classification"], "location": issue.get("location"), "details": issue["details"] }),
+        );
         if seen.insert(key) {
             out.push(issue);
         }
@@ -599,7 +620,8 @@ fn expand_helper_references(references: Vec<Value>, calls: &[Value], unresolved:
             }));
             continue;
         }
-        let confidence = path.iter().fold(text(root_call, "confidence").unwrap_or("high"), |value, call| worse(value, text(call, "confidence").unwrap_or("high")));
+        let confidence =
+            path.iter().fold(text(root_call, "confidence").unwrap_or("high"), |value, call| worse(value, text(call, "confidence").unwrap_or("high")));
         let last = path.last().and_then(|c| text(c, "helperId")).unwrap_or("");
         for reference in by_helper.get(last).map_or(&[][..], Vec::as_slice) {
             projection_count += 1;
@@ -608,7 +630,11 @@ fn expand_helper_references(references: Vec<Value>, calls: &[Value], unresolved:
             }
             let mut copy = (*reference).clone();
             let object = copy.as_object_mut().expect("reference object");
-            object.insert("id".into(), deterministic_id("tech-external-projection", &json!({ "root": root_call["id"], "reference": reference["id"], "helperStack": helper_stack })).into());
+            object.insert(
+                "id".into(),
+                deterministic_id("tech-external-projection", &json!({ "root": root_call["id"], "reference": reference["id"], "helperStack": helper_stack }))
+                    .into(),
+            );
             object.insert("sourceKind".into(), root_call["sourceKind"].clone());
             object.insert("sourceId".into(), root_call["sourceId"].clone());
             object.insert("helperStack".into(), json!(helper_stack));
@@ -681,7 +707,15 @@ fn diagnose(
     for group in duplicates {
         let first = &group[0];
         let tid = id_of(first);
-        let mut i = issue("TECH_DUPLICATE_ID", "confirmed_error", "error", format!("Technology {tid} has multiple active definitions at the same load order"), "confirmed", Some(first["source"]["location"].clone()), json!({ "technologyId": tid }));
+        let mut i = issue(
+            "TECH_DUPLICATE_ID",
+            "confirmed_error",
+            "error",
+            format!("Technology {tid} has multiple active definitions at the same load order"),
+            "confirmed",
+            Some(first["source"]["location"].clone()),
+            json!({ "technologyId": tid }),
+        );
         i.related = Some(group[1..].iter().map(|t| t["source"]["location"].clone()).collect());
         add_issue(&mut issues, i);
     }
@@ -690,11 +724,33 @@ fn diagnose(
         let to = text(edge, "to").unwrap_or("");
         let kind = text(edge, "kind").unwrap_or("");
         if from == to {
-            add_issue(&mut issues, issue("TECH_SELF_LINK", "confirmed_error", "error", format!("Technology {from} links to itself through {kind}"), "confirmed", Some(edge["location"].clone()), json!({ "technologyId": from, "edgeKind": kind })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_SELF_LINK",
+                    "confirmed_error",
+                    "error",
+                    format!("Technology {from} links to itself through {kind}"),
+                    "confirmed",
+                    Some(edge["location"].clone()),
+                    json!({ "technologyId": from, "edgeKind": kind }),
+                ),
+            );
         }
         if !tech_by_id.contains_key(to) {
             let code = if kind == "exclusive" { "TECH_EXCLUSIVE_TARGET_MISSING" } else { "TECH_TARGET_MISSING" };
-            add_issue(&mut issues, issue(code, "confirmed_error", "error", format!("Technology {from} references missing {kind} target {to}"), "confirmed", Some(edge["location"].clone()), json!({ "technologyId": from, "targetId": to, "edgeKind": kind })));
+            add_issue(
+                &mut issues,
+                issue(
+                    code,
+                    "confirmed_error",
+                    "error",
+                    format!("Technology {from} references missing {kind} target {to}"),
+                    "confirmed",
+                    Some(edge["location"].clone()),
+                    json!({ "technologyId": from, "targetId": to, "edgeKind": kind }),
+                ),
+            );
         }
     }
     let tech_ids: Vec<String> = technologies.iter().map(|t| id_of(t).to_string()).collect();
@@ -703,7 +759,18 @@ fn diagnose(
             continue;
         }
         let first = tech_by_id[component[0].as_str()];
-        add_issue(&mut issues, issue("TECH_PREREQUISITE_CYCLE", "confirmed_error", "error", format!("Technology prerequisite cycle: {}", component.join(" -> ")), "confirmed", Some(first["source"]["location"].clone()), json!({ "technologyIds": component })));
+        add_issue(
+            &mut issues,
+            issue(
+                "TECH_PREREQUISITE_CYCLE",
+                "confirmed_error",
+                "error",
+                format!("Technology prerequisite cycle: {}", component.join(" -> ")),
+                "confirmed",
+                Some(first["source"]["location"].clone()),
+                json!({ "technologyIds": component }),
+            ),
+        );
     }
 
     let mut coordinate_groups: Groups<&Value> = Groups::new();
@@ -711,15 +778,32 @@ fn diagnose(
         let tid = text(placement, "technologyId").unwrap_or("");
         let fid = text(placement, "folderId").unwrap_or("");
         if !folder_ids.contains(fid) {
-            add_issue(&mut issues, issue("TECH_FOLDER_REFERENCE_MISSING", "confirmed_error", "error", format!("Technology {tid} references missing folder {fid}"), "confirmed", Some(placement["location"].clone()), json!({ "technologyId": tid, "folderId": fid })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_FOLDER_REFERENCE_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Technology {tid} references missing folder {fid}"),
+                    "confirmed",
+                    Some(placement["location"].clone()),
+                    json!({ "technologyId": tid, "folderId": fid }),
+                ),
+            );
         }
         if placement.get("x").is_none() || placement.get("y").is_none() {
             let mut i = issue(
-                "TECH_PLACEMENT_COORDINATE_UNRESOLVED", "unresolved_analysis", "warning",
-                format!("Technology {tid} has an unresolved source coordinate in {fid}"), "unresolved", Some(placement["location"].clone()),
+                "TECH_PLACEMENT_COORDINATE_UNRESOLVED",
+                "unresolved_analysis",
+                "warning",
+                format!("Technology {tid} has an unresolved source coordinate in {fid}"),
+                "unresolved",
+                Some(placement["location"].clone()),
                 json!({ "technologyId": tid, "folderId": fid, "xExpression": placement.get("xExpression").cloned().unwrap_or(Value::Null), "yExpression": placement.get("yExpression").cloned().unwrap_or(Value::Null) }),
             );
-            i.blockers = vec![json!({ "code": "TECH_COORDINATE_EXPRESSION_UNSUPPORTED", "message": "The coordinate is not a numeric literal or resolvable file-local constant", "location": placement["location"] })];
+            i.blockers = vec![
+                json!({ "code": "TECH_COORDINATE_EXPRESSION_UNSUPPORTED", "message": "The coordinate is not a numeric literal or resolvable file-local constant", "location": placement["location"] }),
+            ];
             add_issue(&mut issues, i);
             continue;
         }
@@ -744,8 +828,12 @@ fn diagnose(
         }
         let first = group[0];
         let mut i = issue(
-            "TECH_FOLDER_COORDINATE_OVERLAP", "confirmed_error", "error",
-            format!("Technologies {} overlap at one source coordinate in {}", ids.join(", "), text(first, "folderId").unwrap_or("")), "confirmed", Some(first["location"].clone()),
+            "TECH_FOLDER_COORDINATE_OVERLAP",
+            "confirmed_error",
+            "error",
+            format!("Technologies {} overlap at one source coordinate in {}", ids.join(", "), text(first, "folderId").unwrap_or("")),
+            "confirmed",
+            Some(first["location"].clone()),
             json!({
                 "folderId": first["folderId"], "x": first["x"], "y": first["y"],
                 "pixelX": first.get("pixelX").cloned().unwrap_or(Value::Null), "pixelY": first.get("pixelY").cloned().unwrap_or(Value::Null), "technologyIds": ids,
@@ -776,8 +864,12 @@ fn diagnose(
             }
             coordinates.sort_by(|a, b| units(a, b));
             let mut i = issue(
-                "TECH_PLACEMENT_CONFLICT", "confirmed_error", "error",
-                format!("Technology {tid} has conflicting placements in folder {}", text(group[0], "folderId").unwrap_or("")), "confirmed", Some(group[0]["location"].clone()),
+                "TECH_PLACEMENT_CONFLICT",
+                "confirmed_error",
+                "error",
+                format!("Technology {tid} has conflicting placements in folder {}", text(group[0], "folderId").unwrap_or("")),
+                "confirmed",
+                Some(group[0]["location"].clone()),
                 json!({ "technologyId": tid, "folderId": group[0]["folderId"], "coordinates": coordinates }),
             );
             i.related = Some(group[1..].iter().map(|p| p["location"].clone()).collect());
@@ -794,15 +886,40 @@ fn diagnose(
         let fid = text(placement, "folderId").unwrap_or("");
         let location = Some(placement["location"].clone());
         match (text(placement, "branchRootId"), text(placement, "gridboxId")) {
-            (None, _) => add_issue(&mut issues, issue("TECH_GRIDBOX_BRANCH_AMBIGUOUS", "probable_defect", "warning", format!("Technology {tid} cannot be assigned to one source branch gridbox in {fid}"), "high", location, json!({ "technologyId": tid, "folderId": fid }))),
-            (Some(root), None) => add_issue(&mut issues, issue("TECH_GRIDBOX_MISSING", "probable_defect", "warning", format!("Technology branch {root} has no matching {root}_tree gridbox in {fid}"), "high", location, json!({ "technologyId": tid, "folderId": fid, "branchRootId": root }))),
+            (None, _) => add_issue(
+                &mut issues,
+                issue(
+                    "TECH_GRIDBOX_BRANCH_AMBIGUOUS",
+                    "probable_defect",
+                    "warning",
+                    format!("Technology {tid} cannot be assigned to one source branch gridbox in {fid}"),
+                    "high",
+                    location,
+                    json!({ "technologyId": tid, "folderId": fid }),
+                ),
+            ),
+            (Some(root), None) => add_issue(
+                &mut issues,
+                issue(
+                    "TECH_GRIDBOX_MISSING",
+                    "probable_defect",
+                    "warning",
+                    format!("Technology branch {root} has no matching {root}_tree gridbox in {fid}"),
+                    "high",
+                    location,
+                    json!({ "technologyId": tid, "folderId": fid, "branchRootId": root }),
+                ),
+            ),
             (Some(_), Some(gid)) => {
                 let gridbox = gridbox_by_id.get(gid);
                 add_issue(
                     &mut issues,
                     issue(
-                        "TECH_GRIDBOX_GEOMETRY_UNRESOLVED", "unresolved_analysis", "warning",
-                        format!("Gridbox geometry for technology {tid} cannot be reduced to source pixel coordinates"), "unresolved",
+                        "TECH_GRIDBOX_GEOMETRY_UNRESOLVED",
+                        "unresolved_analysis",
+                        "warning",
+                        format!("Gridbox geometry for technology {tid} cannot be reduced to source pixel coordinates"),
+                        "unresolved",
                         Some(gridbox.map_or_else(|| placement["location"].clone(), |g| g["location"].clone())),
                         json!({ "technologyId": tid, "folderId": fid, "gridbox": gridbox.map_or(Value::Null, |g| g["name"].clone()), "format": gridbox.and_then(|g| g.get("format")).cloned().unwrap_or(Value::Null) }),
                     ),
@@ -825,7 +942,8 @@ fn diagnose(
             }
         }
     }
-    let grant_ids: HashSet<&str> = external.iter().filter(|r| matches!(text(r, "kind"), Some("grant" | "starting_technology"))).filter_map(|r| text(r, "technologyId")).collect();
+    let grant_ids: HashSet<&str> =
+        external.iter().filter(|r| matches!(text(r, "kind"), Some("grant" | "starting_technology"))).filter_map(|r| text(r, "technologyId")).collect();
     let unlocks_by_tech = group_by(unlocks, "technologyId");
     for technology in technologies {
         let tid = id_of(technology);
@@ -833,26 +951,53 @@ fn diagnose(
         let location = Some(technology["source"]["location"].clone());
         let hidden = &technology["hidden"];
         if *hidden != true && !tech_placements.is_empty() && !reachable.contains(tid) {
-            add_issue(&mut issues, issue("TECH_VISIBLE_WITHOUT_ROOT_PATH", "probable_defect", "warning", format!("Visible technology {tid} has no valid prerequisite path from a visible root"), "high", location.clone(), json!({ "technologyId": tid })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_VISIBLE_WITHOUT_ROOT_PATH",
+                    "probable_defect",
+                    "warning",
+                    format!("Visible technology {tid} has no valid prerequisite path from a visible root"),
+                    "high",
+                    location.clone(),
+                    json!({ "technologyId": tid }),
+                ),
+            );
         }
         if (*hidden == true || tech_placements.is_empty()) && !grant_ids.contains(tid) {
             add_issue(
                 &mut issues,
                 issue(
-                    "TECH_HIDDEN_OR_UNPLACED_WITHOUT_GRANT", "design_warning", "warning",
-                    format!("Technology {tid} is hidden or unplaced and has no discovered static grant path"), if hidden == "unknown" { "medium" } else { "high" }, location.clone(),
+                    "TECH_HIDDEN_OR_UNPLACED_WITHOUT_GRANT",
+                    "design_warning",
+                    "warning",
+                    format!("Technology {tid} is hidden or unplaced and has no discovered static grant path"),
+                    if hidden == "unknown" { "medium" } else { "high" },
+                    location.clone(),
                     json!({ "technologyId": tid, "hidden": hidden, "placementCount": tech_placements.len() }),
                 ),
             );
         }
-        let direct_parents: Vec<&Value> = incoming_of(tid).iter().filter_map(|e| tech_by_id.get(text(e, "from").unwrap_or("")).copied()).filter(|t| t["hidden"] != true).collect();
+        let direct_parents: Vec<&Value> =
+            incoming_of(tid).iter().filter_map(|e| tech_by_id.get(text(e, "from").unwrap_or("")).copied()).filter(|t| t["hidden"] != true).collect();
         let year = js_number(text(technology, "startYear"));
         let parent_years: Vec<f64> = direct_parents.iter().filter_map(|p| js_number(text(p, "startYear"))).collect();
         if let Some(y) = year
             && !parent_years.is_empty()
             && parent_years.iter().all(|p| y < *p)
         {
-            add_issue(&mut issues, issue("TECH_CHILD_EARLIER_THAN_PARENTS", "design_warning", "warning", format!("Technology {tid} is dated earlier than every visible direct prerequisite"), "high", location.clone(), json!({ "technologyId": tid, "startYear": number_value(y), "parentYears": parent_years.iter().map(|p| number_value(*p)).collect::<Vec<_>>() })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_CHILD_EARLIER_THAN_PARENTS",
+                    "design_warning",
+                    "warning",
+                    format!("Technology {tid} is dated earlier than every visible direct prerequisite"),
+                    "high",
+                    location.clone(),
+                    json!({ "technologyId": tid, "startYear": number_value(y), "parentYears": parent_years.iter().map(|p| number_value(*p)).collect::<Vec<_>>() }),
+                ),
+            );
         }
         for edge in incoming_of(tid).iter().filter(|e| e.get("coefficient").is_some()) {
             let Some(c) = js_number(text(edge, "coefficient")) else { continue };
@@ -861,18 +1006,62 @@ fn diagnose(
             }
             let (from, to) = (text(edge, "from").unwrap_or(""), text(edge, "to").unwrap_or(""));
             let coefficient = text(edge, "coefficient").unwrap_or("");
-            add_issue(&mut issues, issue("TECH_EDGE_COEFFICIENT_OUTLIER", "design_warning", "warning", format!("Prerequisite edge {from} -> {to} has unusual research coefficient {coefficient}"), "high", Some(edge["location"].clone()), json!({ "from": from, "to": to, "coefficient": coefficient })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_EDGE_COEFFICIENT_OUTLIER",
+                    "design_warning",
+                    "warning",
+                    format!("Prerequisite edge {from} -> {to} has unusual research coefficient {coefficient}"),
+                    "high",
+                    Some(edge["location"].clone()),
+                    json!({ "from": from, "to": to, "coefficient": coefficient }),
+                ),
+            );
         }
         let degree = incoming_of(tid).len() + outgoing_of(tid).len();
         let no_effects = technology["effectKeys"].as_array().is_none_or(Vec::is_empty);
         let tech_unlocks = unlocks_by_tech.get(tid);
         if no_effects && tech_unlocks.is_empty() && degree == 0 {
-            add_issue(&mut issues, issue("TECH_NO_VISIBLE_ROLE", "design_warning", "warning", format!("Technology {tid} has no visible effect, unlock, or routing role"), "high", location.clone(), json!({ "technologyId": tid })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_NO_VISIBLE_ROLE",
+                    "design_warning",
+                    "warning",
+                    format!("Technology {tid} has no visible effect, unlock, or routing role"),
+                    "high",
+                    location.clone(),
+                    json!({ "technologyId": tid }),
+                ),
+            );
         } else if no_effects && tech_unlocks.is_empty() && !incoming_of(tid).is_empty() && outgoing_of(tid).is_empty() {
-            add_issue(&mut issues, issue("TECH_TERMINAL_WITHOUT_VISIBLE_PAYOFF", "design_warning", "warning", format!("Terminal technology {tid} has no visible effect or unlock"), "high", location.clone(), json!({ "technologyId": tid })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_TERMINAL_WITHOUT_VISIBLE_PAYOFF",
+                    "design_warning",
+                    "warning",
+                    format!("Terminal technology {tid} has no visible effect or unlock"),
+                    "high",
+                    location.clone(),
+                    json!({ "technologyId": tid }),
+                ),
+            );
         }
         if technology["localisation"]["status"] == "missing" {
-            add_issue(&mut issues, issue("TECH_LOCALISATION_MISSING", "confirmed_error", "error", format!("Technology {tid} is missing English name or description localisation"), "confirmed", location.clone(), json!({ "technologyId": tid, "nameKey": technology["localisation"]["nameKey"], "descriptionKey": technology["localisation"]["descriptionKey"] })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_LOCALISATION_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Technology {tid} is missing English name or description localisation"),
+                    "confirmed",
+                    location.clone(),
+                    json!({ "technologyId": tid, "nameKey": technology["localisation"]["nameKey"], "descriptionKey": technology["localisation"]["descriptionKey"] }),
+                ),
+            );
         }
         let icon_status = text(&technology["icon"], "status").unwrap_or("");
         if icon_status == "missing_sprite" || icon_status == "missing_texture" {
@@ -882,18 +1071,51 @@ fn diagnose(
             } else {
                 ("TECH_ICON_TEXTURE_MISSING", format!("Technology {tid} cannot resolve texture for sprite {sprite}"))
             };
-            add_issue(&mut issues, issue(code, "confirmed_error", "error", message, "confirmed", location.clone(), json!({ "technologyId": tid, "sprite": sprite, "texturePath": technology["icon"].get("texturePath").cloned().unwrap_or(Value::Null) })));
+            add_issue(
+                &mut issues,
+                issue(
+                    code,
+                    "confirmed_error",
+                    "error",
+                    message,
+                    "confirmed",
+                    location.clone(),
+                    json!({ "technologyId": tid, "sprite": sprite, "texturePath": technology["icon"].get("texturePath").cloned().unwrap_or(Value::Null) }),
+                ),
+            );
         }
         for category in strings(technology, "categories") {
             if !category_by_id.contains_key(category.as_str()) {
-                add_issue(&mut issues, issue("TECH_CATEGORY_REFERENCE_MISSING", "confirmed_error", "error", format!("Technology {tid} references missing category {category}"), "confirmed", location.clone(), json!({ "technologyId": tid, "categoryId": category })));
+                add_issue(
+                    &mut issues,
+                    issue(
+                        "TECH_CATEGORY_REFERENCE_MISSING",
+                        "confirmed_error",
+                        "error",
+                        format!("Technology {tid} references missing category {category}"),
+                        "confirmed",
+                        location.clone(),
+                        json!({ "technologyId": tid, "categoryId": category }),
+                    ),
+                );
             }
         }
         for tag in strings(technology, "tags") {
             if category_by_id.get(tag.as_str()).is_some_and(|c| c["kind"] == "tag") {
                 continue;
             }
-            add_issue(&mut issues, issue("TECH_TAG_REFERENCE_MISSING", "confirmed_error", "error", format!("Technology {tid} references missing tag {tag}"), "confirmed", location.clone(), json!({ "technologyId": tid, "tagId": tag })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_TAG_REFERENCE_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Technology {tid} references missing tag {tag}"),
+                    "confirmed",
+                    location.clone(),
+                    json!({ "technologyId": tid, "tagId": tag }),
+                ),
+            );
         }
         let mut peers: Vec<&str> = Vec::new();
         for e in incoming_of(tid) {
@@ -909,13 +1131,35 @@ fn diagnose(
         let branch_peers: Vec<&Value> = peers.iter().filter(|p| **p != tid).filter_map(|p| tech_by_id.get(p).copied()).collect();
         let peer_active = branch_peers.iter().any(|p| p["ai"]["present"] == true && p["ai"]["zero"] != true);
         if *hidden != true && degree > 0 && peer_active && (technology["ai"]["present"] != true || technology["ai"]["zero"] == true) {
-            add_issue(&mut issues, issue("TECH_BRANCH_AI_COVERAGE_GAP", "design_warning", "warning", format!("Technology {tid} has missing or zero AI willingness while adjacent branch peers have active AI metadata"), "medium", location, json!({ "technologyId": tid, "aiPresent": technology["ai"]["present"], "aiZero": technology["ai"]["zero"] })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_BRANCH_AI_COVERAGE_GAP",
+                    "design_warning",
+                    "warning",
+                    format!("Technology {tid} has missing or zero AI willingness while adjacent branch peers have active AI metadata"),
+                    "medium",
+                    location,
+                    json!({ "technologyId": tid, "aiPresent": technology["ai"]["present"], "aiZero": technology["ai"]["zero"] }),
+                ),
+            );
         }
     }
 
     for unlock in unlocks.iter().filter(|u| u["resolved"] == false) {
         let (tid, kind, target) = (text(unlock, "technologyId").unwrap_or(""), text(unlock, "kind").unwrap_or(""), text(unlock, "targetId").unwrap_or(""));
-        add_issue(&mut issues, issue("TECH_UNLOCK_TARGET_MISSING", "confirmed_error", "error", format!("Technology {tid} unlocks missing {kind} {target}"), "confirmed", Some(unlock["location"].clone()), json!({ "technologyId": tid, "targetKind": kind, "targetId": target })));
+        add_issue(
+            &mut issues,
+            issue(
+                "TECH_UNLOCK_TARGET_MISSING",
+                "confirmed_error",
+                "error",
+                format!("Technology {tid} unlocks missing {kind} {target}"),
+                "confirmed",
+                Some(unlock["location"].clone()),
+                json!({ "technologyId": tid, "targetKind": kind, "targetId": target }),
+            ),
+        );
     }
     let mut by_category: HashMap<&str, usize> = HashMap::new();
     for technology in technologies {
@@ -932,13 +1176,46 @@ fn diagnose(
             && !dynamic
         {
             let code = if text(reference, "kind") == Some("research_bonus") { "TECH_BONUS_TARGET_MISSING" } else { "TECH_EXTERNAL_REFERENCE_MISSING" };
-            add_issue(&mut issues, issue(code, "confirmed_error", "error", format!("{source} references missing technology {t}"), confidence, Some(reference["location"].clone()), json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "technologyId": t, "referenceKind": reference["kind"] })));
+            add_issue(
+                &mut issues,
+                issue(
+                    code,
+                    "confirmed_error",
+                    "error",
+                    format!("{source} references missing technology {t}"),
+                    confidence,
+                    Some(reference["location"].clone()),
+                    json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "technologyId": t, "referenceKind": reference["kind"] }),
+                ),
+            );
         }
         if let Some(c) = text(reference, "categoryId") {
             if !category_by_id.contains_key(c) && !dynamic {
-                add_issue(&mut issues, issue("TECH_EXTERNAL_CATEGORY_MISSING", "confirmed_error", "error", format!("{source} references missing technology category {c}"), confidence, Some(reference["location"].clone()), json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "categoryId": c, "referenceKind": reference["kind"] })));
+                add_issue(
+                    &mut issues,
+                    issue(
+                        "TECH_EXTERNAL_CATEGORY_MISSING",
+                        "confirmed_error",
+                        "error",
+                        format!("{source} references missing technology category {c}"),
+                        confidence,
+                        Some(reference["location"].clone()),
+                        json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "categoryId": c, "referenceKind": reference["kind"] }),
+                    ),
+                );
             } else if text(reference, "kind") == Some("research_bonus") && by_category.get(c).copied().unwrap_or(0) == 0 {
-                add_issue(&mut issues, issue("TECH_BONUS_CATEGORY_EMPTY", "probable_defect", "warning", format!("Research bonus category {c} matches no indexed technology"), "high", Some(reference["location"].clone()), json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "categoryId": c })));
+                add_issue(
+                    &mut issues,
+                    issue(
+                        "TECH_BONUS_CATEGORY_EMPTY",
+                        "probable_defect",
+                        "warning",
+                        format!("Research bonus category {c} matches no indexed technology"),
+                        "high",
+                        Some(reference["location"].clone()),
+                        json!({ "sourceKind": reference["sourceKind"], "sourceId": reference["sourceId"], "categoryId": c }),
+                    ),
+                );
             }
         }
     }
@@ -949,19 +1226,52 @@ fn diagnose(
         if let Some(f) = text(doctrine, "folderId")
             && !doctrines.iter().any(|d| text(d, "kind") == Some("folder") && id_of(d) == f)
         {
-            add_issue(&mut issues, issue("TECH_DOCTRINE_FOLDER_MISSING", "confirmed_error", "error", format!("Doctrine {did} references missing doctrine folder {f}"), "confirmed", location.clone(), json!({ "doctrineId": did, "folderId": f })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_DOCTRINE_FOLDER_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Doctrine {did} references missing doctrine folder {f}"),
+                    "confirmed",
+                    location.clone(),
+                    json!({ "doctrineId": did, "folderId": f }),
+                ),
+            );
         }
         for track in strings(doctrine, "trackIds") {
             if doctrines.iter().any(|d| text(d, "kind") == Some("track") && id_of(d) == track) {
                 continue;
             }
-            add_issue(&mut issues, issue("TECH_DOCTRINE_TRACK_MISSING", "confirmed_error", "error", format!("Doctrine {did} references missing doctrine track {track}"), "confirmed", location.clone(), json!({ "doctrineId": did, "trackId": track })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_DOCTRINE_TRACK_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Doctrine {did} references missing doctrine track {track}"),
+                    "confirmed",
+                    location.clone(),
+                    json!({ "doctrineId": did, "trackId": track }),
+                ),
+            );
         }
         for exclusive in strings(doctrine, "exclusiveIds") {
             if doctrines.iter().any(|d| id_of(d) == exclusive) {
                 continue;
             }
-            add_issue(&mut issues, issue("TECH_DOCTRINE_EXCLUSIVE_TARGET_MISSING", "confirmed_error", "error", format!("Doctrine {did} references missing exclusive choice {exclusive}"), "confirmed", location.clone(), json!({ "doctrineId": did, "targetId": exclusive })));
+            add_issue(
+                &mut issues,
+                issue(
+                    "TECH_DOCTRINE_EXCLUSIVE_TARGET_MISSING",
+                    "confirmed_error",
+                    "error",
+                    format!("Doctrine {did} references missing exclusive choice {exclusive}"),
+                    "confirmed",
+                    location.clone(),
+                    json!({ "doctrineId": did, "targetId": exclusive }),
+                ),
+            );
         }
     }
 
@@ -982,8 +1292,13 @@ fn diagnose(
         }
         let ids: Vec<&str> = group.iter().map(|t| id_of(t)).collect();
         let mut i = issue(
-            "TECH_SUSPICIOUS_IDENTICAL_SIGNATURE", "design_warning", "warning",
-            format!("Technologies {} have identical effects, unlocks, year, folders, and categories", ids.join(", ")), "medium", Some(group[0]["source"]["location"].clone()), json!({ "technologyIds": ids }),
+            "TECH_SUSPICIOUS_IDENTICAL_SIGNATURE",
+            "design_warning",
+            "warning",
+            format!("Technologies {} have identical effects, unlocks, year, folders, and categories", ids.join(", ")),
+            "medium",
+            Some(group[0]["source"]["location"].clone()),
+            json!({ "technologyIds": ids }),
         );
         i.related = Some(group[1..].iter().map(|t| t["source"]["location"].clone()).collect());
         add_issue(&mut issues, i);
@@ -992,8 +1307,12 @@ fn diagnose(
     for item in unresolved {
         let expression = text(item, "expression").unwrap_or("");
         let mut i = issue(
-            "TECH_ANALYSIS_UNRESOLVED", "unresolved_analysis", "warning", format!("Static technology analysis could not resolve {expression}"),
-            text(item, "confidence").unwrap_or("unresolved"), item.get("location").cloned(),
+            "TECH_ANALYSIS_UNRESOLVED",
+            "unresolved_analysis",
+            "warning",
+            format!("Static technology analysis could not resolve {expression}"),
+            text(item, "confidence").unwrap_or("unresolved"),
+            item.get("location").cloned(),
             json!({ "unresolvedId": item["id"], "kind": item["kind"], "ownerId": item.get("ownerId").cloned().unwrap_or(Value::Null) }),
         );
         i.blockers = item["blockers"].as_array().cloned().unwrap_or_default();
@@ -1015,7 +1334,8 @@ fn sort_diagnostics(diagnostics: &mut [Value]) {
     diagnostics.sort_by(|l, r| {
         let path = |v: &Value| v["location"]["path"].as_str().unwrap_or("").to_string();
         let start = |v: &Value| v["location"]["start"]["offset"].as_i64().unwrap_or(0);
-        severity_rank(text(l, "severity").unwrap_or("")).cmp(&severity_rank(text(r, "severity").unwrap_or("")))
+        severity_rank(text(l, "severity").unwrap_or(""))
+            .cmp(&severity_rank(text(r, "severity").unwrap_or("")))
             .then_with(|| units(&path(l), &path(r)))
             .then_with(|| start(l).cmp(&start(r)))
             .then_with(|| units(text(l, "code").unwrap_or(""), text(r, "code").unwrap_or("")))
@@ -1037,18 +1357,25 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
     let assets = asset_map(&scan.asset_files);
     let (selected_technologies, duplicate_technologies) = active_definitions(flat(fragments, "technologies"));
     let technologies: Vec<Value> = selected_technologies.iter().cloned().map(|t| localise_technology(t, lookups, &assets)).collect();
-    let owner_paths: HashMap<String, String> = technologies.iter().map(|t| (id_of(t).to_string(), text(&t["source"], "path").unwrap_or("").to_string())).collect();
+    let owner_paths: HashMap<String, String> =
+        technologies.iter().map(|t| (id_of(t).to_string(), text(&t["source"], "path").unwrap_or("").to_string())).collect();
     let (selected_folders, _) = active_definitions(flat(fragments, "folders"));
     let folders: Vec<Value> = selected_folders.into_iter().map(|f| localise_folder(f, lookups)).collect();
     let gridboxes = active_by_group(
         flat(fragments, "gridboxes"),
         |g| format!("{}\0{}", text(g, "folderId").unwrap_or("<global>"), text(g, "name").unwrap_or("")),
-        |l, r| units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or("")).then_with(|| units(text(l, "name").unwrap_or(""), text(r, "name").unwrap_or(""))),
+        |l, r| {
+            units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or(""))
+                .then_with(|| units(text(l, "name").unwrap_or(""), text(r, "name").unwrap_or("")))
+        },
     );
     let item_layouts = active_by_group(
         flat(fragments, "itemLayouts"),
         |l| format!("{}\0{}", text(l, "folderId").unwrap_or(""), text(l, "layoutSize").unwrap_or("")),
-        |l, r| units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or("")).then_with(|| units(text(l, "layoutSize").unwrap_or(""), text(r, "layoutSize").unwrap_or(""))),
+        |l, r| {
+            units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or(""))
+                .then_with(|| units(text(l, "layoutSize").unwrap_or(""), text(r, "layoutSize").unwrap_or("")))
+        },
     );
     let year_markers = active_by_group(
         flat(fragments, "yearMarkers"),
@@ -1062,7 +1389,10 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
     let backgrounds = active_by_group(
         flat(fragments, "backgrounds"),
         |b| format!("{}\0{}", text(b, "folderId").unwrap_or(""), text(b, "name").unwrap_or("")),
-        |l, r| units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or("")).then_with(|| units(text(l, "name").unwrap_or(""), text(r, "name").unwrap_or(""))),
+        |l, r| {
+            units(text(l, "folderId").unwrap_or(""), text(r, "folderId").unwrap_or(""))
+                .then_with(|| units(text(l, "name").unwrap_or(""), text(r, "name").unwrap_or("")))
+        },
     );
     let (categories, _) = active_definitions(flat(fragments, "categories"));
     let (selected_doctrines, _) = active_definitions(flat(fragments, "doctrineDefinitions"));
@@ -1071,12 +1401,19 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
     let (unlock_targets, _) = active_definitions(targets);
     let base_placements = sorted_by_id(select_owned(flat(fragments, "placements"), "technologyId", &owner_paths));
     let edges = sorted_by_id(select_owned(flat(fragments, "edges"), "from", &owner_paths));
-    let target_keys: HashSet<String> = unlock_targets.iter().map(|t| format!("{}:{}", text(t, "kind").unwrap_or(""), text(t, "targetId").unwrap_or(""))).collect();
+    let target_keys: HashSet<String> =
+        unlock_targets.iter().map(|t| format!("{}:{}", text(t, "kind").unwrap_or(""), text(t, "targetId").unwrap_or(""))).collect();
     let unlocks: Vec<Value> = sorted_by_id(select_owned(flat(fragments, "unlocks"), "technologyId", &owner_paths))
         .into_iter()
         .map(|mut u| {
             let key = format!("{}:{}", text(&u, "kind").unwrap_or(""), text(&u, "targetId").unwrap_or(""));
-            u["resolved"] = if target_keys.contains(&key) { true.into() } else if scan.complete { false.into() } else { "unknown".into() };
+            u["resolved"] = if target_keys.contains(&key) {
+                true.into()
+            } else if scan.complete {
+                false.into()
+            } else {
+                "unknown".into()
+            };
             u
         })
         .collect();
@@ -1099,9 +1436,22 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
                 .collect()
         })
         .collect();
-    let issues = diagnose(&technologies, &folders, &placements, &gridboxes, &edges, &categories, &doctrine_definitions, &unlocks, &external, &duplicate_localised, &unresolved);
+    let issues = diagnose(
+        &technologies,
+        &folders,
+        &placements,
+        &gridboxes,
+        &edges,
+        &categories,
+        &doctrine_definitions,
+        &unlocks,
+        &external,
+        &duplicate_localised,
+        &unresolved,
+    );
 
-    let mut hashes: Vec<(String, String)> = scan.files.iter().chain(scan.asset_files.iter()).filter(|f| f.shadowed_by.is_none()).map(|f| (f.display_path.clone(), f.sha256.clone())).collect();
+    let mut hashes: Vec<(String, String)> =
+        scan.files.iter().chain(scan.asset_files.iter()).filter(|f| f.shadowed_by.is_none()).map(|f| (f.display_path.clone(), f.sha256.clone())).collect();
     hashes.sort_by(|l, r| units(&l.0, &r.0));
     let hash_map: Map<String, Value> = hashes.iter().map(|(p, h)| (p.clone(), Value::from(h.clone()))).collect();
     let technology_ids: Vec<&str> = technologies.iter().map(id_of).collect();
@@ -1118,7 +1468,13 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
     sort_diagnostics(&mut diagnostics);
     let complete = scan.complete
         && unresolved.iter().all(|u| text(u, "kind") != Some("partial_source"))
-        && !unresolved.iter().any(|u| u["blockers"].as_array().into_iter().flatten().any(|b| matches!(text(b, "code"), Some("TECH_HELPER_DEPTH_BLOCKED" | "TECH_HELPER_PROJECTION_LIMIT"))))
+        && !unresolved.iter().any(|u| {
+            u["blockers"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|b| matches!(text(b, "code"), Some("TECH_HELPER_DEPTH_BLOCKED" | "TECH_HELPER_PROJECTION_LIMIT")))
+        })
         && !(mode == "focused" && !helper_calls.is_empty());
     let mut unsupported = vec![
         "runtime-evaluated visibility and allow triggers".to_string(),
@@ -1141,13 +1497,21 @@ pub fn build_graph(fragments: &[Value], scan: &Scan, lookups: &Lookups) -> Resul
         "externalReferenceCount": external.len(), "issueCount": issues.len(), "unresolvedCount": unresolved.len(),
     });
     if technologies.len() > MAX_TECHNOLOGIES {
-        return Err(Refusal { code: "TECH_GRAPH_NODE_LIMIT", message: format!("Technology graph exceeds {MAX_TECHNOLOGIES} technologies"), details: Value::Null });
+        return Err(Refusal {
+            code: "TECH_GRAPH_NODE_LIMIT",
+            message: format!("Technology graph exceeds {MAX_TECHNOLOGIES} technologies"),
+            details: Value::Null,
+        });
     }
     if edges.len() > MAX_EDGES {
         return Err(Refusal { code: "TECH_GRAPH_EDGE_LIMIT", message: format!("Technology graph exceeds {MAX_EDGES} edges"), details: Value::Null });
     }
     if external.len() > MAX_EXTERNAL_REFERENCES {
-        return Err(Refusal { code: "TECH_GRAPH_REFERENCE_LIMIT", message: format!("Technology graph exceeds {MAX_EXTERNAL_REFERENCES} external references"), details: Value::Null });
+        return Err(Refusal {
+            code: "TECH_GRAPH_REFERENCE_LIMIT",
+            message: format!("Technology graph exceeds {MAX_EXTERNAL_REFERENCES} external references"),
+            details: Value::Null,
+        });
     }
     let files_scanned: Vec<&String> = hashes.iter().map(|(p, _)| p).collect();
     Ok(json!({
