@@ -412,7 +412,9 @@ export function shortestEventPath(
     !options.expandHelpers &&
     !graph.edges.some(({ derived }) => derived) &&
     graph.nodes.some(({ kind }) => kind === 'helper');
-  const structural = lazyCollapse ? edgeMaps(graph.edges.filter(({ derived }) => !derived)) : undefined;
+  const structural = lazyCollapse
+    ? edgeMaps(graph.edges.filter(({ derived }) => !derived))
+    : undefined;
   const maps = edgeMaps(lazyCollapse ? [] : eventFlowEdges(graph, options.expandHelpers));
   const outgoingOf = (nodeId: string): EventGraphEdge[] =>
     structural === undefined

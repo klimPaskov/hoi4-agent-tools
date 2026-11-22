@@ -15,7 +15,11 @@ const at = (symbol: string, offset: number) => ({
   symbol,
 });
 
-function node(id: string, kind: EventGraphNode['kind'], metadata: EventGraphNode['metadata'] = {}): EventGraphNode {
+function node(
+  id: string,
+  kind: EventGraphNode['kind'],
+  metadata: EventGraphNode['metadata'] = {},
+): EventGraphNode {
   const eventId = kind === 'event' ? id.replace('event:', '') : undefined;
   return {
     id,
@@ -28,7 +32,12 @@ function node(id: string, kind: EventGraphNode['kind'], metadata: EventGraphNode
   };
 }
 
-function edge(id: string, from: string, to: string, reason: EventGraphEdge['reason']): EventGraphEdge {
+function edge(
+  id: string,
+  from: string,
+  to: string,
+  reason: EventGraphEdge['reason'],
+): EventGraphEdge {
   return {
     id,
     from,
@@ -105,6 +114,10 @@ describe('issue 278: explain_path agrees with trace on collapsed helper edges', 
       { maxDepth: 12, maxNodes: 2_000, expandHelpers: false },
     );
     expect(explained.found).toBe(true);
-    expect(explained.steps.map(({ node: step }) => step.id)).toEqual(['event:p.1', 'option:p.1:a', 'event:p.2']);
+    expect(explained.steps.map(({ node: step }) => step.id)).toEqual([
+      'event:p.1',
+      'option:p.1:a',
+      'event:p.2',
+    ]);
   });
 });
