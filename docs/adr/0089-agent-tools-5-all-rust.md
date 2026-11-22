@@ -34,7 +34,7 @@ A piece that cannot be represented safely is refused, as the project instruction
 3. The analyzers, each behind its tests: technology and doctrines, events and the event graph (issue 69), decisions, probability, impact, mechanic and scenario tests, `mod_health`, `error_log` and `script_guard`.
 4. The writers: `idea_write`, `character_write`, `event_write`, `decision_write`, `tech_write`, `doctrine_write` and `localisation_write`, then `focus_rewrite` (with its layout issues 243, 253 and 254).
 5. GUI: the layout model and the renderer (issues 233 to 239, 245 to 250 and 255 to 257), then `gui_rewrite`.
-6. The map, the largest module (issues 172, 182 and 260).
+6. The map, the largest module (issues 172, 182 and 260). The stated map baseline of ADR 0090 (issue 272) moves with it, behind its tests.
 7. Reference search ranking and the remaining `reference_*` tools.
 8. The MCP transport, remote access and schema validation, with their negative tests. The Rust program becomes the server, and the TypeScript server is reduced to the launcher described above.
 9. Remove the TypeScript paths and the parity scripts. Run the full benchmark and the in-game checks the changelog has collected (run in the game by the maintainer), fix what they find, then release 5.0.0.

@@ -56,7 +56,9 @@ export function rollupRepeatedSoftDiagnostics(
       hard.push(diagnostic);
       continue;
     }
-    const key = `${diagnostic.severity}:${diagnostic.code}`;
+    // Pre-existing errors a stated map baseline accepted (ADR 0090) roll up apart from warnings.
+    const accepted = diagnostic.details?.attributionStatus === 'accepted-baseline';
+    const key = `${diagnostic.severity}:${diagnostic.code}${accepted ? ':accepted-baseline' : ''}`;
     const group = groups.get(key) ?? [];
     group.push(diagnostic);
     groups.set(key, group);
@@ -91,6 +93,12 @@ export function rollupRepeatedSoftDiagnostics(
       ...(operationIds.length === 1 ? { operationId: operationIds[0]! } : {}),
       details: {
         rollup: 'repeated-soft-diagnostics.v1',
+        ...(first.details?.attributionStatus === 'accepted-baseline'
+          ? {
+              attributionStatus: 'accepted-baseline',
+              baselineSeverity: first.details.baselineSeverity,
+            }
+          : {}),
         occurrenceCount: occurrences,
         retainedSamples: Math.min(SAMPLE_LIMIT, group.length),
         samples: group.slice(0, SAMPLE_LIMIT),

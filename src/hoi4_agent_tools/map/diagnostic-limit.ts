@@ -37,10 +37,11 @@ function addOmittedDiagnostic(
 
 function truncationDiagnostic(
   omitted: readonly Diagnostic[],
+  limit: number,
 ): Diagnostic & { details: MapDiagnosticTruncationDetails } {
   const details: MapDiagnosticTruncationDetails = {
-    limit: MAP_DIAGNOSTIC_LIMIT,
-    retained: MAP_DIAGNOSTIC_LIMIT - 1,
+    limit,
+    retained: limit - 1,
     omitted: 0,
     omittedBySeverity: {},
     omittedByCode: {},
@@ -71,6 +72,7 @@ function addBoundedDiagnostic(
   diagnostics: Diagnostic[],
   diagnostic: Diagnostic,
   includeBaseline: boolean,
+  limit: number,
 ): void {
   if (!includeBaseline && isBaselineOnlyDiagnostic(diagnostic)) return;
   const marker = existingTruncationDiagnostic(diagnostics);
@@ -92,7 +94,7 @@ function addBoundedDiagnostic(
     addOmittedDiagnostic(marker.details, diagnostic);
     return;
   }
-  if (diagnostics.length < MAP_DIAGNOSTIC_LIMIT) {
+  if (diagnostics.length < limit) {
     diagnostics.push(diagnostic);
     return;
   }
@@ -101,9 +103,9 @@ function addBoundedDiagnostic(
   const hard = candidates.filter(isHardDiagnostic);
   const soft = candidates.filter((candidate) => !isHardDiagnostic(candidate));
   const retained =
-    hard.length >= MAP_DIAGNOSTIC_LIMIT - 1
-      ? hard.slice(0, MAP_DIAGNOSTIC_LIMIT - 1)
-      : [...hard, ...soft.slice(0, MAP_DIAGNOSTIC_LIMIT - 1 - hard.length)];
+    hard.length >= limit - 1
+      ? hard.slice(0, limit - 1)
+      : [...hard, ...soft.slice(0, limit - 1 - hard.length)];
   const retainedCounts = new Map<Diagnostic, number>();
   for (const item of retained) retainedCounts.set(item, (retainedCounts.get(item) ?? 0) + 1);
   const omitted = candidates.filter((candidate) => {
@@ -112,17 +114,26 @@ function addBoundedDiagnostic(
     retainedCounts.set(candidate, count - 1);
     return false;
   });
-  diagnostics.splice(0, diagnostics.length, ...retained, truncationDiagnostic(omitted));
+  diagnostics.splice(0, diagnostics.length, ...retained, truncationDiagnostic(omitted, limit));
 }
 
-export function addMapDiagnostic(diagnostics: Diagnostic[], diagnostic: Diagnostic): void {
-  addBoundedDiagnostic(diagnostics, diagnostic, false);
+/** Add a finding, keeping at most `limit` (default {@link MAP_DIAGNOSTIC_LIMIT}) with omission counts. */
+export function addMapDiagnostic(
+  diagnostics: Diagnostic[],
+  diagnostic: Diagnostic,
+  limit = MAP_DIAGNOSTIC_LIMIT,
+): void {
+  addBoundedDiagnostic(diagnostics, diagnostic, false, limit);
 }
 
 /** Active topology validation must report failures in whichever source wins
  * precedence, including inherited game and dependency files. */
-export function addActiveMapDiagnostic(diagnostics: Diagnostic[], diagnostic: Diagnostic): void {
-  addBoundedDiagnostic(diagnostics, diagnostic, true);
+export function addActiveMapDiagnostic(
+  diagnostics: Diagnostic[],
+  diagnostic: Diagnostic,
+  limit = MAP_DIAGNOSTIC_LIMIT,
+): void {
+  addBoundedDiagnostic(diagnostics, diagnostic, true, limit);
 }
 
 export function addMapDiagnostics(

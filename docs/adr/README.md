@@ -93,3 +93,4 @@ Implementation rationale for contributors. For using the server, start with the 
 83. [Game-build manifests and a focus edit that answers before its check](0087-game-build-manifest-and-early-focus-answer.md)
 84. [A strict production audit and reviewed exceptions for development tools](0088-reviewed-audit-exceptions.md)
 85. [Agent Tools 5.0.0 is one Rust program](0089-agent-tools-5-all-rust.md)
+86. [A stated baseline for map writes over pre-existing errors](0090-stated-map-baseline.md)

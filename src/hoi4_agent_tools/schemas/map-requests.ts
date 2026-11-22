@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { MAP_BASELINE_FINGERPRINT_PATTERN } from '../map/baseline.js';
 import { MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT } from '../map/limits.js';
 import { backgroundRequestKeySchema, workspaceIdSchema } from './common.js';
 import {
@@ -225,6 +226,13 @@ export const mapRewriteRequestSchema = z
         'Return generated reference, terrain and political previews and counts without changing mod files.',
       ),
     diffScale: z.number().int().min(1).max(16).optional(),
+    baselineFingerprint: z
+      .string()
+      .regex(MAP_BASELINE_FINGERPRINT_PATTERN)
+      .optional()
+      .describe(
+        'Opt in to a stated baseline: the baselineFingerprint a full hoi4.map_inspect of the untouched map returned. The server recomputes it and refuses the write when the map changed since. Pre-existing errors outside the objects the write touches then stop blocking and are summarized by code; new errors and pre-existing errors inside the footprint still block. Omit it to have every error block.',
+      ),
     requestKey: backgroundRequestKeySchema.optional(),
   })
   .strict();
