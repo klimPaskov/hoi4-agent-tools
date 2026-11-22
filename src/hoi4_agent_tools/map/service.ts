@@ -973,6 +973,38 @@ export class AgentNudger {
     includeBorderInputs = false,
     includeContinentReferences = false,
   ): Promise<MapScanSnapshot> {
+    const { files, sourceRoots } = await this.scanSources(
+      workspaceId,
+      principal,
+      signal,
+      includeExternalScriptReferences,
+      includeWorldContext,
+      includeAppearance,
+      includeBorderInputs,
+      includeContinentReferences,
+    );
+    const revision = hashCanonical(
+      files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
+    );
+    return {
+      workspaceId,
+      revision,
+      files,
+      index: MapWorkspaceIndex.build(files, sourceRoots),
+    };
+  }
+
+  /** The source files a map scan reads, without the index built from them. */
+  private async scanSources(
+    workspaceId: string,
+    principal?: string,
+    signal?: AbortSignal,
+    includeExternalScriptReferences = false,
+    includeWorldContext = false,
+    includeAppearance = false,
+    includeBorderInputs = false,
+    includeContinentReferences = false,
+  ) {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
     const sourceRoots = {
@@ -1117,15 +1149,7 @@ export class AgentNudger {
       (left, right) =>
         left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
     );
-    const revision = hashCanonical(
-      files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
-    );
-    return {
-      workspaceId,
-      revision,
-      files,
-      index: MapWorkspaceIndex.build(files, sourceRoots),
-    };
+    return { files, sourceRoots };
   }
 
   async validate(
@@ -1439,8 +1463,9 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
   ): Promise<string> {
-    const snapshot = await this.scan(workspaceId, principal, signal);
-    return mapBaselineFingerprint(snapshot.files);
+    // The files of a base scan, hashed without building the map index from them (issue 272).
+    const { files } = await this.scanSources(workspaceId, principal, signal);
+    return mapBaselineFingerprint(files);
   }
 
   async plan(input: MapPlanInput): Promise<MapPlanResult & { baseline?: MapStatedBaselineReport }> {

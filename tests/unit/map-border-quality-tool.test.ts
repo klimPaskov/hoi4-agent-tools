@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { toolResult } from '../../src/hoi4_agent_tools/core/operation-result.js';
@@ -17,6 +17,7 @@ import {
   BORDER_QUALITY_TARGETS,
   borderQualityDiagnostics,
 } from '../../src/hoi4_agent_tools/map/border-quality.js';
+import { mapBaselineFingerprint } from '../../src/hoi4_agent_tools/map/baseline.js';
 import { MapWorkspaceIndex } from '../../src/hoi4_agent_tools/map/model.js';
 import { planMapOperations, type MapOperation } from '../../src/hoi4_agent_tools/map/operations.js';
 import { measureIndexBorderNaturalness } from '../../src/hoi4_agent_tools/map/border-quality-input.js';
@@ -511,5 +512,29 @@ describe('border quality in hoi4.map_inspect', () => {
     expect(borderQualityDiagnostics(first.report).map(({ code }) => code)).toContain(
       'MAP_BORDER_ARTIFICIAL_REVIEW',
     );
+  });
+});
+
+// ADR 0090: the fingerprint a full inspect returns is the one a rewrite recomputes, and it hashes
+// the files of a base scan without building the map index a second time.
+describe('map baseline fingerprint in hoi4.map_inspect', () => {
+  it('equals the rewrite recompute and the base scan files, and builds no index', async () => {
+    const { engine, nudger } = await workspace({ border: 'river', terrain: true });
+    const inspected = await inspectMap(
+      engine,
+      nudger,
+      mapInspectRequestSchema.parse({ workspaceId: 'test' }),
+      context,
+    );
+    const stated = (inspected.data as { baselineFingerprint?: string }).baselineFingerprint;
+    expect(stated).toMatch(/^[0-9a-f]{64}$/u);
+    expect(mapBaselineFingerprint((await nudger.scan('test')).files)).toBe(stated);
+    const build = vi.spyOn(MapWorkspaceIndex, 'build');
+    try {
+      expect(await nudger.baselineFingerprint('test')).toBe(stated);
+      expect(build).not.toHaveBeenCalled();
+    } finally {
+      build.mockRestore();
+    }
   });
 });
