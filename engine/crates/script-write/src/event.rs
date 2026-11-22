@@ -6,13 +6,13 @@
 
 use std::collections::BTreeMap;
 
-use hoi4_syntax::{Document, Entry, Value};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, remove_edit};
 use crate::source::{
-    Replacement, Source, WriteResult, apply_replacements, assignments, block_of, diagnostic_codes, fail, indented_body, line_indent, line_start, probe_one_block,
+    Block, Decoded, Entry, Replacement, Source, Value, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent, line_start,
+    probe_one_block, scalar_of,
 };
 
 pub const EVENT_KINDS: [&str; 5] = ["country_event", "news_event", "state_event", "unit_leader_event", "operative_leader_event"];
@@ -34,6 +34,7 @@ pub struct EventWritePlan {
     pub id: String,
     pub kind: String,
     pub path: String,
+    pub text: String,
     pub bytes: Vec<u8>,
     pub edits: Vec<Replacement>,
     pub untouched_definitions: usize,
@@ -68,39 +69,39 @@ pub fn namespace_of(id: &str) -> &str {
     &id[..id.find('.').unwrap_or(id.len())]
 }
 
-struct Located<'a> {
-    event: &'a Entry,
+struct Located<'b, 't> {
+    event: &'b Entry<'t>,
     kind: String,
     id: String,
 }
 
 /// Every top-level event block of the document that has an `id`.
-fn definitions<'a>(source: &Source, document: &'a Document) -> Vec<Located<'a>> {
+fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<Located<'b, 't>> {
     let mut found = Vec::new();
-    for event in assignments(source, &document.root, None) {
-        let kind = source.key(event);
+    for event in assignments(root, None) {
+        let kind = key_of(event);
         if !EVENT_KINDS.contains(&kind.as_str()) {
             continue;
         }
         let Some(block) = block_of(event) else { continue };
-        if let Some(id) = assignments(source, block, Some("id")).first()
-            && let Value::Scalar(token) = &id.value
+        if let Some(id) = assignments(block, Some("id")).first()
+            && let Some(value) = scalar_of(id)
         {
-            found.push(Located { event, kind, id: document.text(*token).into_owned() });
+            found.push(Located { event, kind, id: value.into_owned() });
         }
     }
     found
 }
 
-fn namespaces<'a>(source: &Source, document: &'a Document) -> Vec<&'a Entry> {
-    assignments(source, &document.root, Some("add_namespace"))
+fn namespaces<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
+    assignments(root, Some("add_namespace"))
 }
 
-fn indent_unit(source: &Source, located: &[Located]) -> String {
+fn indent_unit(source: &Source<'_>, located: &[Located<'_, '_>]) -> String {
     for Located { event, .. } in located {
         let Some(block) = block_of(event) else { continue };
-        let Some(first) = block.items.first() else { continue };
-        let inner = line_indent(source.bytes(), source.document.byte_range(&first.tokens()).start as usize);
+        let Some(first) = block.entries.first() else { continue };
+        let inner = line_indent(source.bytes(), Source::item_start(first));
         let outer = line_indent(source.bytes(), source.entry_range(event).start);
         if inner.len() > outer.len() && inner.starts_with(&outer) {
             return inner[outer.len()..].to_string();
@@ -112,8 +113,15 @@ fn indent_unit(source: &Source, located: &[Located]) -> String {
 /// The body, checked on its own as the block it will become, and its own `id` when it has one.
 /// Returns the `id` line to write, none when the body has its own.
 fn checked_body(kind: &str, id: &str, body: &str) -> WriteResult<Vec<String>> {
-    let probe = match probe_one_block(kind, body) {
-        Ok(probe) => probe,
+    // The probe's findings: how many `id` assignments the body has, whether the block is empty,
+    // and whether the one `id` is the event's own.
+    let found = probe_one_block(kind, body, |block| {
+        let own = assignments(block, Some("id"));
+        let matches = own.first().is_none_or(|entry| matches!(&entry.value, Value::Scalar(s) if s.value == id));
+        (block.entries.is_empty(), own.len(), matches)
+    });
+    let (empty, count, matches) = match found {
+        Ok(found) => found,
         Err(codes) => {
             return fail(
                 "EVENT_WRITE_BODY_INVALID",
@@ -122,38 +130,30 @@ fn checked_body(kind: &str, id: &str, body: &str) -> WriteResult<Vec<String>> {
             );
         }
     };
-    let probe_source = Source { document: probe, path: "event-body".into() };
-    let Some(Entry { value: Value::Block(block), .. }) = probe_source.document.root.items.first().and_then(|i| i.as_entry()) else {
-        return fail("EVENT_WRITE_BODY_INVALID", "The body of an event cannot be empty", json!({}));
-    };
-    if block.items.is_empty() {
+    if empty {
         return fail("EVENT_WRITE_BODY_INVALID", "The body of an event cannot be empty", json!({}));
     }
-    let own = assignments(&probe_source, block, Some("id"));
-    if own.len() > 1 {
+    if count > 1 {
         return fail("EVENT_WRITE_BODY_INVALID", "The body names an id more than once", json!({}));
     }
-    if let Some(own) = own.first() {
-        let matches = matches!(&own.value, Value::Scalar(token) if probe_source.document.text(*token) == id);
-        if !matches {
-            return fail(
-                "EVENT_WRITE_ID_MISMATCH",
-                format!("The body has its own id, which is not {id}; leave id out of the body, the tool writes it"),
-                json!({ "id": id }),
-            );
-        }
+    if !matches {
+        return fail(
+            "EVENT_WRITE_ID_MISMATCH",
+            format!("The body has its own id, which is not {id}; leave id out of the body, the tool writes it"),
+            json!({ "id": id }),
+        );
     }
-    Ok(if own.len() == 1 { Vec::new() } else { vec![format!("id = {id}")] })
+    Ok(if count == 1 { Vec::new() } else { vec![format!("id = {id}")] })
 }
 
-fn definition_texts(source: &Source, document: &Document, skip: Option<usize>) -> BTreeMap<String, Vec<Vec<u8>>> {
-    let mut by_id: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
-    for Located { event, id, .. } in definitions(source, document) {
+fn definition_texts(source: &Source<'_>, skip: Option<usize>) -> BTreeMap<String, Vec<String>> {
+    let mut by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for Located { event, id, .. } in definitions(&source.document.root) {
         let range = source.entry_range(event);
         if Some(range.start) == skip {
             continue;
         }
-        by_id.entry(id).or_default().push(source.bytes()[range].to_vec());
+        by_id.entry(id).or_default().push(source.text()[range].to_string());
     }
     by_id
 }
@@ -219,9 +219,10 @@ pub fn plan_new_event_file(path: &str, input: &EventWriteInput) -> WriteResult<E
     parts.push(block_text(&kind, body, &id_line, "", "\t", "\n"));
     parts.push(String::new());
     let text = parts.join("\n");
-    let written = Source::parse(text.as_bytes(), path);
+    let decoded = Decoded::new(text.as_bytes());
+    let written = Source::new(&decoded, path);
     if written.has_blocking() {
-        return fail("EVENT_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("EVENT_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
     Ok(EventWritePlan {
         operation: Operation::Add,
@@ -229,7 +230,8 @@ pub fn plan_new_event_file(path: &str, input: &EventWriteInput) -> WriteResult<E
         kind,
         path: path.to_string(),
         bytes: text.clone().into_bytes(),
-        edits: vec![Replacement { start: 0, end: 0, text, description: format!("create {path} with {}", input.id) }],
+        edits: vec![Replacement { start: 0, end: 0, text: text.clone(), description: format!("create {path} with {}", input.id) }],
+        text,
         untouched_definitions: 0,
         namespace_added,
     })
@@ -238,17 +240,18 @@ pub fn plan_new_event_file(path: &str, input: &EventWriteInput) -> WriteResult<E
 /// `planEventWrite`: the edit of one event of an existing file.
 pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> WriteResult<EventWritePlan> {
     check_request(input)?;
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return fail(
             "EVENT_WRITE_SOURCE_INVALID",
             "The source has syntax errors and cannot be edited safely",
-            json!({ "path": path, "diagnosticCodes": diagnostic_codes(&source) }),
+            json!({ "path": path, "diagnosticCodes": source.diagnostic_codes() }),
         );
     }
     let text = source.bytes();
     let newline = source.newline();
-    let located = definitions(&source, &source.document);
+    let located = definitions(&source.document.root);
     let unit = indent_unit(&source, &located);
     let existing: Vec<&Located> = located.iter().filter(|l| l.id == input.id).collect();
     let body = input.body.as_deref().unwrap_or_default();
@@ -260,32 +263,32 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
     if input.operation == Operation::Add {
         kind = kind_of(input);
         if let Some(first) = existing.first() {
-            return fail("EVENT_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": source.line_of_key(first.event) }));
+            return fail("EVENT_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.event.key.line }));
         }
         let id_line = checked_body(&kind, &input.id, body)?;
         let wanted = namespace_of(&input.id);
-        let declared_here = namespaces(&source, &source.document).iter().any(|e| matches!(&e.value, Value::Scalar(token) if source.document.text(*token) == wanted));
+        let declared_here = namespaces(&source.document.root).iter().any(|e| matches!(&e.value, Value::Scalar(s) if s.value == wanted));
         if !declared_here && input.namespace_declared != Some(true) {
             if input.create_namespace != Some(true) {
                 namespace_missing(&input.id)?;
             }
             namespace_added = true;
-            let lines = namespaces(&source, &source.document);
+            let lines = namespaces(&source.document.root);
             let description = format!("declare the namespace {wanted}");
             if let Some(last) = lines.last() {
                 let end = source.entry_range(last).end;
                 let line_end_at = text[end..].iter().position(|&b| b == b'\n').map(|at| end + at);
                 let at = line_end_at.map_or(text.len(), |at| at + 1);
                 edits.push(Replacement { start: at, end: at, text: format!("{}add_namespace = {wanted}{newline}", if line_end_at.is_none() { newline } else { "" }), description });
-            } else if let Some(first) = source.document.root.items.first() {
-                let at = line_start(text, source.document.byte_range(&first.tokens()).start as usize);
+            } else if let Some(first) = source.document.root.entries.first() {
+                let at = line_start(text, Source::item_start(first));
                 edits.push(Replacement { start: at, end: at, text: format!("add_namespace = {wanted}{newline}{newline}"), description });
             }
         }
         let block = block_text(&kind, body, &id_line, "", &unit, newline);
         let lead = if text.is_empty() { String::new() } else { format!("{}{newline}", if text.ends_with(b"\n") { "" } else { newline }) };
         edits.push(Replacement { start: text.len(), end: text.len(), text: format!("{lead}{block}{newline}"), description: format!("add {}", input.id) });
-        if namespace_added && source.document.root.items.is_empty() {
+        if namespace_added && source.document.root.entries.is_empty() {
             edits = vec![Replacement {
                 start: text.len(),
                 end: text.len(),
@@ -301,7 +304,7 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
             return fail(
                 "EVENT_WRITE_DUPLICATE_ID",
                 format!("{} is defined {} times in this file", input.id, existing.len()),
-                json!({ "id": input.id, "lines": existing.iter().map(|l| source.line_of_key(l.event)).collect::<Vec<_>>() }),
+                json!({ "id": input.id, "lines": existing.iter().map(|l| l.event.key.line).collect::<Vec<_>>() }),
             );
         }
         let found = existing[0];
@@ -325,13 +328,14 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
         }
     }
 
-    let new_bytes = apply_replacements(&source, &edits)?;
-    let written = Source::parse(&new_bytes, path);
+    let (after_text, new_bytes) = apply_replacements(&source, &edits)?;
+    let written_decoded = Decoded::new(&new_bytes);
+    let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("EVENT_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("EVENT_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
-    let before = definition_texts(&source, &source.document, skip);
-    let after = definition_texts(&written, &written.document, None);
+    let before = definition_texts(&source, skip);
+    let after = definition_texts(&written, None);
     let mut untouched = 0;
     for (id, texts) in &before {
         let now = after.get(id).map(Vec::as_slice).unwrap_or_default();
@@ -343,23 +347,18 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
             }
         }
     }
-    Ok(EventWritePlan { operation: input.operation, id: input.id.clone(), kind, path: path.to_string(), bytes: new_bytes, edits, untouched_definitions: untouched, namespace_added })
+    Ok(EventWritePlan { operation: input.operation, id: input.id.clone(), kind, path: path.to_string(), text: after_text, bytes: new_bytes, edits, untouched_definitions: untouched, namespace_added })
 }
 
 /// The ids of the events in a source, and the namespaces it declares.
 pub fn event_file_contents(bytes: &[u8], path: &str) -> (Vec<String>, Vec<String>) {
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return (Vec::new(), Vec::new());
     }
-    let ids = definitions(&source, &source.document).into_iter().map(|l| l.id).collect();
-    let spaces = namespaces(&source, &source.document)
-        .into_iter()
-        .filter_map(|e| match &e.value {
-            Value::Scalar(token) => Some(source.document.text(*token).into_owned()),
-            _ => None,
-        })
-        .collect();
+    let ids = definitions(&source.document.root).into_iter().map(|l| l.id).collect();
+    let spaces = namespaces(&source.document.root).into_iter().filter_map(|e| scalar_of(e).map(|v| v.into_owned())).collect();
     (ids, spaces)
 }
 

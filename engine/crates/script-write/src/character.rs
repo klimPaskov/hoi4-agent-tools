@@ -6,12 +6,11 @@
 
 use std::collections::BTreeMap;
 
-use hoi4_syntax::Entry;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, diagnostic_codes, fail, indented_body, line_indent, line_start};
+use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent, line_start};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +25,7 @@ pub struct CharacterWritePlan {
     pub operation: Operation,
     pub id: String,
     pub path: String,
+    pub text: String,
     pub bytes: Vec<u8>,
     pub edit: Replacement,
     pub untouched_definitions: usize,
@@ -44,19 +44,19 @@ impl CharacterWritePlan {
 }
 
 /// Every `characters = { <id> = { ... } }` definition of the document.
-fn definitions<'a>(source: &Source, document: &'a hoi4_syntax::Document) -> Vec<&'a Entry> {
-    assignments(source, &document.root, Some("characters"))
+fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
+    assignments(root, Some("characters"))
         .into_iter()
-        .flat_map(|characters| block_of(characters).map(|block| assignments(source, block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|characters| block_of(characters).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
         .collect()
 }
 
 /// One level of indentation, read from the file's own characters, tabs when it has none.
-fn indent_unit(source: &Source) -> String {
-    for characters in assignments(source, &source.document.root, Some("characters")) {
+fn indent_unit(source: &Source<'_>) -> String {
+    for characters in assignments(&source.document.root, Some("characters")) {
         let Some(block) = block_of(characters) else { continue };
         let outer = line_indent(source.bytes(), source.entry_range(characters).start);
-        for character in assignments(source, block, None) {
+        for character in assignments(block, None) {
             let inner = line_indent(source.bytes(), source.entry_range(character).start);
             if inner.len() > outer.len() && inner.starts_with(&outer) {
                 return inner[outer.len()..].to_string();
@@ -66,14 +66,14 @@ fn indent_unit(source: &Source) -> String {
     "\t".to_string()
 }
 
-fn definition_texts(source: &Source, document: &hoi4_syntax::Document, skip: Option<usize>) -> BTreeMap<String, Vec<Vec<u8>>> {
-    let mut by_key: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
-    for character in definitions(source, document) {
+fn definition_texts(source: &Source<'_>, skip: Option<usize>) -> BTreeMap<String, Vec<String>> {
+    let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for character in definitions(&source.document.root) {
         let range = source.entry_range(character);
         if Some(range.start) == skip {
             continue;
         }
-        by_key.entry(source.key(character)).or_default().push(source.bytes()[range].to_vec());
+        by_key.entry(key_of(character)).or_default().push(source.text()[range].to_string());
     }
     by_key
 }
@@ -100,16 +100,18 @@ pub fn plan_new_character_file(path: &str, input: &CharacterWriteInput) -> Write
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "CHARACTER_WRITE_BODY_INVALID", "character")?;
     let text = ["characters = {".to_string(), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()].join("\n");
-    let written = Source::parse(text.as_bytes(), path);
+    let decoded = Decoded::new(text.as_bytes());
+    let written = Source::new(&decoded, path);
     if written.has_blocking() {
-        return fail("CHARACTER_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("CHARACTER_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
     Ok(CharacterWritePlan {
         operation: Operation::Add,
         id: input.id.clone(),
         path: path.to_string(),
         bytes: text.clone().into_bytes(),
-        edit: Replacement { start: 0, end: 0, text, description: format!("create {path} with {}", input.id) },
+        edit: Replacement { start: 0, end: 0, text: text.clone(), description: format!("create {path} with {}", input.id) },
+        text,
         untouched_definitions: 0,
     })
 }
@@ -117,12 +119,13 @@ pub fn plan_new_character_file(path: &str, input: &CharacterWriteInput) -> Write
 /// `planCharacterWrite`: the edit of one character of an existing file.
 pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInput) -> WriteResult<CharacterWritePlan> {
     check_request(input)?;
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return fail(
             "CHARACTER_WRITE_SOURCE_INVALID",
             "The source has syntax errors and cannot be edited safely",
-            json!({ "path": path, "diagnosticCodes": diagnostic_codes(&source) }),
+            json!({ "path": path, "diagnosticCodes": source.diagnostic_codes() }),
         );
     }
     let text = source.bytes();
@@ -131,17 +134,17 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
         assert_body_is_one_block(&input.id, body, "CHARACTER_WRITE_BODY_INVALID", "character")?;
     }
     let unit = indent_unit(&source);
-    let all = definitions(&source, &source.document);
-    let existing: Vec<&&Entry> = all.iter().filter(|e| source.key(e) == input.id).collect();
+    let all = definitions(&source.document.root);
+    let existing: Vec<&&Entry> = all.iter().filter(|e| e.key.value == input.id).collect();
     let body = input.body.as_deref().unwrap_or_default();
 
     let edit;
     let mut skip = None;
     if input.operation == Operation::Add {
         if let Some(first) = existing.first() {
-            return fail("CHARACTER_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": source.line_of_key(first) }));
+            return fail("CHARACTER_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.key.line }));
         }
-        let blocks: Vec<&Entry> = assignments(&source, &source.document.root, Some("characters")).into_iter().filter(|e| block_of(e).is_some()).collect();
+        let blocks: Vec<&Entry> = assignments(&source.document.root, Some("characters")).into_iter().filter(|e| block_of(e).is_some()).collect();
         if blocks.len() != 1 {
             return fail(
                 "CHARACTER_WRITE_LAYOUT_UNSUPPORTED",
@@ -171,7 +174,7 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
         edit = Replacement {
             start: close_line_start,
             end: close_line_start,
-            text: format!("{}{character_text}", if block.items.is_empty() { "" } else { newline }),
+            text: format!("{}{character_text}", if block.entries.is_empty() { "" } else { newline }),
             description: format!("add {}", input.id),
         };
     } else {
@@ -182,7 +185,7 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
             return fail(
                 "CHARACTER_WRITE_DUPLICATE_ID",
                 format!("{} is defined {} times in this file", input.id, existing.len()),
-                json!({ "id": input.id, "lines": existing.iter().map(|e| source.line_of_key(e)).collect::<Vec<_>>() }),
+                json!({ "id": input.id, "lines": existing.iter().map(|e| e.key.line).collect::<Vec<_>>() }),
             );
         }
         let range = source.entry_range(existing[0]);
@@ -200,13 +203,14 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
         };
     }
 
-    let new_bytes = apply_replacements(&source, std::slice::from_ref(&edit))?;
-    let written = Source::parse(&new_bytes, path);
+    let (after_text, new_bytes) = apply_replacements(&source, std::slice::from_ref(&edit))?;
+    let written_decoded = Decoded::new(&new_bytes);
+    let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("CHARACTER_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("CHARACTER_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
-    let before = definition_texts(&source, &source.document, skip);
-    let after = definition_texts(&written, &written.document, None);
+    let before = definition_texts(&source, skip);
+    let after = definition_texts(&written, None);
     let mut untouched = 0;
     for (key, texts) in &before {
         let now = after.get(key).map(Vec::as_slice).unwrap_or_default();
@@ -218,7 +222,10 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
             }
         }
     }
-    Ok(CharacterWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), bytes: new_bytes, edit, untouched_definitions: untouched })
+    if written.text() != after_text {
+        return fail("CHARACTER_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
+    }
+    Ok(CharacterWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
 }
 
 #[cfg(test)]

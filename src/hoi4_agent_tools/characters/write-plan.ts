@@ -30,7 +30,7 @@ export interface CharacterWritePlan {
   text: string;
   /** The file after the edit, in its own encoding. */
   bytes: Buffer;
-  /** The one replacement that was made, in byte offsets of the source. */
+  /** The one replacement that was made, in byte offsets of the decoded text. */
   edit: SourceByteReplacement;
   /** A unified diff of the file, empty when nothing changed. */
   diff: string;

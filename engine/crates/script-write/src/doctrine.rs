@@ -1,17 +1,17 @@
-//! The edit behind `hoi4.doctrine_write`: add, replace or remove one doctrine of a
-//! `common/doctrines/**` file file and nothing else.
+//! The edit behind `hoi4.doctrine_write`: add, replace or remove one grand doctrine, track or
+//! subdoctrine of a `common/doctrines/**` file and nothing else. These files are flat: each
+//! top-level block is one definition, keyed by its name.
 //!
 //! Ported from `src/hoi4_agent_tools/doctrine/write-plan.ts` (`planDoctrineWrite`,
 //! `planNewDoctrineFile` and their helpers), commit `ef3d2215`.
 
 use std::collections::BTreeMap;
 
-use hoi4_syntax::Entry;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Replacement, Source, WriteResult, apply_replacements, assignments, block_of, diagnostic_codes, fail, indented_body, line_indent};
+use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +26,7 @@ pub struct DoctrineWritePlan {
     pub operation: Operation,
     pub id: String,
     pub path: String,
+    pub text: String,
     pub bytes: Vec<u8>,
     pub edit: Replacement,
     pub untouched_definitions: usize,
@@ -44,16 +45,16 @@ impl DoctrineWritePlan {
 }
 
 /// Every top-level block of the document: one doctrine definition each.
-fn definitions<'a>(source: &Source, document: &'a hoi4_syntax::Document) -> Vec<&'a Entry> {
-    assignments(source, &document.root, None).into_iter().filter(|e| block_of(e).is_some()).collect()
+fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
+    assignments(root, None).into_iter().filter(|e| block_of(e).is_some()).collect()
 }
 
 /// One level of indentation, read from the file's own doctrines, tabs when it has none.
-fn indent_unit(source: &Source, located: &[&Entry]) -> String {
+fn indent_unit(source: &Source<'_>, located: &[&Entry<'_>]) -> String {
     for doctrine in located {
         let Some(block) = block_of(doctrine) else { continue };
-        let Some(first) = block.items.first() else { continue };
-        let inner = line_indent(source.bytes(), source.document.byte_range(&first.tokens()).start as usize);
+        let Some(first) = block.entries.first() else { continue };
+        let inner = line_indent(source.bytes(), Source::item_start(first));
         let outer = line_indent(source.bytes(), source.entry_range(doctrine).start);
         if inner.len() > outer.len() && inner.starts_with(&outer) {
             return inner[outer.len()..].to_string();
@@ -62,14 +63,14 @@ fn indent_unit(source: &Source, located: &[&Entry]) -> String {
     "\t".to_string()
 }
 
-fn definition_texts(source: &Source, document: &hoi4_syntax::Document, skip: Option<usize>) -> BTreeMap<String, Vec<Vec<u8>>> {
-    let mut by_key: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
-    for doctrine in definitions(source, document) {
+fn definition_texts(source: &Source<'_>, skip: Option<usize>) -> BTreeMap<String, Vec<String>> {
+    let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for doctrine in definitions(&source.document.root) {
         let range = source.entry_range(doctrine);
         if Some(range.start) == skip {
             continue;
         }
-        by_key.entry(source.key(doctrine)).or_default().push(source.bytes()[range].to_vec());
+        by_key.entry(key_of(doctrine)).or_default().push(source.text()[range].to_string());
     }
     by_key
 }
@@ -96,16 +97,18 @@ pub fn plan_new_doctrine_file(path: &str, input: &DoctrineWriteInput) -> WriteRe
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "DOCTRINE_WRITE_BODY_INVALID", "doctrine")?;
     let text = [format!("{} = {{", input.id), indented_body(body, "\t", "\n"), "}".to_string(), String::new()].join("\n");
-    let written = Source::parse(text.as_bytes(), path);
+    let decoded = Decoded::new(text.as_bytes());
+    let written = Source::new(&decoded, path);
     if written.has_blocking() {
-        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
     Ok(DoctrineWritePlan {
         operation: Operation::Add,
         id: input.id.clone(),
         path: path.to_string(),
         bytes: text.clone().into_bytes(),
-        edit: Replacement { start: 0, end: 0, text, description: format!("create {path} with {}", input.id) },
+        edit: Replacement { start: 0, end: 0, text: text.clone(), description: format!("create {path} with {}", input.id) },
+        text,
         untouched_definitions: 0,
     })
 }
@@ -113,12 +116,13 @@ pub fn plan_new_doctrine_file(path: &str, input: &DoctrineWriteInput) -> WriteRe
 /// `planDoctrineWrite`: the edit of one doctrine of an existing file.
 pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput) -> WriteResult<DoctrineWritePlan> {
     check_request(input)?;
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return fail(
             "DOCTRINE_WRITE_SOURCE_INVALID",
             "The source has syntax errors and cannot be edited safely",
-            json!({ "path": path, "diagnosticCodes": diagnostic_codes(&source) }),
+            json!({ "path": path, "diagnosticCodes": source.diagnostic_codes() }),
         );
     }
     let text = source.bytes();
@@ -126,16 +130,16 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
     if let Some(body) = input.body.as_deref() {
         assert_body_is_one_block(&input.id, body, "DOCTRINE_WRITE_BODY_INVALID", "doctrine")?;
     }
-    let all = definitions(&source, &source.document);
+    let all = definitions(&source.document.root);
     let unit = indent_unit(&source, &all);
-    let existing: Vec<&&Entry> = all.iter().filter(|e| source.key(e) == input.id).collect();
+    let existing: Vec<&&Entry> = all.iter().filter(|e| e.key.value == input.id).collect();
     let body = input.body.as_deref().unwrap_or_default();
 
     let edit;
     let mut skip = None;
     if input.operation == Operation::Add {
         if let Some(first) = existing.first() {
-            return fail("DOCTRINE_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": source.line_of_key(first) }));
+            return fail("DOCTRINE_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.key.line }));
         }
         let lead = if text.is_empty() { String::new() } else { format!("{}{newline}", if text.ends_with(b"\n") { "" } else { newline }) };
         edit = Replacement {
@@ -152,7 +156,7 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
             return fail(
                 "DOCTRINE_WRITE_DUPLICATE_ID",
                 format!("{} is defined {} times in this file", input.id, existing.len()),
-                json!({ "id": input.id, "lines": existing.iter().map(|e| source.line_of_key(e)).collect::<Vec<_>>() }),
+                json!({ "id": input.id, "lines": existing.iter().map(|e| e.key.line).collect::<Vec<_>>() }),
             );
         }
         let range = source.entry_range(existing[0]);
@@ -170,13 +174,14 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
         };
     }
 
-    let new_bytes = apply_replacements(&source, std::slice::from_ref(&edit))?;
-    let written = Source::parse(&new_bytes, path);
+    let (after_text, new_bytes) = apply_replacements(&source, std::slice::from_ref(&edit))?;
+    let written_decoded = Decoded::new(&new_bytes);
+    let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
-    let before = definition_texts(&source, &source.document, skip);
-    let after = definition_texts(&written, &written.document, None);
+    let before = definition_texts(&source, skip);
+    let after = definition_texts(&written, None);
     let mut untouched = 0;
     for (key, texts) in &before {
         let now = after.get(key).map(Vec::as_slice).unwrap_or_default();
@@ -188,7 +193,10 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
             }
         }
     }
-    Ok(DoctrineWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), bytes: new_bytes, edit, untouched_definitions: untouched })
+    if written.text() != after_text {
+        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
+    }
+    Ok(DoctrineWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
 }
 
 #[cfg(test)]

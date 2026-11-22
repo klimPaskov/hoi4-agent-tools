@@ -6,12 +6,11 @@
 
 use std::collections::BTreeMap;
 
-use hoi4_syntax::{Document, Entry};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, diagnostic_codes, fail, indented_body, line_indent, line_start};
+use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent, line_start};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +28,7 @@ pub struct DecisionWritePlan {
     pub id: String,
     pub category: String,
     pub path: String,
+    pub text: String,
     pub bytes: Vec<u8>,
     pub edit: Replacement,
     pub untouched_definitions: usize,
@@ -47,28 +47,28 @@ impl DecisionWritePlan {
     }
 }
 
-struct Located<'a> {
-    decision: &'a Entry,
-    category: &'a Entry,
+struct Located<'b, 't> {
+    decision: &'b Entry<'t>,
+    category: &'b Entry<'t>,
 }
 
 /// The top-level category blocks of a decisions file.
-fn category_blocks<'a>(source: &Source, document: &'a Document) -> Vec<&'a Entry> {
-    assignments(source, &document.root, None).into_iter().filter(|e| block_of(e).is_some()).collect()
+fn category_blocks<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
+    assignments(root, None).into_iter().filter(|e| block_of(e).is_some()).collect()
 }
 
 /// Every `<category> = { <decision> = { ... } }` definition of the document.
-fn definitions<'a>(source: &Source, document: &'a Document) -> Vec<Located<'a>> {
-    category_blocks(source, document)
+fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<Located<'b, 't>> {
+    category_blocks(root)
         .into_iter()
         .flat_map(|category| {
             let block = block_of(category).expect("filtered to blocks");
-            assignments(source, block, None).into_iter().filter(|e| block_of(e).is_some()).map(move |decision| Located { decision, category }).collect::<Vec<_>>()
+            assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).map(move |decision| Located { decision, category }).collect::<Vec<_>>()
         })
         .collect()
 }
 
-fn indent_unit(source: &Source, located: &[Located]) -> String {
+fn indent_unit(source: &Source<'_>, located: &[Located<'_, '_>]) -> String {
     for Located { decision, category } in located {
         let outer = line_indent(source.bytes(), source.entry_range(category).start);
         let inner = line_indent(source.bytes(), source.entry_range(decision).start);
@@ -79,14 +79,14 @@ fn indent_unit(source: &Source, located: &[Located]) -> String {
     "\t".to_string()
 }
 
-fn definition_texts(source: &Source, document: &Document, skip: Option<usize>) -> BTreeMap<String, Vec<Vec<u8>>> {
-    let mut by_key: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
-    for Located { decision, category } in definitions(source, document) {
+fn definition_texts(source: &Source<'_>, skip: Option<usize>) -> BTreeMap<String, Vec<String>> {
+    let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for Located { decision, category } in definitions(&source.document.root) {
         let range = source.entry_range(decision);
         if Some(range.start) == skip {
             continue;
         }
-        by_key.entry(format!("{}:{}", source.key(category), source.key(decision))).or_default().push(source.bytes()[range].to_vec());
+        by_key.entry(format!("{}:{}", key_of(category), key_of(decision))).or_default().push(source.text()[range].to_string());
     }
     by_key
 }
@@ -124,9 +124,10 @@ pub fn plan_new_decision_file(path: &str, input: &DecisionWriteInput) -> WriteRe
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "DECISION_WRITE_BODY_INVALID", "decision")?;
     let text = [format!("{category} = {{"), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()].join("\n");
-    let written = Source::parse(text.as_bytes(), path);
+    let decoded = Decoded::new(text.as_bytes());
+    let written = Source::new(&decoded, path);
     if written.has_blocking() {
-        return fail("DECISION_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("DECISION_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
     Ok(DecisionWritePlan {
         operation: Operation::Add,
@@ -134,7 +135,8 @@ pub fn plan_new_decision_file(path: &str, input: &DecisionWriteInput) -> WriteRe
         category: category.to_string(),
         path: path.to_string(),
         bytes: text.clone().into_bytes(),
-        edit: Replacement { start: 0, end: 0, text, description: format!("create {path} with {}", input.id) },
+        edit: Replacement { start: 0, end: 0, text: text.clone(), description: format!("create {path} with {}", input.id) },
+        text,
         untouched_definitions: 0,
     })
 }
@@ -142,22 +144,23 @@ pub fn plan_new_decision_file(path: &str, input: &DecisionWriteInput) -> WriteRe
 /// `planDecisionWrite`: the edit of one decision of an existing file.
 pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput) -> WriteResult<DecisionWritePlan> {
     check_request(input)?;
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return fail(
             "DECISION_WRITE_SOURCE_INVALID",
             "The source has syntax errors and cannot be edited safely",
-            json!({ "path": path, "diagnosticCodes": diagnostic_codes(&source) }),
+            json!({ "path": path, "diagnosticCodes": source.diagnostic_codes() }),
         );
     }
     let text = source.bytes();
     let newline = source.newline();
-    let located = definitions(&source, &source.document);
+    let located = definitions(&source.document.root);
     if let Some(body) = input.body.as_deref() {
         assert_body_is_one_block(&input.id, body, "DECISION_WRITE_BODY_INVALID", "decision")?;
     }
     let unit = indent_unit(&source, &located);
-    let existing: Vec<&Located> = located.iter().filter(|l| source.key(l.decision) == input.id).collect();
+    let existing: Vec<&Located> = located.iter().filter(|l| l.decision.key.value == input.id).collect();
     let body = input.body.as_deref().unwrap_or_default();
 
     let edit;
@@ -168,18 +171,18 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
             return fail(
                 "DECISION_WRITE_DUPLICATE_ID",
                 format!("{} is already defined in this file", input.id),
-                json!({ "id": input.id, "category": source.key(first.category), "line": source.line_of_key(first.decision) }),
+                json!({ "id": input.id, "category": key_of(first.category), "line": first.decision.key.line }),
             );
         }
         let Some(wanted) = input.category.as_deref() else {
             return fail("DECISION_WRITE_CATEGORY_REQUIRED", "add needs the category block the decision goes in", json!({}));
         };
-        let blocks = category_blocks(&source, &source.document);
-        let matching: Vec<&Entry> = blocks.iter().copied().filter(|e| source.key(e) == wanted).collect();
+        let blocks = category_blocks(&source.document.root);
+        let matching: Vec<&Entry> = blocks.iter().copied().filter(|e| e.key.value == wanted).collect();
         if matching.is_empty() && input.create_category != Some(true) {
             let mut categories: Vec<String> = Vec::new();
             for entry in &blocks {
-                let key = source.key(entry);
+                let key = key_of(entry);
                 if !categories.contains(&key) {
                     categories.push(key);
                 }
@@ -194,7 +197,7 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
             return fail(
                 "DECISION_WRITE_CATEGORY_AMBIGUOUS",
                 format!("The file has {} {wanted} category blocks", matching.len()),
-                json!({ "category": wanted, "lines": matching.iter().map(|e| source.line_of_key(e)).collect::<Vec<_>>() }),
+                json!({ "category": wanted, "lines": matching.iter().map(|e| e.key.line).collect::<Vec<_>>() }),
             );
         }
         edit = if matching.is_empty() {
@@ -228,7 +231,7 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
             Replacement {
                 start: close_line_start,
                 end: close_line_start,
-                text: format!("{}{decision_text}", if block.items.is_empty() { "" } else { newline }),
+                text: format!("{}{decision_text}", if block.entries.is_empty() { "" } else { newline }),
                 description: format!("add {} to {wanted}", input.id),
             }
         };
@@ -241,11 +244,11 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
             return fail(
                 "DECISION_WRITE_DUPLICATE_ID",
                 format!("{} is defined {} times in this file", input.id, existing.len()),
-                json!({ "id": input.id, "lines": existing.iter().map(|l| source.line_of_key(l.decision)).collect::<Vec<_>>() }),
+                json!({ "id": input.id, "lines": existing.iter().map(|l| l.decision.key.line).collect::<Vec<_>>() }),
             );
         }
         let found = existing[0];
-        category = source.key(found.category);
+        category = key_of(found.category);
         if input.category.as_deref().is_some_and(|c| c != category) {
             return fail(
                 "DECISION_WRITE_CATEGORY_MISMATCH",
@@ -268,13 +271,14 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
         };
     }
 
-    let new_bytes = apply_replacements(&source, std::slice::from_ref(&edit))?;
-    let written = Source::parse(&new_bytes, path);
+    let (after_text, new_bytes) = apply_replacements(&source, std::slice::from_ref(&edit))?;
+    let written_decoded = Decoded::new(&new_bytes);
+    let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("DECISION_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("DECISION_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
-    let before = definition_texts(&source, &source.document, skip);
-    let after = definition_texts(&written, &written.document, None);
+    let before = definition_texts(&source, skip);
+    let after = definition_texts(&written, None);
     let mut untouched = 0;
     for (key, texts) in &before {
         let now = after.get(key).map(Vec::as_slice).unwrap_or_default();
@@ -286,18 +290,22 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
             }
         }
     }
-    Ok(DecisionWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), bytes: new_bytes, edit, untouched_definitions: untouched })
+    if written.text() != after_text {
+        return fail("DECISION_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
+    }
+    Ok(DecisionWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
 }
 
 /// The category blocks of a `common/decisions` file, or none when the file cannot be parsed.
 pub fn decision_categories(bytes: &[u8], path: &str) -> Vec<String> {
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return Vec::new();
     }
     let mut seen: Vec<String> = Vec::new();
-    for entry in category_blocks(&source, &source.document) {
-        let key = source.key(entry);
+    for entry in category_blocks(&source.document.root) {
+        let key = key_of(entry);
         if !seen.contains(&key) {
             seen.push(key);
         }

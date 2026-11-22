@@ -47,7 +47,7 @@ export interface EventWritePlan {
   text: string;
   /** The file after the edit, in its own encoding. */
   bytes: Buffer;
-  /** The replacements that were made, the event first, in byte offsets of the source. */
+  /** The replacements that were made, the event first, in byte offsets of the decoded text. */
   edits: SourceByteReplacement[];
   /** A unified diff of the file, empty when nothing changed. */
   diff: string;

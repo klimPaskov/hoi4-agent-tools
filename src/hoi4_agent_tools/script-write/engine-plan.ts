@@ -10,7 +10,7 @@ import { decodeSource } from '../core/source/encoding.js';
  * the engine with the diff service.
  */
 
-/** One replacement. `start` and `end` are byte offsets of the source file, not text offsets. */
+/** One replacement. `start` and `end` are byte offsets of the decoded text (UTF-8 after the byte order mark), not UTF-16 offsets. */
 export const replacementSchema = z.object({
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),

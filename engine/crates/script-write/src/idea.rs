@@ -8,13 +8,12 @@
 
 use std::collections::BTreeMap;
 
-use hoi4_syntax::{Block, Document, Entry, Value};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::source::{
-    Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, diagnostic_codes, fail, indented_body, line_indent, line_start,
-    probe_one_block,
+    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
+    line_start, probe_one_block,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -45,13 +44,14 @@ pub struct IdeaWriteInput {
     pub body: Option<String>,
 }
 
-/// The plan of one idea edit. The file after the edit is `bytes`.
+/// The plan of one idea edit. The file after the edit is `bytes`, its decoded text `text`.
 #[derive(Debug)]
 pub struct IdeaWritePlan {
     pub operation: Operation,
     pub id: String,
     pub category: String,
     pub path: String,
+    pub text: String,
     pub bytes: Vec<u8>,
     pub edit: Replacement,
     pub untouched_definitions: usize,
@@ -76,19 +76,19 @@ pub fn id_is_valid(id: &str) -> bool {
     chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
 }
 
-struct Located<'a> {
-    idea: &'a Entry,
-    category: &'a Entry,
+struct Located<'b, 't> {
+    idea: &'b Entry<'t>,
+    category: &'b Entry<'t>,
 }
 
 /// Every `ideas = { <category> = { <id> = { ... } } }` definition of the document.
-fn definitions<'a>(source: &Source, document: &'a Document) -> Vec<Located<'a>> {
+fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<Located<'b, 't>> {
     let mut found = Vec::new();
-    for ideas in assignments(source, &document.root, Some("ideas")) {
+    for ideas in assignments(root, Some("ideas")) {
         let Some(ideas_block) = block_of(ideas) else { continue };
-        for category in assignments(source, ideas_block, None) {
+        for category in assignments(ideas_block, None) {
             let Some(category_block) = block_of(category) else { continue };
-            for idea in assignments(source, category_block, None) {
+            for idea in assignments(category_block, None) {
                 if block_of(idea).is_some() {
                     found.push(Located { idea, category });
                 }
@@ -98,15 +98,15 @@ fn definitions<'a>(source: &Source, document: &'a Document) -> Vec<Located<'a>> 
     found
 }
 
-fn category_blocks<'a>(source: &Source, document: &'a Document) -> Vec<&'a Entry> {
-    assignments(source, &document.root, Some("ideas"))
+fn category_blocks<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
+    assignments(root, Some("ideas"))
         .into_iter()
-        .flat_map(|ideas| block_of(ideas).map(|block| assignments(source, block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|ideas| block_of(ideas).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
         .collect()
 }
 
 /// One level of indentation, read from the file's own ideas, tabs when it has none.
-fn indent_unit(source: &Source, located: &[Located]) -> String {
+fn indent_unit(source: &Source<'_>, located: &[Located<'_, '_>]) -> String {
     for Located { idea, category } in located {
         let outer = line_indent(source.bytes(), source.entry_range(category).start);
         let inner = line_indent(source.bytes(), source.entry_range(idea).start);
@@ -119,55 +119,38 @@ fn indent_unit(source: &Source, located: &[Located]) -> String {
 
 /// The body, checked on its own as the block it will become.
 pub fn assert_body_is_one_block(id: &str, body: &str, code: &str, what: &str) -> WriteResult<()> {
-    match probe_one_block(id, body) {
+    match probe_one_block(id, body, |block| block.entries.is_empty()) {
         Err(codes) => fail(
             code,
             format!("The body must be the text between the braces of one {what}: balanced braces and no definition of its own"),
             json!({ "diagnosticCodes": codes }),
         ),
-        Ok(probe) => {
-            let empty = match probe.root.items.first() {
-                Some(hoi4_syntax::Item::Entry(entry)) => !matches!(&entry.value, Value::Block(block) if !block.items.is_empty()),
-                _ => true,
-            };
-            if empty {
-                return fail(code, format!("The body of {} {what} cannot be empty", if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }), json!({}));
-            }
-            Ok(())
-        }
+        Ok(true) => fail(code, format!("The body of {} {what} cannot be empty", if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }), json!({})),
+        Ok(false) => Ok(()),
     }
 }
 
-fn definition_texts(source: &Source, document: &Document, skip: Option<usize>) -> BTreeMap<String, Vec<Vec<u8>>> {
-    let mut by_key: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
-    for Located { idea, category } in definitions(source, document) {
+fn definition_texts(source: &Source<'_>, skip: Option<usize>) -> BTreeMap<String, Vec<String>> {
+    let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for Located { idea, category } in definitions(&source.document.root) {
         let range = source.entry_range(idea);
         if Some(range.start) == skip {
             continue;
         }
-        let key = format!("{}:{}", source.key(category), source.key(idea));
-        by_key.entry(key).or_default().push(source.bytes()[range].to_vec());
+        by_key.entry(format!("{}:{}", key_of(category), key_of(idea))).or_default().push(source.text()[range].to_string());
     }
     by_key
 }
 
-fn line_blank_before_close(source: &Source, block: &Block) -> WriteResult<usize> {
-    let close = source.close_range(block).map(|r| r.start);
-    match close {
-        Some(close) => Ok(line_start(source.bytes(), close)),
-        None => fail("IDEA_WRITE_LAYOUT_UNSUPPORTED", "The block has no closing brace", json!({})),
-    }
-}
-
 /// The edit that adds a category block holding the new idea to the file's single `ideas` block.
-fn category_creation(source: &Source, input: &IdeaWriteInput, unit: &str, body: &str) -> WriteResult<Replacement> {
+fn category_creation(source: &Source<'_>, input: &IdeaWriteInput, unit: &str, body: &str) -> WriteResult<Replacement> {
     let wanted = input.category.as_deref().unwrap_or_default();
     if !id_is_valid(wanted) {
         return fail("IDEA_WRITE_CATEGORY_INVALID", format!("{} is not a valid category name", json!(wanted)), json!({ "category": wanted }));
     }
     let bytes = source.bytes();
     let newline = source.newline();
-    let blocks: Vec<&Entry> = assignments(source, &source.document.root, Some("ideas")).into_iter().filter(|e| block_of(e).is_some()).collect();
+    let blocks: Vec<&Entry> = assignments(&source.document.root, Some("ideas")).into_iter().filter(|e| block_of(e).is_some()).collect();
     if blocks.len() != 1 {
         return fail(
             "IDEA_WRITE_LAYOUT_UNSUPPORTED",
@@ -198,12 +181,12 @@ fn category_creation(source: &Source, input: &IdeaWriteInput, unit: &str, body: 
     Ok(Replacement {
         start: close_line_start,
         end: close_line_start,
-        text: format!("{}{category_indent}{wanted} = {{{newline}{idea_text}{category_indent}}}{newline}", if block.items.is_empty() { "" } else { newline }),
+        text: format!("{}{category_indent}{wanted} = {{{newline}{idea_text}{category_indent}}}{newline}", if block.entries.is_empty() { "" } else { newline }),
         description: format!("add {} in the new category {wanted}", input.id),
     })
 }
 
-fn body_required<'a>(input: &'a IdeaWriteInput) -> WriteResult<&'a str> {
+fn body_required(input: &IdeaWriteInput) -> WriteResult<&str> {
     match input.body.as_deref() {
         Some(body) if !body.trim().is_empty() => Ok(body),
         _ => fail("IDEA_WRITE_BODY_REQUIRED", format!("{} needs the body of the idea", input.operation.name()), json!({})),
@@ -239,9 +222,10 @@ pub fn plan_new_idea_file(path: &str, input: &IdeaWriteInput) -> WriteResult<Ide
         String::new(),
     ]
     .join("\n");
-    let written = Source::parse(text.as_bytes(), path);
+    let decoded = Decoded::new(text.as_bytes());
+    let written = Source::new(&decoded, path);
     if written.has_blocking() {
-        return fail("IDEA_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("IDEA_WRITE_RESULT_INVALID", "The new file would have syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
     Ok(IdeaWritePlan {
         operation: Operation::Add,
@@ -249,7 +233,8 @@ pub fn plan_new_idea_file(path: &str, input: &IdeaWriteInput) -> WriteResult<Ide
         category: category.to_string(),
         path: path.to_string(),
         bytes: text.clone().into_bytes(),
-        edit: Replacement { start: 0, end: 0, text, description: format!("create {path} with {}", input.id) },
+        edit: Replacement { start: 0, end: 0, text: text.clone(), description: format!("create {path} with {}", input.id) },
+        text,
         untouched_definitions: 0,
     })
 }
@@ -265,22 +250,23 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
     if input.operation != Operation::Remove {
         body_required(input)?;
     }
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return fail(
             "IDEA_WRITE_SOURCE_INVALID",
             "The source has syntax errors and cannot be edited safely",
-            json!({ "path": path, "diagnosticCodes": diagnostic_codes(&source) }),
+            json!({ "path": path, "diagnosticCodes": source.diagnostic_codes() }),
         );
     }
     let text = source.bytes();
     let newline = source.newline();
-    let located = definitions(&source, &source.document);
+    let located = definitions(&source.document.root);
     if let Some(body) = input.body.as_deref() {
         assert_body_is_one_block(&input.id, body, "IDEA_WRITE_BODY_INVALID", "idea")?;
     }
     let unit = indent_unit(&source, &located);
-    let existing: Vec<&Located> = located.iter().filter(|l| source.key(l.idea) == input.id).collect();
+    let existing: Vec<&Located> = located.iter().filter(|l| key_of(l.idea) == input.id).collect();
 
     let edit: Replacement;
     let category: String;
@@ -291,18 +277,18 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             return fail(
                 "IDEA_WRITE_DUPLICATE_ID",
                 format!("{} is already defined in this file", input.id),
-                json!({ "id": input.id, "category": source.key(first.category), "line": source.line_of_key(first.idea) }),
+                json!({ "id": input.id, "category": key_of(first.category), "line": first.idea.key.line }),
             );
         }
         let Some(wanted) = input.category.as_deref() else {
             return fail("IDEA_WRITE_CATEGORY_REQUIRED", "add needs the category block the idea goes in", json!({}));
         };
-        let blocks = category_blocks(&source, &source.document);
-        let matching: Vec<&&Entry> = blocks.iter().filter(|e| source.key(e) == wanted).collect();
+        let blocks = category_blocks(&source.document.root);
+        let matching: Vec<&Entry> = blocks.iter().copied().filter(|e| e.key.value == wanted).collect();
         if matching.is_empty() && input.create_category != Some(true) {
             let mut categories: Vec<String> = Vec::new();
             for entry in &blocks {
-                let key = source.key(entry);
+                let key = key_of(entry);
                 if !categories.contains(&key) {
                     categories.push(key);
                 }
@@ -317,20 +303,19 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             return fail(
                 "IDEA_WRITE_CATEGORY_AMBIGUOUS",
                 format!("The file has {} {wanted} categories", matching.len()),
-                json!({ "category": wanted, "lines": matching.iter().map(|e| source.line_of_key(e)).collect::<Vec<_>>() }),
+                json!({ "category": wanted, "lines": matching.iter().map(|e| e.key.line).collect::<Vec<_>>() }),
             );
         }
         let body = input.body.as_deref().unwrap_or_default();
         edit = if matching.is_empty() {
             category_creation(&source, input, &unit, body)?
         } else {
-            let target: &Entry = matching[0];
+            let target = matching[0];
             let block = block_of(target).expect("filtered to blocks");
-            let close_line_start = line_blank_before_close(&source, block).map_err(|mut e| {
-                e.message = format!("The {wanted} category has no closing brace");
-                e
-            })?;
-            let close = source.close_range(block).expect("checked above");
+            let Some(close) = source.close_range(block) else {
+                return fail("IDEA_WRITE_LAYOUT_UNSUPPORTED", format!("The {wanted} category has no closing brace"), json!({}));
+            };
+            let close_line_start = line_start(text, close.start);
             if !blank(&text[close_line_start..close.start]) {
                 return fail(
                     "IDEA_WRITE_LAYOUT_UNSUPPORTED",
@@ -344,7 +329,7 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             Replacement {
                 start: close_line_start,
                 end: close_line_start,
-                text: format!("{}{idea_text}", if block.items.is_empty() { "" } else { newline }),
+                text: format!("{}{idea_text}", if block.entries.is_empty() { "" } else { newline }),
                 description: format!("add {} to {wanted}", input.id),
             }
         };
@@ -357,11 +342,11 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             return fail(
                 "IDEA_WRITE_DUPLICATE_ID",
                 format!("{} is defined {} times in this file", input.id, existing.len()),
-                json!({ "id": input.id, "lines": existing.iter().map(|l| source.line_of_key(l.idea)).collect::<Vec<_>>() }),
+                json!({ "id": input.id, "lines": existing.iter().map(|l| l.idea.key.line).collect::<Vec<_>>() }),
             );
         }
         let found = existing[0];
-        category = source.key(found.category);
+        category = key_of(found.category);
         if input.category.as_deref().is_some_and(|c| c != category) {
             return fail(
                 "IDEA_WRITE_CATEGORY_MISMATCH",
@@ -385,13 +370,14 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
         }
     }
 
-    let new_bytes = apply_replacements(&source, std::slice::from_ref(&edit))?;
-    let written = Source::parse(&new_bytes, path);
+    let (after_text, new_bytes) = apply_replacements(&source, std::slice::from_ref(&edit))?;
+    let written_decoded = Decoded::new(&new_bytes);
+    let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("IDEA_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": diagnostic_codes(&written) }));
+        return fail("IDEA_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
     }
-    let before = definition_texts(&source, &source.document, skip);
-    let after = definition_texts(&written, &written.document, None);
+    let before = definition_texts(&source, skip);
+    let after = definition_texts(&written, None);
     let mut untouched = 0;
     for (key, texts) in &before {
         let now = after.get(key).map(Vec::as_slice).unwrap_or_default();
@@ -403,12 +389,15 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             }
         }
     }
-    Ok(IdeaWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), bytes: new_bytes, edit, untouched_definitions: untouched })
+    if written.text() != after_text {
+        return fail("IDEA_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
+    }
+    Ok(IdeaWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
 }
 
 /// The removal of one definition: its own line when it is alone on it, and a blank line that only
-/// separated it from the definition before.
-pub fn remove_edit(source: &Source, id: &str, start: usize, end: usize, flat: bool) -> Replacement {
+/// separated it from the definition before. `flat` files have no closing brace to stop at.
+pub fn remove_edit(source: &Source<'_>, id: &str, start: usize, end: usize, flat: bool) -> Replacement {
     let text = source.bytes();
     let line_start_at = line_start(text, start);
     let line_end_at = text[end..].iter().position(|&b| b == b'\n').map(|at| end + at);
@@ -429,7 +418,13 @@ pub fn remove_edit(source: &Source, id: &str, start: usize, end: usize, flat: bo
     let after = &text[line_end..];
     let next_is_blank_or_close = after.is_empty() || {
         let skip = after.iter().take_while(|&&b| b == b' ' || b == b'\t').count();
-        matches!(after.get(skip), Some(b'\n' | b'}')) || (after.get(skip) == Some(&b'\r') && after.get(skip + 1) == Some(&b'\n'))
+        let crlf = after.get(skip) == Some(&b'\r') && after.get(skip + 1) == Some(&b'\n');
+        if flat {
+            let rest = &after[skip..];
+            rest.is_empty() || rest[0] == b'\n' || crlf || rest == b"\r"
+        } else {
+            matches!(after.get(skip), Some(b'\n' | b'}')) || crlf
+        }
     };
     let mut new_start = line_start_at;
     if blank_before && next_is_blank_or_close {
@@ -441,13 +436,14 @@ pub fn remove_edit(source: &Source, id: &str, start: usize, end: usize, flat: bo
 
 /// The category blocks of a `common/ideas` file, or none when the file cannot be parsed.
 pub fn idea_categories(bytes: &[u8], path: &str) -> Vec<String> {
-    let source = Source::parse(bytes, path);
+    let decoded = Decoded::new(bytes);
+    let source = Source::new(&decoded, path);
     if source.has_blocking() {
         return Vec::new();
     }
     let mut seen: Vec<String> = Vec::new();
-    for entry in category_blocks(&source, &source.document) {
-        let key = source.key(entry);
+    for entry in category_blocks(&source.document.root) {
+        let key = key_of(entry);
         if !seen.contains(&key) {
             seen.push(key);
         }
