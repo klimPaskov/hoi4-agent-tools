@@ -85,11 +85,17 @@ pub struct ValidationResult {
 pub struct Findings<'a> {
     pub list: Vec<Diagnostic>,
     options: &'a Options,
+    /// Collect every finding as reported, without the ceiling or the operation id.
+    raw: bool,
 }
 
 impl Findings<'_> {
     /// `addDiagnostic`: the operation id when the finding has none, under the ceiling.
     pub fn add(&mut self, mut diagnostic: Diagnostic) {
+        if self.raw {
+            self.list.push(diagnostic);
+            return;
+        }
         if diagnostic.operation_id.is_none() {
             diagnostic.operation_id.clone_from(&self.options.operation_id);
         }
@@ -824,7 +830,7 @@ fn validate_positions(index: &MapIndex, out: &mut Findings) {
 
 /// `validateMap`.
 pub fn validate(index: &MapIndex, options: &Options) -> ValidationResult {
-    let mut out = Findings { list: index.diagnostics.clone(), options };
+    let mut out = Findings { list: index.diagnostics.clone(), options, raw: false };
     validate_definitions(index, &mut out);
     validate_geometry(index, &mut out);
     validate_states_and_regions(index, &mut out);
@@ -837,6 +843,15 @@ pub fn validate(index: &MapIndex, options: &Options) -> ValidationResult {
     let checks = map_validation_checks(&diagnostics);
     let passed = checks.iter().all(|c| c.passed) && !diagnostics.iter().any(|d| d.severity.blocks());
     ValidationResult { passed, diagnostics, checks }
+}
+
+/// The crossing, wall, railway and unit-position findings alone, as `validateCrossings` reports
+/// them: every finding, unbounded and without an operation id.
+pub fn crossing_findings(index: &MapIndex) -> Vec<Diagnostic> {
+    let options = Options::default();
+    let mut out = Findings { list: Vec::new(), options: &options, raw: true };
+    crossing::validate_crossings(index, &mut out);
+    out.list
 }
 
 fn starts(code: &str, prefixes: &[&str]) -> bool {

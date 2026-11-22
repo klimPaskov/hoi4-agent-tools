@@ -890,6 +890,17 @@ mod tests {
     }
 
     #[test]
+    fn positions_have_their_own_ceiling_issue_172() {
+        let mut budget = Budget::default();
+        assert!(budget.records(MAP_MODEL_MAX_RECORDS).is_ok());
+        assert!(budget.positions(600_000).is_ok(), "positions no longer count against the domain records");
+        let refused = budget.positions(MAP_MODEL_MAX_POSITION_RECORDS).unwrap_err();
+        assert_eq!((refused.code.as_str(), refused.details["kind"].as_str()), ("MAP_MODEL_BUDGET_BLOCKED", Some("position records")));
+        assert_eq!(budget.records(1).unwrap_err().details["kind"], "domain records");
+        assert!(Budget::script_files(MAP_MODEL_MAX_SCRIPT_FILES + 1).is_err());
+    }
+
+    #[test]
     fn ordered_map_keeps_the_first_insertion_place() {
         let mut map = OrderedMap::default();
         map.set("b", 1);

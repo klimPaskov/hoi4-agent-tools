@@ -83,6 +83,9 @@ struct MapRequest {
     tool_version: Option<String>,
     #[serde(default)]
     options: Option<OptionsRequest>,
+    /// `crossings`: only the crossing checks, every finding as reported (`validateCrossings`).
+    #[serde(default)]
+    only: Option<String>,
 }
 
 fn invalid(message: impl Into<String>) -> MapError {
@@ -161,6 +164,11 @@ pub fn validate_op(request: &Value, payload: &[u8]) -> Result<Value, MapError> {
         edge_mode: options_request.edge_mode,
     };
     let index = MapIndex::build(files, request.source_roots.unwrap_or_default())?;
+    match request.only.as_deref() {
+        None => {}
+        Some("crossings") => return Ok(json!({ "diagnostics": validate::crossing_findings(&index) })),
+        Some(other) => return Err(invalid(format!("unknown map validation part {other}"))),
+    }
     let result = validate::validate(&index, &options);
     let mut answer = json!({ "passed": result.passed, "diagnostics": result.diagnostics, "checks": result.checks });
     if let Some(version) = &request.tool_version {
