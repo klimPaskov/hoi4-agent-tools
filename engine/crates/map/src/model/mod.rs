@@ -54,13 +54,16 @@ impl MapError {
         Self::new(code, message, json!({}))
     }
 
-    /// The engine's error object: code, message and the details beside them.
+    /// The engine's error object: code and message, with the details beside them as the
+    /// resident engine passes them on.
     pub fn to_json(&self) -> Value {
         let mut value = json!({ "code": self.code, "message": self.message });
-        if let Value::Object(details) = &self.details
-            && !details.is_empty()
-        {
-            value["details"] = Value::Object(details.clone());
+        if let (Value::Object(target), Value::Object(details)) = (&mut value, &self.details) {
+            for (key, field) in details {
+                if key != "code" && key != "message" {
+                    target.insert(key.clone(), field.clone());
+                }
+            }
         }
         value
     }
