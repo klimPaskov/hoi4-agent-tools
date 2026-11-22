@@ -561,6 +561,8 @@ fn serve_connection(stream: TcpStream, shared: &Shared) {
                 let mut reply = Reply::plain(431, "Request Header Fields Too Large");
                 reply.close = true;
                 let _ = write_reply(&mut writer, &reply);
+                let _ = writer.shutdown(Shutdown::Write);
+                drain(&mut reader);
                 return;
             }
             Err(HeadError::Malformed) => {
@@ -579,6 +581,7 @@ fn serve_connection(stream: TcpStream, shared: &Shared) {
                 reply.close |= last;
                 if write_reply(&mut writer, &reply).is_err() || reply.close {
                     let _ = writer.shutdown(Shutdown::Write);
+                    drain(&mut reader);
                     return;
                 }
             }
@@ -588,6 +591,25 @@ fn serve_connection(stream: TcpStream, shared: &Shared) {
                     return;
                 }
             }
+        }
+    }
+}
+
+/// Reads and discards what the client still sends after a refusal, briefly and boundedly, so
+/// closing a socket with unread input does not reset the connection before the client reads the
+/// refusal.
+fn drain(reader: &mut BufReader<TcpStream>) {
+    let until = Instant::now() + Duration::from_millis(500);
+    let mut discarded = 0usize;
+    let mut buffer = [0u8; 8192];
+    while discarded < 4 * 1_048_576 {
+        let Some(left) = until.checked_duration_since(Instant::now()).filter(|left| !left.is_zero()) else { return };
+        if reader.get_ref().set_read_timeout(Some(left)).is_err() {
+            return;
+        }
+        match reader.read(&mut buffer) {
+            Ok(0) | Err(_) => return,
+            Ok(read) => discarded += read,
         }
     }
 }
