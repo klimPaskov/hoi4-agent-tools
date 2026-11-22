@@ -148,7 +148,9 @@ impl TxnApplier {
         if self.enforces(Rule::JournalContainment) {
             Journal::open(&self.workspace.cache_root)
         } else {
-            Ok(Journal { directory: self.workspace.cache_root.join(crate::journal::JOURNAL_FOLDER) })
+            // Trusts wherever the journal folder points.
+            let directory = self.workspace.cache_root.join(crate::journal::JOURNAL_FOLDER);
+            Ok(Journal { directory: fs::canonicalize(&directory).unwrap_or(directory) })
         }
     }
 

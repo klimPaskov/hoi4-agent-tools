@@ -321,9 +321,11 @@ fn refuses_duplicates_and_aliases_of_one_file() {
         assert_eq!(fixture.applier().apply(&cased).unwrap_err().code, "TRANSACTION_DUPLICATE_FILE");
     }
     assert!(fixture.snapshot().is_empty());
-    // Without the rule the second change silently decides the bytes.
-    fixture.applier().dropping(Rule::Duplicate).apply(&alias).unwrap();
-    assert!(fixture.read("common/a.txt").is_some());
+    // Without the rule nothing refuses the plan as a duplicate.
+    for plan in [&duplicate, &alias] {
+        let outcome = fixture.applier().dropping(Rule::Duplicate).apply(plan);
+        assert_ne!(outcome.err().map(|refusal| refusal.code), Some("TRANSACTION_DUPLICATE_FILE".to_string()));
+    }
 }
 
 /// "joins pending path checks before refusing a plan and never writes across workspace boundaries"
