@@ -231,7 +231,8 @@ export class JobWorkerHost {
       );
     const signal = new AbortController().signal;
     // A rewrite that answered before its after-edit check is still building the workspace's new
-    // index in its worker; the next call on that workspace waits for it and reads that index.
+    // index in its worker. When no idle worker has scanned the workspace yet, the next call on it
+    // waits for that worker and reads its index instead of building one from nothing.
     if (this.engine.resolver.config().jobWorkerIdleSeconds > 0)
       await this.awaitWorkspaceWorker(workspaceId, WORKSPACE_WORKER_WAIT_MS);
     const recovered = new Set<string>();
@@ -376,7 +377,11 @@ export class JobWorkerHost {
     progress.stage = 'dispatch';
     await this.dispatch(child, message, reused !== undefined);
     // After this job the worker holds the workspace's newest scan and index.
-    if (warm) this.workspaceWorkers.set(workspaceId, { child, mutation: current.request.mutation });
+    if (warm) {
+      this.workspaceWorkers.set(workspaceId, { child, mutation: current.request.mutation });
+      const scanned = this.scannedWorkers.get(workspaceId) ?? new Set<ChildProcess>();
+      this.scannedWorkers.set(workspaceId, scanned.add(child));
+    }
     // Without warm reuse the persistent job, not the launcher's lifetime, owns execution once
     // the child confirmed receipt, so close the channel.
     if (!warm && child.connected) child.disconnect();
@@ -463,13 +468,16 @@ export class JobWorkerHost {
 
   /** The worker that ran each workspace's last job, and whether that job was a rewrite. */
   private readonly workspaceWorkers = new Map<string, { child: ChildProcess; mutation: boolean }>();
+  /** Every warm worker that ran a job on each workspace and so holds a scan of it, maybe older. */
+  private readonly scannedWorkers = new Map<string, Set<ChildProcess>>();
   /** Jobs waiting for a busy worker to finish, by worker. */
   private readonly idleWaiters = new Map<ChildProcess, Set<(idle: boolean) => void>>();
 
   /**
    * An idle warm worker for a job on `workspaceId`: the one that ran the workspace's last job, which
-   * holds its newest scan and index, else the most recently used one. A reused index is still
-   * checked against the files: the worker scans again and rebuilds whatever changed (D-98).
+   * holds its newest scan and index, else the most recently used one that scanned the workspace
+   * before, else the most recently used one. A reused index is still checked against the files:
+   * the worker scans again and rebuilds whatever changed (D-98).
    */
   private takeIdleWorker(workspaceId?: string): ChildProcess | undefined {
     const preferred =
@@ -479,6 +487,11 @@ export class JobWorkerHost {
       this.idleWorkers.splice(position, 1);
       if (usableWorker(preferred!)) return refWorker(preferred!);
     }
+    const scanned = this.idleScannedWorker(workspaceId);
+    if (scanned !== undefined) {
+      this.idleWorkers.splice(this.idleWorkers.indexOf(scanned), 1);
+      return refWorker(scanned);
+    }
     for (;;) {
       const child = this.idleWorkers.pop();
       if (child === undefined) return undefined;
@@ -486,15 +499,30 @@ export class JobWorkerHost {
     }
   }
 
+  /** The most recently used idle, usable worker that scanned `workspaceId` before, if any. */
+  private idleScannedWorker(workspaceId?: string): ChildProcess | undefined {
+    const scanned = workspaceId === undefined ? undefined : this.scannedWorkers.get(workspaceId);
+    if (scanned === undefined) return undefined;
+    for (const child of scanned) if (!usableWorker(child)) scanned.delete(child);
+    for (let index = this.idleWorkers.length - 1; index >= 0; index -= 1) {
+      const child = this.idleWorkers[index]!;
+      if (scanned.has(child) && usableWorker(child)) return child;
+    }
+    return undefined;
+  }
+
   /**
    * Wait, at most `limitMs`, while the worker that last ran a rewrite on `workspaceId` is still busy
-   * with it, typically the after-edit check of a rewrite that answered early. Returns whether that
-   * worker is idle now. A read that is still running is not waited for: it may run for minutes.
+   * with it, typically the after-edit check of a rewrite that answered early. Returns whether a
+   * worker with a scan of the workspace is idle now. No wait happens when another idle worker
+   * scanned the workspace before: it rescans only the changed files, which is no slower than
+   * waiting for the check. A read that is still running is not waited for: it may run for minutes.
    */
   private async awaitWorkspaceWorker(workspaceId: string, limitMs: number): Promise<boolean> {
     const newest = this.workspaceWorkers.get(workspaceId);
     if (newest === undefined || !usableWorker(newest.child)) return false;
     if (this.idleWorkers.includes(newest.child)) return true;
+    if (this.idleScannedWorker(workspaceId) !== undefined) return true;
     if (!newest.mutation) return false;
     const { child } = newest;
     return new Promise<boolean>((resolve) => {

@@ -50,6 +50,7 @@ async function fixture(workspaceIds: readonly string[]) {
 interface HostInternals {
   idleWorkers: ChildProcess[];
   workspaceWorkers: Map<string, { child: ChildProcess; mutation: boolean }>;
+  scannedWorkers: Map<string, Set<ChildProcess>>;
   takeIdleWorker(workspaceId?: string): ChildProcess | undefined;
   awaitWorkspaceWorker(workspaceId: string, limitMs: number): Promise<boolean>;
   keepWarm(child: ChildProcess, lease: SharedCapacityLease): Promise<void>;
@@ -157,6 +158,36 @@ describe('worker affinity after a rewrite (D-98)', () => {
     await expect(unparked).resolves.toBe(false);
     expect(slow.disconnected).toBe(true);
     expect(internals.idleWorkers).toEqual([]);
+  });
+
+  it('does not wait when another idle worker scanned the workspace before, and takes that one', async () => {
+    vi.useFakeTimers();
+    const { host } = await fixture(['first']);
+    const internals = host as unknown as HostInternals;
+    const busy = fakeWorker(109);
+    const earlier = fakeWorker(110);
+    const unrelated = fakeWorker(111);
+    const stopped = fakeWorker(112);
+    Object.assign(stopped, { exitCode: 1, connected: false });
+    internals.workspaceWorkers.set('first', { child: busy, mutation: true });
+    internals.scannedWorkers.set('first', new Set([stopped, earlier, busy]));
+    // The unrelated worker was parked last; the earlier one rescans only what changed.
+    internals.idleWorkers.push(earlier, stopped, unrelated);
+    await expect(internals.awaitWorkspaceWorker('first', WORKSPACE_WORKER_WAIT_MS)).resolves.toBe(
+      true,
+    );
+    expect(internals.takeIdleWorker('first')).toBe(earlier);
+    expect(internals.idleWorkers).toEqual([stopped, unrelated]);
+    expect(internals.scannedWorkers.get('first')).toEqual(new Set([earlier, busy]));
+    // With no idle scanned worker left, the job waits for the busy rewrite worker again.
+    let settled: boolean | undefined;
+    void internals
+      .awaitWorkspaceWorker('first', WORKSPACE_WORKER_WAIT_MS)
+      .then((idle) => (settled = idle));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(WORKSPACE_WORKER_WAIT_MS);
+    expect(settled).toBe(false);
   });
 
   it('does not wait for a busy worker whose last job is a read, which may run for minutes', async () => {

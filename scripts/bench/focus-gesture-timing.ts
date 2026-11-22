@@ -119,7 +119,7 @@ for (const id of values.corpus) {
     `name="Gesture timing ${id}"\nsupported_version="1.19.*"\n`,
   );
   let tree: string;
-  let treeId: string | undefined;
+  let treeId: string;
   let workspace: Record<string, unknown>;
   if (id === 'probe') {
     if (game === undefined) throw new Error('the probe corpus needs the installed game');
@@ -145,6 +145,12 @@ for (const id of values.corpus) {
     const copied = path.join(scratchMod, ...tree.split('/'));
     await mkdir(path.dirname(copied), { recursive: true });
     await copyFile(path.join(located.root, ...tree.split('/')), copied);
+    // A plan-free compact layout names its tree: the file's first one.
+    const named = /focus_tree\s*=\s*\{[\s\S]*?\bid\s*=\s*"?([\w.-]+)/u.exec(
+      await readFile(copied, 'latin1'),
+    )?.[1];
+    if (named === undefined) throw new Error(`${id}: ${tree} names no focus tree id`);
+    treeId = named;
     workspace =
       corpus.kind === 'game'
         ? { id, name: corpus.name, root: scratchMod, gameRoot: located.root }
@@ -196,7 +202,7 @@ for (const id of values.corpus) {
       check('inspect before rewrite', await server.call('hoi4.focus_inspect', 'sync', inspectArgs));
       const rewrite = await server.call('hoi4.focus_rewrite', 'compact', {
         ...inspectArgs,
-        ...(treeId === undefined ? {} : { treeId }),
+        treeId,
         layoutMode: 'compact',
         ...(early ? { answerBeforeCheck: true } : {}),
       });
