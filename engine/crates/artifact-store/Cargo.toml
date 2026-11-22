@@ -5,13 +5,20 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-rust-version.workspace = true
+# File locks (`File::lock`) are stable from Rust 1.89.
+rust-version = "1.89"
 publish.workspace = true
 
 [dependencies]
 hoi4-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+png.workspace = true
+regex = "1.11"
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true
