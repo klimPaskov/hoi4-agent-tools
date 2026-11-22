@@ -129,6 +129,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "hoi4-artifacts"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "hoi4-decision"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hoi4-drawio"
 version = "0.1.0"
 dependencies = [
@@ -153,16 +180,41 @@ dependencies = [
 name = "hoi4-engine-cli"
 version = "0.1.0"
 dependencies = [
+ "hoi4-artifacts",
+ "hoi4-core",
+ "hoi4-decision",
  "hoi4-drawio",
  "hoi4-engine",
+ "hoi4-event",
  "hoi4-focus-layout",
+ "hoi4-focus-write",
+ "hoi4-gui",
+ "hoi4-health",
+ "hoi4-impact",
+ "hoi4-jobs",
+ "hoi4-map",
  "hoi4-preview",
+ "hoi4-probability",
+ "hoi4-reference",
+ "hoi4-script-write",
+ "hoi4-server",
  "hoi4-syntax",
+ "hoi4-tech",
  "hoi4-texture",
+ "hoi4-txn",
  "rayon",
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "hoi4-event"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -172,6 +224,60 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "hoi4-focus-write"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-gui"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-health"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-impact"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-jobs"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-map"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -187,6 +293,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "hoi4-probability"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-reference"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-script-write"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hoi4-server"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hoi4-syntax"
 version = "0.1.0"
 dependencies = [
@@ -194,10 +336,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "hoi4-tech"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hoi4-texture"
 version = "0.1.0"
 dependencies = [
  "png",
+]
+
+[[package]]
+name = "hoi4-txn"
+version = "0.1.0"
+dependencies = [
+ "hoi4-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,6 +1,30 @@
 [workspace]
 resolver = "3"
-members = ["crates/syntax", "crates/engine", "crates/drawio", "crates/focus", "crates/texture", "crates/preview", "crates/cli"]
+members = [
+    "crates/syntax",
+    "crates/engine",
+    "crates/drawio",
+    "crates/focus",
+    "crates/texture",
+    "crates/preview",
+    "crates/cli",
+    "crates/core",
+    "crates/txn",
+    "crates/artifact-store",
+    "crates/jobs",
+    "crates/tech",
+    "crates/event",
+    "crates/decision",
+    "crates/probability",
+    "crates/impact",
+    "crates/health",
+    "crates/script-write",
+    "crates/focus-write",
+    "crates/gui",
+    "crates/map",
+    "crates/reference",
+    "crates/server",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +41,22 @@ hoi4-drawio = { path = "crates/drawio" }
 hoi4-focus-layout = { path = "crates/focus" }
 hoi4-texture = { path = "crates/texture" }
 hoi4-preview = { path = "crates/preview" }
+hoi4-core = { path = "crates/core" }
+hoi4-txn = { path = "crates/txn" }
+hoi4-artifacts = { path = "crates/artifact-store" }
+hoi4-jobs = { path = "crates/jobs" }
+hoi4-tech = { path = "crates/tech" }
+hoi4-event = { path = "crates/event" }
+hoi4-decision = { path = "crates/decision" }
+hoi4-probability = { path = "crates/probability" }
+hoi4-impact = { path = "crates/impact" }
+hoi4-health = { path = "crates/health" }
+hoi4-script-write = { path = "crates/script-write" }
+hoi4-focus-write = { path = "crates/focus-write" }
+hoi4-gui = { path = "crates/gui" }
+hoi4-map = { path = "crates/map" }
+hoi4-reference = { path = "crates/reference" }
+hoi4-server = { path = "crates/server" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
