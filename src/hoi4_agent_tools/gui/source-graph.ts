@@ -91,6 +91,7 @@ const modelledElementAttributes = new Set([
   'text',
   'font',
   'fontSize',
+  'text_color_code',
   'maxWidth',
   'maxHeight',
   'fixedsize',
@@ -1724,6 +1725,16 @@ function referenceLabel(edge: GuiSourceEdge): string {
   return value === undefined ? edge.to : JSON.stringify(value);
 }
 
+/** `localisation/replace/**` or `localisation/<language>/replace/**`. */
+function inLocalisationReplaceFolder(relativePath: string): boolean {
+  const segments = relativePath.replaceAll('\\', '/').toLowerCase().split('/');
+  return (
+    segments[0] === 'localisation' &&
+    ((segments[1] === 'replace' && segments.length > 2) ||
+      (segments[2] === 'replace' && segments.length > 3))
+  );
+}
+
 export function buildGuiSourceGraph(
   files: readonly ScannedFile[],
   providedIndex?: SymbolIndex,
@@ -1885,9 +1896,13 @@ export function buildGuiSourceGraph(
     string,
     Array<{ value: GuiLocalisationValue; fileNodeId: string }>
   >();
+  // The first candidate of a key is the one the game shows: higher load order first, and within
+  // one root a file in a `replace` folder before the root's other files.
   for (const { file, fileNodeId } of localisationFiles.sort(
     (left, right) =>
       right.file.loadOrder - left.file.loadOrder ||
+      Number(inLocalisationReplaceFolder(right.file.relativePath)) -
+        Number(inLocalisationReplaceFolder(left.file.relativePath)) ||
       compareCodeUnits(left.file.displayPath, right.file.displayPath),
   )) {
     const document = parseLocalisation(file.bytes, file.displayPath);
