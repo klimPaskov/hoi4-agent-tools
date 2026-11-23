@@ -1,5 +1,13 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod/v4';
@@ -24,6 +32,8 @@ import type { MapValidationOptions, MapValidationResult } from './validation.js'
  */
 
 export const MAP_VALIDATE_OP = 'map.validate';
+/** The engine's request payload ceiling; a larger map is refused, never cut. */
+export const MAP_ENGINE_PAYLOAD_LIMIT = 256 * 1024 * 1024;
 const MAP_VALIDATE_TIMEOUT_MS = 600_000;
 
 const location = z.looseObject({ path: z.string() });
@@ -54,7 +64,9 @@ export const mapValidateAnswerSchema = z
   .object({
     passed: z.boolean(),
     diagnostics: z.array(diagnosticSchema),
-    checks: z.array(z.object({ id: z.string(), passed: z.boolean(), message: z.string() }).strict()),
+    checks: z.array(
+      z.object({ id: z.string(), passed: z.boolean(), message: z.string() }).strict(),
+    ),
     baselineFingerprint: z.string().optional(),
   })
   .strict();
@@ -112,6 +124,13 @@ export function mapValidateRequest(
       ...(options.edgeMode === undefined ? {} : { edgeMode: options.edgeMode }),
     },
   };
+  const bytes = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  if (bytes > MAP_ENGINE_PAYLOAD_LIMIT)
+    throw new ServiceError(
+      'MAP_ENGINE_PAYLOAD_LIMIT',
+      `The map's scanned files hold ${bytes} bytes, above the ${MAP_ENGINE_PAYLOAD_LIMIT}-byte limit of one engine request; the map is not validated in part`,
+      { bytes, limit: MAP_ENGINE_PAYLOAD_LIMIT, files: files.length },
+    );
   return { body, payload: Buffer.concat(chunks) };
 }
 
@@ -161,7 +180,13 @@ export function engineValidateMapSync(
   index: MapWorkspaceIndex,
   options: MapValidationOptions = {},
 ): MapValidationResult {
-  return result(engineMapOperationSync(MAP_VALIDATE_OP, mapValidateRequest(index, options), mapValidateAnswerSchema));
+  return result(
+    engineMapOperationSync(
+      MAP_VALIDATE_OP,
+      mapValidateRequest(index, options),
+      mapValidateAnswerSchema,
+    ),
+  );
 }
 
 /** One registered engine operation on a one-shot `hoi4-engine serve`, over files. */
@@ -220,13 +245,15 @@ export function engineMapOperationSync<T>(
     throw unavailable(`hoi4-engine ${op} answered an unreadable frame`, 'invalid_output');
   }
   const frame = frameSchema.safeParse(parsedFrame);
-  if (!frame.success) throw unavailable(`hoi4-engine ${op} answered an unknown frame`, 'invalid_output');
+  if (!frame.success)
+    throw unavailable(`hoi4-engine ${op} answered an unknown frame`, 'invalid_output');
   if (!frame.data.ok) {
     const { code, message, ...details } = frame.data.error;
     if (TOOL_CODE.test(code)) throw new ServiceError(code, message, details);
     throw unavailable(message, code);
   }
   const parsed = schema.safeParse(frame.data.result);
-  if (!parsed.success) throw unavailable(`hoi4-engine ${op} answered out of shape`, 'invalid_response');
+  if (!parsed.success)
+    throw unavailable(`hoi4-engine ${op} answered out of shape`, 'invalid_response');
   return parsed.data;
 }

@@ -20,6 +20,7 @@ fn file(path: &str, bytes: Vec<u8>) -> ScannedFile {
         modified_ms: 0,
         sha256: hoi4_core::canonical::sha256_hex(&bytes),
         bytes,
+        shadowed_by: None,
     }
 }
 

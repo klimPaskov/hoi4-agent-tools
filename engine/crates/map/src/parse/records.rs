@@ -12,7 +12,7 @@
 //! from and its location. The syntax nodes the TypeScript writers edit stay in TypeScript until
 //! the map writer moves (packet P13b).
 
-use hoi4_core::diagnostics::{Category, Diagnostic, Severity, SourceLocation, SourcePosition};
+use hoi4_core::diagnostics::{Category, Diagnostic, Severity, SourceLocation};
 use serde::Serialize;
 use serde_json::json;
 

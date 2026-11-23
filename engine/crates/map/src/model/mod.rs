@@ -77,7 +77,7 @@ impl std::fmt::Display for MapError {
 impl std::error::Error for MapError {}
 
 /// A map in insertion order, where setting an existing key keeps its place (a JavaScript `Map`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct OrderedMap<K, V> {
     entries: Vec<(K, V)>,
     slots: HashMap<K, usize>,

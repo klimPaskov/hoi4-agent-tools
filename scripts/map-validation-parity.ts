@@ -70,7 +70,9 @@ const hello = await callEngineOperation({
   result: z.looseObject({ engine: z.string(), ops: z.array(z.string()) }),
 });
 if (!hello.result.ops.includes('map.validate')) {
-  process.stderr.write(`${located.path} does not list map.validate; build the engine from this branch\n`);
+  process.stderr.write(
+    `${located.path} does not list map.validate; build the engine from this branch\n`,
+  );
   process.exit(2);
 }
 
@@ -107,7 +109,8 @@ function compare(
   engineMs: number,
 ): Comparison {
   const counts = new Map<string, number>();
-  for (const d of left.diagnostics) counts.set(fingerprint(d), (counts.get(fingerprint(d)) ?? 0) + 1);
+  for (const d of left.diagnostics)
+    counts.set(fingerprint(d), (counts.get(fingerprint(d)) ?? 0) + 1);
   const onlyEngine: Diagnostic[] = [];
   for (const d of right.diagnostics) {
     const key = fingerprint(d);
@@ -189,7 +192,12 @@ try {
         version: 1,
         serverStateRoot: path.join(temporary, 'state', corpus.id),
         workspaces: [
-          { id: 'parity', name: corpus.name, root, ...(gameRoot === undefined ? {} : { gameRoot }) },
+          {
+            id: 'parity',
+            name: corpus.name,
+            root,
+            ...(gameRoot === undefined ? {} : { gameRoot }),
+          },
         ],
       }),
     );
@@ -208,7 +216,10 @@ try {
     const standard = await run(index, {});
     const full = await run(index, { diagnosticLimit: MAP_BASELINE_DIAGNOSTIC_LIMIT });
     const clean = (c: Comparison) =>
-      c.onlyEngine === 0 && c.onlyTypeScript === 0 && c.samePassed && c.differingChecks.length === 0;
+      c.onlyEngine === 0 &&
+      c.onlyTypeScript === 0 &&
+      c.samePassed &&
+      c.differingChecks.length === 0;
     differs ||= !clean(standard) || !clean(full);
     report[corpus.id] = { files, bytes, standard, full };
     process.stderr.write(
