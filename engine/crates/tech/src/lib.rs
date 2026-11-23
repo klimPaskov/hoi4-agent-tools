@@ -207,7 +207,7 @@ fn graph_op(request: &Value) -> OpResponse {
         Ok(graph) => {
             let revision = graph["revision"].as_str().unwrap_or("").to_string();
             keep_graph(revision, graph.clone());
-            OpResponse::ok(json!({ "graph": graph }))
+            OpResponse::ok_with_payload(json!({ "format": "json" }), serde_json::to_vec(&graph).unwrap_or_default())
         }
         Err(r) => refusal(r),
     }
@@ -308,7 +308,10 @@ fn query(request: &Value, payload: &[u8]) -> OpResponse {
             Some(id) => match queries::explain(graph, id) {
                 Ok(report) => {
                     let summary = queries::explain_summary(&report);
-                    return OpResponse::ok(json!({ "report": report, "summary": summary }));
+                    return OpResponse::ok_with_payload(
+                        json!({ "format": "json" }),
+                        serde_json::to_vec(&json!({ "report": report, "summary": summary })).unwrap_or_default(),
+                    );
                 }
                 Err(r) => Err(r),
             },
@@ -334,7 +337,7 @@ fn query(request: &Value, payload: &[u8]) -> OpResponse {
         other => return OpResponse::error("invalid_request", format!("unknown technology query mode {other}")),
     };
     match answer {
-        Ok(report) => OpResponse::ok(json!({ "report": report })),
+        Ok(report) => OpResponse::ok_with_payload(json!({ "format": "json" }), serde_json::to_vec(&json!({ "report": report })).unwrap_or_default()),
         Err(r) => refusal(r),
     }
 }

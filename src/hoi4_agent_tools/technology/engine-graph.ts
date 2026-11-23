@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { canonicalJson } from '../core/canonical.js';
 import { callEngineOperation } from '../core/engine-operation.js';
+import { ServiceError } from '../core/result.js';
 import type { ScanSnapshot } from '../core/engine.js';
 import type { ScannedFile } from '../core/scanner.js';
 import type { TechnologyGraphSnapshot } from './model.js';
@@ -20,19 +21,7 @@ const analyzeSchema = z
   })
   .strict();
 
-const graphSchema = z
-  .object({
-    graph: z
-      .object({
-        schemaVersion: z.literal(2),
-        revision: z.string(),
-        technologies: z.array(z.unknown()),
-        edges: z.array(z.unknown()),
-        issues: z.array(z.unknown()),
-      })
-      .passthrough(),
-  })
-  .strict();
+const answerSchema = z.object({ format: z.literal('json') }).strict();
 
 const querySchema = z.object({ report: z.unknown(), summary: z.unknown().optional() }).strict();
 
@@ -144,18 +133,25 @@ export async function buildTechnologyGraphOnEngine(
       },
       lookups: lookups(analysis),
     },
-    result: graphSchema,
+    result: answerSchema,
   });
+  const graphOf = (answer: { payload: Buffer }): TechnologyGraphSnapshot => {
+    const graph = JSON.parse(answer.payload.toString('utf8')) as TechnologyGraphSnapshot;
+    if (graph.schemaVersion !== 2 || !Array.isArray(graph.technologies))
+      throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine tech.graph answered out of shape', {
+        op: 'tech.graph',
+        reason: 'invalid_response',
+      });
+    return graph;
+  };
   let analysis = analyses.get(snapshot) ?? (await analyze(snapshot));
   try {
-    return (await callEngineOperation(request(analysis))).result
-      .graph as unknown as TechnologyGraphSnapshot;
+    return graphOf(await callEngineOperation(request(analysis)));
   } catch (error) {
     if (!(error instanceof Error) || (error as { code?: string }).code !== 'TECH_SESSION_EXPIRED')
       throw error;
     analysis = await analyze(snapshot);
-    return (await callEngineOperation(request(analysis))).result
-      .graph as unknown as TechnologyGraphSnapshot;
+    return graphOf(await callEngineOperation(request(analysis)));
   }
 }
 
@@ -165,18 +161,20 @@ export async function queryTechnologyGraph(
   query: TechnologyEngineQuery,
 ): Promise<TechnologyEngineAnswer> {
   const body = { revision: graph.revision, ...query };
+  const answerOf = (answer: { payload: Buffer }): TechnologyEngineAnswer =>
+    querySchema.parse(JSON.parse(answer.payload.toString('utf8')));
   try {
-    return (await callEngineOperation({ op: 'tech.query', body, result: querySchema })).result;
+    return answerOf(await callEngineOperation({ op: 'tech.query', body, result: answerSchema }));
   } catch (error) {
     if (!(error instanceof Error) || (error as { code?: string }).code !== 'TECH_GRAPH_EXPIRED')
       throw error;
   }
-  return (
+  return answerOf(
     await callEngineOperation({
       op: 'tech.query',
       body: { ...body, graphInPayload: true },
       payload: Buffer.from(canonicalJson(graph), 'utf8'),
-      result: querySchema,
-    })
-  ).result;
+      result: answerSchema,
+    }),
+  );
 }
