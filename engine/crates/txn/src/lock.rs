@@ -34,12 +34,12 @@ fn process_identity() -> &'static ProcessIdentity {
     IDENTITY.get_or_init(|| ProcessIdentity { host: host_name().to_lowercase(), instance_id: random_id("instance"), started_at: iso_time(now_ms()) })
 }
 
+/// The host name as Node's `os.hostname()` gives it (`gethostname`), so a lock written by either
+/// server names the same host.
 fn host_name() -> String {
     let from_env = |name: &str| std::env::var(name).ok().map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
-    if cfg!(windows) {
-        return from_env("COMPUTERNAME").unwrap_or_default();
-    }
-    if let Ok(text) = fs::read_to_string("/proc/sys/kernel/hostname")
+    if !cfg!(windows)
+        && let Ok(text) = fs::read_to_string("/proc/sys/kernel/hostname")
         && !text.trim().is_empty()
     {
         return text.trim().to_owned();
@@ -52,7 +52,7 @@ fn host_name() -> String {
             return text;
         }
     }
-    from_env("HOSTNAME").unwrap_or_default()
+    from_env(if cfg!(windows) { "COMPUTERNAME" } else { "HOSTNAME" }).unwrap_or_default()
 }
 
 /// Whether the process is alive: `Some(false)` only when the system says it does not exist.
@@ -255,7 +255,9 @@ mod tests {
     #[test]
     fn keeps_a_lock_owned_by_a_live_process() {
         let cache = scratch();
-        let child = Command::new(if cfg!(windows) { "cmd" } else { "sleep" }).args(if cfg!(windows) { vec!["/C", "ping -n 6 127.0.0.1 >NUL"] } else { vec!["5"] }).spawn();
+        let child = Command::new(if cfg!(windows) { "cmd" } else { "sleep" })
+            .args(if cfg!(windows) { vec!["/C", "ping -n 6 127.0.0.1 >NUL"] } else { vec!["5"] })
+            .spawn();
         let mut child = child.unwrap();
         plant_owner(
             &cache,

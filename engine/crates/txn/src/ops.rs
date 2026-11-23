@@ -73,7 +73,8 @@ fn refused(refusal: Refusal) -> OpResponse {
 
 fn applier(request: &Value) -> Result<TxnApplier, OpResponse> {
     // The key is a field of the request, so a parse error names no values.
-    let workspace: WorkspaceRequest = serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn: the workspace fields are missing or malformed"))?;
+    let workspace: WorkspaceRequest =
+        serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn: the workspace fields are missing or malformed"))?;
     if !is_sha256(&workspace.workspace_identity) || !is_sha256(&workspace.root_fingerprint) {
         return Err(OpResponse::error("invalid_request", "txn: workspaceIdentity and rootFingerprint must be lowercase SHA-256"));
     }
@@ -95,7 +96,8 @@ fn applier(request: &Value) -> Result<TxnApplier, OpResponse> {
 
 /// Splits the payload into the plan's new bytes.
 fn plan_from(request: &Value, payload: &[u8]) -> Result<RewritePlan, OpResponse> {
-    let apply: ApplyRequest = serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn.apply: the plan fields are missing or malformed"))?;
+    let apply: ApplyRequest =
+        serde_json::from_value(request.clone()).map_err(|_| OpResponse::error("invalid_request", "txn.apply: the plan fields are missing or malformed"))?;
     let workspace_id = request["workspaceId"].as_str().unwrap_or_default().to_owned();
     let mut offset = 0_usize;
     let mut changes = Vec::with_capacity(apply.changes.len());

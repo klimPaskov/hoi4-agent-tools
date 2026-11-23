@@ -195,8 +195,7 @@ impl ServerState {
     fn assert_head_input(input: &HeadInput<'_>) -> Result<(), Refusal> {
         if !is_sha256(input.workspace_identity)
             || !valid_transaction_id(input.transaction_id)
-            || input.revision < 1
-            || input.revision > MAX_SAFE_INTEGER
+            || !(1..=MAX_SAFE_INTEGER).contains(&input.revision)
             || !is_sha256(input.authentication_tag)
             || !is_sha256(input.manifest_hash)
         {
@@ -228,8 +227,7 @@ impl ServerState {
         }
         let head: JournalHead = serde_json::from_slice(&fs::read(path).map_err(|_| invalid())?).map_err(|_| invalid())?;
         if head.version != 1
-            || head.revision < 1
-            || head.revision > MAX_SAFE_INTEGER
+            || !(1..=MAX_SAFE_INTEGER).contains(&head.revision)
             || !is_sha256(&head.workspace_identity)
             || !valid_transaction_id(&head.transaction_id)
             || !is_sha256(&head.manifest_hash)
@@ -264,7 +262,7 @@ impl ServerState {
                 return Err(state_error("TRANSACTION_HEAD_INVALID", "Protected transaction state contains an invalid entry"));
             }
             let revision: u64 = name[..16].parse().unwrap_or(0);
-            if revision < 1 || revision > MAX_SAFE_INTEGER {
+            if !(1..=MAX_SAFE_INTEGER).contains(&revision) {
                 return Err(state_error("TRANSACTION_HEAD_INVALID", "Protected transaction revision is invalid"));
             }
             heads.push((revision, entry.path()));
@@ -289,7 +287,8 @@ impl ServerState {
         };
         head.head_tag = self.authenticate_canonical(&Self::head_payload(&head))?;
         let target = directory.join(format!("{:016}.json", input.revision));
-        let value = serde_json::to_value(&head).map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
+        let value = serde_json::to_value(&head)
+            .map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
         let bytes = format!("{}\n", canonical_json(&value));
         let created = atomic_create(&target, bytes.as_bytes())
             .map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
@@ -315,7 +314,8 @@ impl ServerState {
         }
         let directory = self.head_directory(input.workspace_identity, input.transaction_id)?;
         assert_no_link_components(&directory)?;
-        fs::create_dir_all(&directory).map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
+        fs::create_dir_all(&directory)
+            .map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
         assert_no_link_components(&directory)?;
         if let Some(latest) = self.latest(&directory, input)? {
             if Self::matches(&latest.head, input) {

@@ -21,7 +21,7 @@ use hoi4_core::plan::Refusal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::fsutil::{FileIdentity, durable_write};
+use crate::fsutil::{FileIdentity, durable_write, sync_directory};
 use crate::limits::{MAX_BATCH_FILES, MAX_DIAGNOSTICS, MAX_FILES, MAX_MANIFEST_BYTES};
 use crate::paths::{contained_generated_path, io_refusal};
 use crate::state::{HeadInput, ServerState, is_sha256};
@@ -253,7 +253,10 @@ fn schema_check(manifest: &Manifest) -> bool {
         && manifest.applied_files.iter().all(|path| valid_relative(path))
         && manifest.files.iter().all(file_ok)
         && payload.files.iter().all(file_ok)
-        && manifest.pending_files.as_ref().is_none_or(|pending| pending.len() <= MAX_BATCH_FILES && pending.iter().all(|file| valid_relative(&file.relative_path)))
+        && manifest
+            .pending_files
+            .as_ref()
+            .is_none_or(|pending| pending.len() <= MAX_BATCH_FILES && pending.iter().all(|file| valid_relative(&file.relative_path)))
 }
 
 /// How a load checks the manifest's protected head.
@@ -387,10 +390,7 @@ impl<'a> Journal<'a> {
         let path = contained_generated_path(&directory, &["blobs", hash]).map_err(|_| missing())?;
         let bytes = fs::read(path).map_err(|_| missing())?;
         if bytes.len() as u64 != size || sha256_hex(&bytes) != *hash {
-            return Err(Refusal::new(
-                "TRANSACTION_BLOB_INTEGRITY_FAILED",
-                format!("{} before rollback data failed integrity validation", file.relative_path),
-            ));
+            return Err(Refusal::new("TRANSACTION_BLOB_INTEGRITY_FAILED", format!("{} before rollback data failed integrity validation", file.relative_path)));
         }
         Ok(bytes)
     }
@@ -428,9 +428,14 @@ impl<'a> Journal<'a> {
         let directory = self.transaction_directory(&candidate.transaction_id)?;
         let path = contained_generated_path(&directory, &["manifest.json"])?;
         durable_write(&path, text.as_bytes()).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "Transaction manifest cannot be written", &error))?;
+        sync_directory(&directory);
         let manifest_hash = sha256_hex(canonical.as_bytes());
         let input = self.head_input(&candidate, &manifest_hash);
-        if candidate.revision == 1 { self.state.record_initial_head(&input)? } else { self.state.record_successor(&input)? }
+        if candidate.revision == 1 {
+            self.state.record_initial_head(&input)?
+        } else {
+            self.state.record_successor(&input)?
+        }
         *manifest = candidate;
         Ok(())
     }
@@ -482,15 +487,24 @@ impl<'a> Journal<'a> {
             return Err(Refusal::new("TRANSACTION_MANIFEST_INTEGRITY_FAILED", format!("Transaction manifest integrity failed: {transaction_id}")));
         }
         if hash_canonical(&to_value(&manifest.plan_payload)?) != manifest.plan_hash {
-            return Err(Refusal::new("TRANSACTION_PLAN_INTEGRITY_FAILED", format!("Transaction plan hash no longer matches its persisted payload: {transaction_id}")));
+            return Err(Refusal::new(
+                "TRANSACTION_PLAN_INTEGRITY_FAILED",
+                format!("Transaction plan hash no longer matches its persisted payload: {transaction_id}"),
+            ));
         }
         let current = to_value(&manifest.current_plan_payload())?;
         let immutable = |value: Value| hash_canonical(&without(value, &["diagnostics", "validation"]));
         if immutable(current.clone()) != immutable(to_value(&manifest.plan_payload)?) {
-            return Err(Refusal::new("TRANSACTION_PLAN_INTEGRITY_FAILED", format!("Transaction manifest no longer matches its hash-bound plan: {transaction_id}")));
+            return Err(Refusal::new(
+                "TRANSACTION_PLAN_INTEGRITY_FAILED",
+                format!("Transaction manifest no longer matches its hash-bound plan: {transaction_id}"),
+            ));
         }
         if manifest.state == State::Planned && hash_canonical(&current) != manifest.plan_hash {
-            return Err(Refusal::new("TRANSACTION_PLAN_INTEGRITY_FAILED", format!("Planned transaction content no longer matches its plan hash: {transaction_id}")));
+            return Err(Refusal::new(
+                "TRANSACTION_PLAN_INTEGRITY_FAILED",
+                format!("Planned transaction content no longer matches its plan hash: {transaction_id}"),
+            ));
         }
         if head_mode != HeadMode::None {
             let manifest_hash = hash_canonical(&to_value(&manifest)?);

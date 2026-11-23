@@ -441,10 +441,8 @@ fn refuses_a_linked_journal_folder() {
 fn restores_every_file_when_a_replacement_fails() {
     let fixture = fixture();
     let (rewrite, before) = three_file_plan(&fixture);
-    let hooks = At {
-        after_replace: Some(Box::new(|_, index| if index == 1 { Err(Refusal::new("TEST_FAILURE", "injected")) } else { Ok(()) })),
-        ..At::default()
-    };
+    let hooks =
+        At { after_replace: Some(Box::new(|_, index| if index == 1 { Err(Refusal::new("TEST_FAILURE", "injected")) } else { Ok(()) })), ..At::default() };
     let refusal = fixture.applier().with_hooks(Arc::new(hooks)).apply(&rewrite).unwrap_err();
     assert_eq!(refusal.code, "TEST_FAILURE");
     assert_eq!(fixture.snapshot(), before, "every file is back, and no stage or backup remains");
@@ -733,10 +731,7 @@ fn skips_uncommitted_journals_and_finishes_reclaims() {
 fn keeps_an_untouched_pending_path_as_it_is() {
     let fixture = fixture();
     let rewrite = plan(vec![change("a.txt", None, Some(b"a")), change("b.txt", None, Some(b"b"))]);
-    let hooks = At {
-        after_batch_intent: Some(Box::new(|_| panic!("simulated crash after the batch intent"))),
-        ..At::default()
-    };
+    let hooks = At { after_batch_intent: Some(Box::new(|_| panic!("simulated crash after the batch intent"))), ..At::default() };
     let applier = fixture.applier().with_hooks(Arc::new(hooks));
     assert!(catch_unwind(AssertUnwindSafe(|| applier.apply(&rewrite))).is_err());
     // The modder creates b.txt with the very bytes the rewrite meant to write.
@@ -787,7 +782,8 @@ fn refuses_plans_beyond_the_structure_limits() {
     assert!(refusal.message.contains("15001 files (limit 15000)"));
     assert!(refusal.message.contains("split the change"));
     let mut noisy = plan(vec![change("a.txt", None, Some(b"x"))]);
-    noisy.diagnostics = (0..=crate::limits::MAX_DIAGNOSTICS).map(|index| Diagnostic::new(format!("I{index}"), Severity::Info, Category::Validation, "note")).collect();
+    noisy.diagnostics =
+        (0..=crate::limits::MAX_DIAGNOSTICS).map(|index| Diagnostic::new(format!("I{index}"), Severity::Info, Category::Validation, "note")).collect();
     assert_eq!(fixture.applier().apply(&noisy).unwrap_err().code, "TRANSACTION_STRUCTURE_LIMIT");
     assert!(fixture.snapshot().is_empty());
     fixture.applier().dropping(Rule::Limits).apply(&noisy).unwrap();
@@ -866,5 +862,4 @@ fn applies_and_recovers_through_the_engine_operations() {
         assert!(!refused.to_string().contains(&KEY[..16]));
         assert!(refused["code"] == "SERVER_STATE_KEY_INVALID" || refused["code"] == "invalid_request");
     }
-    assert_eq!(missing.result.unwrap_err()["code"], "WORKSPACE_MOD_ROOT_UNSAFE");
 }

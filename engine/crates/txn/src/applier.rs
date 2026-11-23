@@ -22,7 +22,8 @@ use serde_json::{Value, json};
 
 use crate::fsutil::{durable_write, exists, file_identity, hash_regular, iso_time, now_ms, random_id, read_regular, with_suffix};
 use crate::journal::{
-    Binding, Failure, FileRecord, HeadMode, JOURNAL_FOLDER, JOURNAL_VERSION, Journal, Manifest, PendingFile, PlanPayload, RollbackStatus, State, infer_media_type,
+    Binding, Failure, FileRecord, HeadMode, JOURNAL_FOLDER, JOURNAL_VERSION, Journal, Manifest, PendingFile, PlanPayload, RollbackStatus, State,
+    infer_media_type,
 };
 use crate::limits::{JOURNAL_TTL_SECONDS, MAX_DIAGNOSTICS, MAX_FILES, MAX_JOURNAL_BYTES, MAX_JOURNALS, batch_size};
 use crate::lock::WorkspaceLock;
@@ -295,7 +296,8 @@ impl TxnApplier {
         match self.restore_before_state(journal, manifest) {
             Ok(()) => {
                 manifest.state = State::RolledBack;
-                manifest.failure = Some(Failure { code: "TRANSACTION_RECOVERED".into(), message: "Incomplete transaction was rolled back during recovery".into() });
+                manifest.failure =
+                    Some(Failure { code: "TRANSACTION_RECOVERED".into(), message: "Incomplete transaction was rolled back during recovery".into() });
                 journal.write_manifest(manifest)
             }
             Err(refusal) => {
@@ -430,7 +432,8 @@ impl TxnApplier {
         journal.remove_orphan_heads(&ids)?;
         for id in &ids {
             let directory = journal.transaction_directory(id)?;
-            let remove_folder = || fs::remove_dir_all(&directory).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "An expired journal cannot be removed", &error));
+            let remove_folder =
+                || fs::remove_dir_all(&directory).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "An expired journal cannot be removed", &error));
             if !journal.has_manifest(id)? {
                 let age = fs::metadata(&directory).and_then(|metadata| metadata.modified()).ok().and_then(|modified| modified.elapsed().ok());
                 if age.is_some_and(|age| age.as_millis() > u128::from(self.ttl_seconds) * 1000) {
@@ -486,7 +489,8 @@ impl TxnApplier {
         let replacement: u64 = manifest.files.iter().map(|file| file.before_size.unwrap_or(0) + file.after_size.unwrap_or(0)).sum();
         let work = prospective.saturating_add(replacement);
         let limits = self.enforces(Rule::Limits);
-        let reached = |usage: (usize, u64)| usage.0 >= self.max_journals || prospective > self.max_journal_bytes || usage.1 > self.max_journal_bytes - prospective;
+        let reached =
+            |usage: (usize, u64)| usage.0 >= self.max_journals || prospective > self.max_journal_bytes || usage.1 > self.max_journal_bytes - prospective;
         if limits && work <= self.max_journal_bytes && reached(usage) {
             self.prune(journal, true)?;
             usage = journal.usage()?;
@@ -605,7 +609,8 @@ impl TxnApplier {
                 for item in &work {
                     let backup = with_suffix(&item.target, &format!(".hoi4-agent-{transaction_id}.backup"));
                     if exists(&backup) {
-                        fs::remove_file(&backup).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "A replaced source backup cannot be removed", &error))?;
+                        fs::remove_file(&backup)
+                            .map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "A replaced source backup cannot be removed", &error))?;
                     }
                 }
                 manifest.state = State::Applied;
@@ -715,7 +720,8 @@ impl TxnApplier {
                     if exists(&item.target) {
                         return Err(stale("Source target was recreated during atomic replacement"));
                     }
-                    fs::rename(stage, &item.target).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "Rewrite output cannot replace its source", &error))?;
+                    fs::rename(stage, &item.target)
+                        .map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "Rewrite output cannot replace its source", &error))?;
                 }
                 manifest.applied_files.push(item.relative_path.clone());
                 if abort_after == Some(index) {
@@ -748,7 +754,11 @@ impl TxnApplier {
 impl PlanApplier for TxnApplier {
     fn apply(&self, plan: &RewritePlan) -> Result<Applied, Refusal> {
         if has_blocking(&plan.diagnostics) {
-            return Err(Refusal { code: "TRANSACTION_VALIDATION_BLOCKED".into(), message: "Dry-run validation did not pass".into(), diagnostics: plan.diagnostics.clone() });
+            return Err(Refusal {
+                code: "TRANSACTION_VALIDATION_BLOCKED".into(),
+                message: "Dry-run validation did not pass".into(),
+                diagnostics: plan.diagnostics.clone(),
+            });
         }
         if plan.workspace_id != self.binding.workspace_id {
             return Err(Refusal::new("TRANSACTION_WORKSPACE_MISMATCH", "Transaction belongs to another workspace"));

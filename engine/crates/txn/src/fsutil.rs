@@ -55,10 +55,6 @@ fn platform_identity(_path: &Path, _metadata: &fs::Metadata) -> io::Result<FileI
     Err(io::Error::new(io::ErrorKind::Unsupported, "file identity is not supported on this platform"))
 }
 
-pub fn same_identity(left: &Option<FileIdentity>, right: &Option<FileIdentity>) -> bool {
-    left == right
-}
-
 /// Whether anything (a file, folder or link) is at `path`.
 pub fn exists(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
@@ -143,13 +139,7 @@ pub fn iso_time(ms: u64) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
-        rest / 3_600_000,
-        rest / 60_000 % 60,
-        rest / 1_000 % 60,
-        rest % 1_000
-    )
+    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z", rest / 3_600_000, rest / 60_000 % 60, rest / 1_000 % 60, rest % 1_000)
 }
 
 /// `path` with `suffix` appended to its file name.
