@@ -406,6 +406,16 @@ function manifestAuthenticationPayload(manifest: TransactionManifest): unknown {
   return payload;
 }
 
+/** The paths whose rollback backups stay in the workspace, added to a rollback refusal. */
+function withRetainedBackups(error: ServiceError, retained: readonly string[]): ServiceError {
+  if (retained.length === 0) return error;
+  return new ServiceError(error.code, error.message, {
+    ...error.details,
+    retainedBackupCount: retained.length,
+    retainedBackups: retained.slice(0, 20),
+  });
+}
+
 export function transactionRootFingerprint(workspace: ResolvedWorkspace): string {
   return resolvedWorkspaceIdentity(workspace);
 }
@@ -1096,7 +1106,15 @@ export class TransactionManager {
           }
           manifest.state = manifest.rollbackStatus === 'applied' ? 'rolled_back' : 'failed';
           await this.writeManifest(workspace, manifest, options.hooks);
-          if (rollbackError instanceof ServiceError) throw rollbackError;
+          if (rollbackError !== undefined) {
+            const retained = await this.discardSettledBackups(
+              workspace,
+              manifest,
+              options.principal,
+            );
+            if (rollbackError instanceof ServiceError)
+              throw withRetainedBackups(rollbackError, retained);
+          }
           if (rollbackError !== undefined) {
             throw new ServiceError(
               'TRANSACTION_ROLLBACK_FAILED',
@@ -1279,7 +1297,8 @@ export class TransactionManager {
         'Interrupted transaction could not be recovered safely',
       );
       await this.writeManifest(workspace, manifest);
-      if (error instanceof ServiceError) throw error;
+      const retained = await this.discardSettledBackups(workspace, manifest, principal);
+      if (error instanceof ServiceError) throw withRetainedBackups(error, retained);
       throw new ServiceError(
         'TRANSACTION_RECOVERY_FAILED',
         'Interrupted transaction could not be recovered safely',
@@ -1356,6 +1375,142 @@ export class TransactionManager {
       }
     }
     return recovered;
+  }
+
+  /**
+   * After a rollback that could not complete, a file still holding this transaction's
+   * after-bytes keeps its result, and its before-bytes are in the journal's verified blobs. Its
+   * in-workspace backup would only linger in the mod tree, where searches, syncs and packagers
+   * would pick it up, so it is removed. A file in any other state keeps its backup. Returns the
+   * workspace-relative paths whose backups remain. Cleanup never masks the original failure.
+   */
+  private async discardSettledBackups(
+    workspace: ResolvedWorkspace,
+    manifest: TransactionManifest,
+    principal?: string,
+  ): Promise<string[]> {
+    const retained: string[] = [];
+    for (const file of manifest.files) {
+      try {
+        const { path: target } = await this.resolver.resolvePath(
+          workspace.id,
+          file.relativePath,
+          'write',
+          ['mod'],
+          principal,
+        );
+        const backup = `${target}.hoi4-agent-${manifest.transactionId}.backup`;
+        if (!(await fileExists(backup))) continue;
+        const current = (await fileExists(target)) ? sha256Bytes(await readFile(target)) : null;
+        let settled =
+          file.beforeSha256 !== null &&
+          current === file.afterSha256 &&
+          sha256Bytes(await readFile(backup)) === file.beforeSha256;
+        if (settled) {
+          try {
+            await this.readVerifiedBlob(workspace, manifest, file, 'before');
+          } catch {
+            settled = false;
+          }
+        }
+        if (settled) await unlink(backup);
+        else retained.push(file.relativePath);
+      } catch {
+        retained.push(file.relativePath);
+      }
+    }
+    return retained.sort((left, right) => compareCodeUnits(left, right));
+  }
+
+  /** The current file of each change equals its after-bytes and no backup of it remains. */
+  private async workspaceAtAfterState(
+    workspace: ResolvedWorkspace,
+    manifest: TransactionManifest,
+  ): Promise<boolean> {
+    try {
+      await this.verifyCurrentFiles(workspace, manifest, 'after', manifest.principal ?? undefined);
+    } catch {
+      return false;
+    }
+    return (
+      (await this.discardSettledBackups(workspace, manifest, manifest.principal ?? undefined))
+        .length === 0
+    );
+  }
+
+  /**
+   * Discard a failed transaction's journal for good: the owner accepts the workspace as it is.
+   * Its remaining in-workspace backups are removed when they still hold the recorded
+   * before-bytes; any other file of that name is left alone and reported. Library callers only;
+   * no MCP tool exposes this.
+   */
+  async discardFailed(
+    workspaceId: string,
+    transactionId: string,
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<{ removedBackups: number; retainedBackups: string[] }> {
+    signal?.throwIfAborted();
+    const workspace = this.resolver.get(workspaceId, principal);
+    const initial = await this.load(workspace, transactionId, {
+      headMode: 'none',
+      ...(signal === undefined ? {} : { signal }),
+    });
+    if ((initial.principal ?? null) !== (principal ?? null)) {
+      throw new ServiceError(
+        'TRANSACTION_PRINCIPAL_MISMATCH',
+        'Transaction belongs to another principal',
+      );
+    }
+    return this.withWorkspaceLock(workspace, transactionId, async () => {
+      signal?.throwIfAborted();
+      const manifest = await this.load(workspace, transactionId, {
+        headMode: 'reconcile',
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if ((manifest.principal ?? null) !== (principal ?? null)) {
+        throw new ServiceError(
+          'TRANSACTION_PRINCIPAL_MISMATCH',
+          'Transaction belongs to another principal',
+        );
+      }
+      if (manifest.state !== 'failed') {
+        throw new ServiceError(
+          'TRANSACTION_STATE_INVALID',
+          'Only a failed transaction can be discarded',
+          { state: manifest.state },
+        );
+      }
+      let removedBackups = 0;
+      const retainedBackups: string[] = [];
+      for (const file of manifest.files) {
+        const { path: target } = await this.resolver.resolvePath(
+          workspace.id,
+          file.relativePath,
+          'write',
+          ['mod'],
+          principal,
+        );
+        const backup = `${target}.hoi4-agent-${manifest.transactionId}.backup`;
+        if (!(await fileExists(backup))) continue;
+        if (
+          file.beforeSha256 !== null &&
+          sha256Bytes(await readFile(backup)) === file.beforeSha256
+        ) {
+          await unlink(backup);
+          removedBackups += 1;
+        } else retainedBackups.push(file.relativePath);
+      }
+      const transactionsDirectory = await containedGeneratedPath(
+        workspace.cacheRoot,
+        'transactions',
+      );
+      await this.reclaimJournal(workspace, transactionsDirectory, transactionId);
+      return {
+        removedBackups,
+        retainedBackups: retainedBackups.sort((left, right) => compareCodeUnits(left, right)),
+      };
+    });
   }
 
   private async restoreBeforeState(
@@ -1830,7 +1985,16 @@ export class TransactionManager {
         continue;
       }
       if (reclaimApplied && manifest.state === 'applied') {
-        await this.reclaimAutonomousAppliedJournal(workspace, transactionsDirectory, entry.name);
+        await this.reclaimJournal(workspace, transactionsDirectory, entry.name);
+      } else if (
+        Date.parse(manifest.expiresAt) <= now &&
+        manifest.state === 'failed' &&
+        (await this.workspaceAtAfterState(workspace, manifest))
+      ) {
+        // A failed journal whose workspace still holds every after-byte, with no backup left,
+        // is an applied journal in all but name. Once expired it stops counting against the
+        // quota; one whose files changed since stays until its owner discards it.
+        await this.reclaimJournal(workspace, transactionsDirectory, entry.name);
       } else if (
         Date.parse(manifest.expiresAt) <= now &&
         (manifest.state === 'planned' || manifest.state === 'rolled_back')
@@ -1842,7 +2006,7 @@ export class TransactionManager {
     }
   }
 
-  private async reclaimAutonomousAppliedJournal(
+  private async reclaimJournal(
     workspace: ResolvedWorkspace,
     transactionsDirectory: string,
     transactionId: string,
