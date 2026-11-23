@@ -1,1 +1,0 @@
-- `hoi4.gui_render` now reads a text box's `text_color_code` (for example `"Y"`) and draws its text in that colour, looked up like in-text `§` codes: the font's own `textcolors` first, then the standard codes. In-text markup that ends with `§!` returns to that colour. An unknown code keeps the font's colour.
