@@ -1,0 +1,1 @@
+- `hoi4.gui_render` and `hoi4.gui_inspect` read a mod's `localisation/replace/` folder, which they skipped before. Within one root, a key in `localisation/replace/` or `localisation/<language>/replace/` now wins over the same key in the root's other files, as in the game. Windows showed the base game's text, such as "Trade" or "Production", where a mod replaces it.
