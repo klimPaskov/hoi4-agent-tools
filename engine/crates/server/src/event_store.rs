@@ -11,6 +11,9 @@ use serde_json::Value;
 
 use crate::random::random_uuid;
 
+/// A replayed stream: its id and the `(event id, message)` pairs after the given event.
+pub type Replay = (String, Vec<(String, Value)>);
+
 /// The aggregate byte budget of every event store of one server.
 #[derive(Debug, Clone)]
 pub struct SharedEventStoreBudget {
@@ -93,7 +96,7 @@ impl BoundedEventStore {
     }
 
     /// The stream of `last_event_id` and the events after it on that stream, in order.
-    pub fn replay_events_after(&mut self, last_event_id: &str, now_ms: u64) -> Result<(String, Vec<(String, Value)>), &'static str> {
+    pub fn replay_events_after(&mut self, last_event_id: &str, now_ms: u64) -> Result<Replay, &'static str> {
         self.prune(now_ms);
         let index = self.events.iter().position(|event| event.event_id == last_event_id).ok_or("Event ID is unknown or expired")?;
         let stream_id = self.events[index].stream_id.clone();

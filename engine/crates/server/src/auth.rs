@@ -19,7 +19,7 @@ use crate::config::HttpConfig;
 use crate::error::ServiceError;
 
 /// The principal one request authenticated as. Holds no secret.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AuthenticatedPrincipal {
     pub principal: String,
     pub client_id: String,
@@ -424,7 +424,7 @@ mod tests {
         HttpConfig::from_json(&json!({ "tokens": tokens })).unwrap()
     }
 
-    fn lookup(map: &BTreeMap<&str, String>) -> impl Fn(&str) -> Option<String> + '_ {
+    fn lookup<'a>(map: &'a BTreeMap<&'a str, String>) -> impl Fn(&str) -> Option<String> + 'a {
         move |name| map.get(name).cloned()
     }
 
