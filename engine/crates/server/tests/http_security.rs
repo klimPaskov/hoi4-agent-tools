@@ -87,8 +87,7 @@ impl Response {
 fn dechunk(body: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut rest = body;
-    loop {
-        let Some(line_end) = rest.windows(2).position(|window| window == b"\r\n") else { break };
+    while let Some(line_end) = rest.windows(2).position(|window| window == b"\r\n") {
         let size = usize::from_str_radix(std::str::from_utf8(&rest[..line_end]).unwrap_or("0").trim(), 16).unwrap_or(0);
         rest = &rest[line_end + 2..];
         if size == 0 || rest.len() < size {
