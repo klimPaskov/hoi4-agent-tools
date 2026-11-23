@@ -199,6 +199,7 @@ const mapWorkspaceInspectDataSchema = z
       .optional(),
     quality: borderQualitySummarySchema.optional(),
     lands: naturalLandsSummarySchema.optional(),
+    baselineFingerprint: sha256Schema.optional(),
   })
   .strict();
 const mapRenderDataSchema = z

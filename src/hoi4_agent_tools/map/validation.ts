@@ -24,6 +24,11 @@ export interface MapValidationOptions {
   expectedChangedBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   baseline?: MapWorkspaceIndex;
   includeBaselineDiagnostics?: boolean;
+  /**
+   * The most findings kept before the rest are counted in one `MAP_DIAGNOSTICS_TRUNCATED` marker.
+   * Defaults to `MAP_DIAGNOSTIC_LIMIT`; a write with a stated baseline needs every finding.
+   */
+  diagnosticLimit?: number;
   /** The world edge policy of a world being created, which sets seam severities. */
   edgeMode?: EdgeMode;
   signal?: AbortSignal;
@@ -126,12 +131,16 @@ function addDiagnostic(
 ): void {
   const add =
     options.includeBaselineDiagnostics === true ? addActiveMapDiagnostic : addMapDiagnostic;
-  add(diagnostics, {
-    ...diagnostic,
-    ...(diagnostic.operationId !== undefined || options.operationId === undefined
-      ? {}
-      : { operationId: options.operationId }),
-  });
+  add(
+    diagnostics,
+    {
+      ...diagnostic,
+      ...(diagnostic.operationId !== undefined || options.operationId === undefined
+        ? {}
+        : { operationId: options.operationId }),
+    },
+    options.diagnosticLimit,
+  );
 }
 
 function duplicateValues<T>(values: readonly T[], key: (value: T) => string): Map<string, T[]> {
@@ -1440,7 +1449,22 @@ function* validateMapSteps(
   );
   yield* cancellationCheckpoint(options.signal);
   const sorted = sortDiagnostics(diagnostics);
-  const checks = [
+  const checks = mapValidationChecks(sorted);
+  const passed =
+    checks.every((check) => check.passed) &&
+    !sorted.some(({ severity }) => severity === 'error' || severity === 'blocker');
+  return { passed, diagnostics: sorted, checks };
+}
+
+/**
+ * The map validation checks: one per finding family, failed by any error or blocker of that
+ * family in `diagnostics`.
+ */
+export function mapValidationChecks(
+  diagnostics: readonly Diagnostic[],
+): ValidationSummary['checks'] {
+  const sorted = diagnostics;
+  return [
     {
       id: 'map-files-and-definitions',
       passed: !sorted.some(({ code, severity }) =>
@@ -1519,10 +1543,6 @@ function* validateMapSteps(
         'Heightmap, terrain, river, tree, colour, normal and city bitmaps, lakes and the world edge are valid',
     },
   ];
-  const passed =
-    checks.every((check) => check.passed) &&
-    !sorted.some(({ severity }) => severity === 'error' || severity === 'blocker');
-  return { passed, diagnostics: sorted, checks };
 }
 
 export function validateMap(

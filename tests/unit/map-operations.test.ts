@@ -27,6 +27,8 @@ import {
   MAP_DIAGNOSTIC_LIMIT,
 } from '../../src/hoi4_agent_tools/map/diagnostic-limit.js';
 import { MAP_SELECTED_PIXEL_LIMIT } from '../../src/hoi4_agent_tools/map/limits.js';
+import { mapWriteFootprint } from '../../src/hoi4_agent_tools/map/baseline.js';
+import type { Diagnostic } from '../../src/hoi4_agent_tools/core/diagnostics.js';
 import {
   indexWithProposedChanges,
   planMapOperations,
@@ -44,6 +46,7 @@ import {
 } from '../../src/hoi4_agent_tools/map/service.js';
 import { validateMap, validateMapAsync } from '../../src/hoi4_agent_tools/map/validation.js';
 import { mapOperationSchema } from '../../src/hoi4_agent_tools/schemas/map.js';
+import { mapRewriteRequestSchema } from '../../src/hoi4_agent_tools/schemas/map-requests.js';
 
 const postValidate = () =>
   Promise.resolve({
@@ -3836,5 +3839,266 @@ describe('map catalog consistency', () => {
     });
     expect(missing).toContain('MAP_ADJACENCY_TERMINATOR_MISSING');
     expect(missing).not.toContain('MAP_ADJACENCY_AFTER_TERMINATOR');
+  });
+});
+
+// ADR 0090, issue 272: a stated baseline leaves pre-existing errors outside a write's footprint.
+describe('map writes with a stated baseline', () => {
+  const unrelatedLocator: MapOperation = {
+    id: 'unrelated-locator-update',
+    kind: 'update_entity_locator',
+    entity: 'test_entity',
+    name: 'test_locator',
+    position: [4, 5, 6],
+  };
+
+  /** A fixture whose state 2 has a controller but no owner: one pre-existing error. */
+  async function brokenBaseline(extra: Readonly<Record<string, string>> = {}) {
+    const fixture = await setup(extra);
+    const statePath = path.join(fixture.mod, 'history', 'states', '2-TWO.txt');
+    const source = await readFile(statePath, 'utf8');
+    await writeFile(
+      statePath,
+      source.replace(
+        'history = { owner = BBB add_core_of = BBB }',
+        'history = { controller = BBB add_core_of = BBB }',
+      ),
+      'utf8',
+    );
+    const fingerprint = await fixture.nudger.baselineFingerprint('map-test');
+    return { ...fixture, fingerprint };
+  }
+
+  const hard = (diagnostics: readonly Diagnostic[]) =>
+    diagnostics.filter(({ severity }) => severity === 'error' || severity === 'blocker');
+
+  it('behaves as before without the field: the pre-existing error blocks and nothing is reported', async () => {
+    const { nudger } = await brokenBaseline();
+    const result = await nudger.plan({ workspaceId: 'map-test', operations: [unrelatedLocator] });
+    expect(result.baseline).toBeUndefined();
+    expect(result.transaction.validation.passed).toBe(false);
+    expect(result.validation.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_VALIDATION_OPERATION_UNOWNED',
+        severity: 'blocker',
+        details: expect.objectContaining({ attributionStatus: 'pre-existing-baseline' }),
+      }),
+    );
+    expect(
+      result.validation.diagnostics.some(
+        ({ details }) => details?.attributionStatus === 'accepted-baseline',
+      ),
+    ).toBe(false);
+  });
+
+  it('lets a write that touches nothing the pre-existing error belongs to pass', async () => {
+    const { nudger, fingerprint } = await brokenBaseline();
+    const result = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [unrelatedLocator],
+      baselineFingerprint: fingerprint,
+    });
+    expect(result.baseline).toEqual({
+      stated: fingerprint,
+      matched: true,
+      accepted: 1,
+      insideFootprint: 0,
+    });
+    expect(result.validation.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_STATE_CONTROLLER_WITHOUT_OWNER',
+        severity: 'warning',
+        details: expect.objectContaining({
+          attributionStatus: 'accepted-baseline',
+          baselineSeverity: 'error',
+        }),
+      }),
+    );
+    expect(hard(result.validation.diagnostics)).toEqual([]);
+    expect(result.transaction.validation.passed).toBe(true);
+  });
+
+  it('refuses a stale fingerprint, whether invented or taken before an edit', async () => {
+    const { mod, nudger, fingerprint } = await brokenBaseline();
+    const invented = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [unrelatedLocator],
+      baselineFingerprint: 'f'.repeat(64),
+    });
+    expect(invented.baseline).toMatchObject({ matched: false, accepted: 0 });
+    expect(invented.transaction.validation.passed).toBe(false);
+    expect(invented.validation.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_BASELINE_STALE', severity: 'blocker' }),
+    );
+    // With a refused baseline every pre-existing error blocks as it does without one.
+    expect(invented.validation.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_VALIDATION_OPERATION_UNOWNED', severity: 'blocker' }),
+    );
+
+    const regionPath = path.join(mod, 'map', 'strategicregions', '1-REGION.txt');
+    await writeFile(
+      regionPath,
+      `${await readFile(regionPath, 'utf8')}# edited after the baseline\n`,
+    );
+    expect(await nudger.baselineFingerprint('map-test')).not.toBe(fingerprint);
+    const edited = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [unrelatedLocator],
+      baselineFingerprint: fingerprint,
+    });
+    expect(edited.baseline).toMatchObject({ matched: false });
+    expect(edited.validation.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_BASELINE_STALE' }),
+    );
+    expect(edited.transaction.validation.passed).toBe(false);
+  });
+
+  it('still blocks a pre-existing error inside the write footprint', async () => {
+    const { nudger, fingerprint } = await brokenBaseline();
+    const result = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [
+        { id: 'touch-state-2', kind: 'update_state', stateId: 2, changes: { manpower: 600 } },
+      ],
+      baselineFingerprint: fingerprint,
+    });
+    expect(result.baseline).toMatchObject({ matched: true, accepted: 0, insideFootprint: 1 });
+    expect(result.validation.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_VALIDATION_OPERATION_UNOWNED',
+        severity: 'blocker',
+        details: expect.objectContaining({
+          sourceDiagnosticCode: 'MAP_STATE_CONTROLLER_WITHOUT_OWNER',
+        }),
+      }),
+    );
+    expect(result.transaction.validation.passed).toBe(false);
+  });
+
+  it('still blocks a new error while it accepts the untouched pre-existing one', async () => {
+    const { nudger, fingerprint } = await brokenBaseline();
+    const result = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [
+        {
+          id: 'break-state-1',
+          kind: 'update_state',
+          stateId: 1,
+          changes: { owner: null, controller: 'AAA' },
+        },
+      ],
+      baselineFingerprint: fingerprint,
+    });
+    expect(result.baseline).toMatchObject({ matched: true, accepted: 1 });
+    expect(hard(result.validation.diagnostics)).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_STATE_CONTROLLER_WITHOUT_OWNER',
+        severity: 'error',
+        operationId: 'break-state-1',
+      }),
+    );
+    expect(result.transaction.validation.passed).toBe(false);
+  });
+
+  it('writes over a baseline far above the diagnostic limit and rolls it up by code', async () => {
+    // 120 more states, each with a controller and no owner: 121 pre-existing errors in all.
+    const extra: Record<string, string> = {};
+    for (let id = 10; id < 130; id += 1)
+      extra[`history/states/${id}-EXTRA.txt`] =
+        `state = { id = ${id} name = "STATE_${id}" manpower = 1 state_category = town provinces = { } history = { controller = BBB } }\n`;
+    const { nudger, fingerprint } = await brokenBaseline(extra);
+    // Without the field the write cannot pass: the baseline alone is over the limit.
+    await expect(
+      nudger.plan({ workspaceId: 'map-test', operations: [unrelatedLocator] }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_STRUCTURE_LIMIT' });
+    const result = await nudger.plan({
+      workspaceId: 'map-test',
+      operations: [unrelatedLocator],
+      baselineFingerprint: fingerprint,
+    });
+    expect(result.baseline?.matched).toBe(true);
+    expect(result.baseline?.accepted).toBeGreaterThanOrEqual(121);
+    expect(result.baseline?.insideFootprint).toBe(0);
+    expect(result.transaction.validation.passed).toBe(true);
+    expect(result.transaction.diagnostics.length).toBeLessThanOrEqual(100);
+    const rolled = result.transaction.diagnostics.find(
+      ({ code, details }) =>
+        code === 'MAP_STATE_CONTROLLER_WITHOUT_OWNER' &&
+        details?.attributionStatus === 'accepted-baseline',
+    );
+    expect(rolled?.details).toMatchObject({
+      rollup: 'repeated-soft-diagnostics.v1',
+      baselineSeverity: 'error',
+    });
+    expect(rolled?.details?.occurrenceCount).toBeGreaterThanOrEqual(121);
+  });
+});
+
+describe('map write footprint', () => {
+  const normalize = (value: string): string | undefined => {
+    const bare = /^(?:mod|dependency|game|fixture):(.*)$/u.exec(value)?.[1] ?? value;
+    return bare.includes('/') ? bare.toLowerCase() : undefined;
+  };
+  const unnamed: Diagnostic = { code: 'TEST', severity: 'error', category: 'map', message: 'x' };
+
+  it('names the province on a changed definition row and treats unnamed findings as touched', async () => {
+    const { snapshot } = await setup();
+    const plan = planMapOperations(snapshot.index, [
+      {
+        id: 'terrain-1',
+        kind: 'update_province_definition',
+        provinceId: 1,
+        changes: { terrain: 'hills' },
+      } as unknown as MapOperation,
+    ]);
+    expect(plan.blockers).toEqual([]);
+    const changed = new Set(plan.changes.map(({ relativePath }) => relativePath.toLowerCase()));
+    expect(changed.has('map/definition.csv')).toBe(true);
+    const footprint = mapWriteFootprint(snapshot.index, plan.finalIndex, changed, normalize);
+    expect([...footprint.touchedProvinces]).toEqual([1]);
+    const row = (id: number): Diagnostic => {
+      const definition = plan.finalIndex.definitionsById.get(id)!;
+      return {
+        ...unnamed,
+        location: {
+          path: definition.document.file.displayPath,
+          start: { line: definition.line, column: 1, offset: 0 },
+          end: { line: definition.line, column: 1, offset: 0 },
+        },
+      };
+    };
+    expect(footprint.touches(row(1), new Set(['map/definition.csv']))).toBe(true);
+    expect(footprint.touches(row(4), new Set(['map/definition.csv']))).toBe(false);
+    expect(footprint.touches(unnamed, new Set())).toBe(true);
+    expect(footprint.touches({ ...unnamed, details: { provinceIds: [4, 1] } }, new Set())).toBe(
+      true,
+    );
+    expect(footprint.touches({ ...unnamed, details: { provinceIds: [4] } }, new Set())).toBe(false);
+  });
+});
+
+describe('map rewrite baseline fingerprint input', () => {
+  const request = (baselineFingerprint?: unknown) => ({
+    workspaceId: 'map-test',
+    operations: [
+      { id: 'a', kind: 'update_entity_locator', entity: 'e', name: 'n', position: [1, 2, 3] },
+    ],
+    ...(baselineFingerprint === undefined ? {} : { baselineFingerprint }),
+  });
+
+  it('accepts a lowercase SHA-256 and leaves the field out when it is omitted', () => {
+    expect(mapRewriteRequestSchema.safeParse(request('a'.repeat(64))).success).toBe(true);
+    const omitted = mapRewriteRequestSchema.parse(request());
+    expect('baselineFingerprint' in omitted).toBe(false);
+  });
+
+  it.each([
+    ['too short', 'a'.repeat(63)],
+    ['upper case', 'A'.repeat(64)],
+    ['not hex', 'g'.repeat(64)],
+    ['a boolean opt-in', true],
+    ['an empty string', ''],
+  ])('refuses a fingerprint that is %s', (_label, value) => {
+    expect(mapRewriteRequestSchema.safeParse(request(value)).success).toBe(false);
   });
 });

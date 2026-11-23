@@ -15,12 +15,51 @@
 //! trusted to be in step. When stdin closes, requests still running finish first.
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 use serde_json::{Value, json};
 
 /// The protocol version in `hello`; bumped when a request or response changes shape.
 pub const PROTOCOL: u32 = 1;
+/// The ops this file answers itself; registered ops may not reuse these names.
+const BUILT_IN_OPS: [&str; 6] = ["hello", "texture.decode", "focus.render", "map.provinces", "index.files", "paths.resolve"];
+
+/// The ops of the ported crates (ADR 0091). Every crate's `register` is called here once, so a
+/// packet adds an op in its own crate without editing this file.
+pub fn build_registry() -> hoi4_core::ops::Registry {
+    let mut registry = hoi4_core::ops::Registry::new();
+    hoi4_txn::register(&mut registry);
+    hoi4_artifacts::register(&mut registry);
+    hoi4_jobs::register(&mut registry);
+    hoi4_tech::register(&mut registry);
+    hoi4_event::register(&mut registry);
+    hoi4_decision::register(&mut registry);
+    hoi4_probability::register(&mut registry);
+    hoi4_impact::register(&mut registry);
+    hoi4_health::register(&mut registry);
+    hoi4_script_write::register(&mut registry);
+    hoi4_focus_write::register(&mut registry);
+    hoi4_gui::register(&mut registry);
+    hoi4_map::register(&mut registry);
+    hoi4_reference::register(&mut registry);
+    hoi4_server::register(&mut registry);
+    registry
+}
+
+fn registry() -> &'static hoi4_core::ops::Registry {
+    static REGISTRY: OnceLock<hoi4_core::ops::Registry> = OnceLock::new();
+    REGISTRY.get_or_init(build_registry)
+}
+
+/// Refuses a registry with a name registered twice or one that shadows a built-in op.
+pub fn check_registry(registry: &hoi4_core::ops::Registry) -> Result<(), String> {
+    registry.check().map_err(|error| error.to_string())?;
+    match BUILT_IN_OPS.iter().find(|name| registry.contains(name)) {
+        Some(name) => Err(format!("the engine operation {name} is built in and cannot be registered again")),
+        None => Ok(()),
+    }
+}
+
 /// The largest request payload accepted (a texture file).
 const MAX_REQUEST_PAYLOAD: usize = 256 * 1024 * 1024;
 
@@ -105,9 +144,11 @@ fn focus_render(request: &Value) -> Response {
 
 fn handle(request: &Value, payload: &[u8]) -> Response {
     match request["op"].as_str() {
-        Some("hello") => Response::ok(
-            json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "map.provinces", "index.files", "paths.resolve"] }),
-        ),
+        Some("hello") => {
+            let mut ops: Vec<&str> = BUILT_IN_OPS.to_vec();
+            ops.extend(registry().names());
+            Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ops }))
+        }
         Some("texture.decode") => texture_decode(request, payload),
         Some("focus.render") => focus_render(request),
         Some("map.provinces") => match hoi4_engine::map_provinces::respond(request, payload) {
@@ -123,7 +164,10 @@ fn handle(request: &Value, payload: &[u8]) -> Response {
             Ok(result) => Response::ok(result),
             Err(error) => Response { result: Err(error), payload: Vec::new() },
         },
-        Some(other) => Response::error("unknown_op", format!("unknown op {other}")),
+        Some(other) => match registry().dispatch(other, &hoi4_core::ops::OpContext::default(), request, payload) {
+            Some(answer) => Response { result: answer.result, payload: answer.payload },
+            None => Response::error("unknown_op", format!("unknown op {other}")),
+        },
         None => Response::error("invalid_request", "the request has no op"),
     }
 }
@@ -173,6 +217,10 @@ impl InFlight {
 
 /// Runs until stdin closes. Returns the process exit code.
 pub fn run() -> u8 {
+    if let Err(error) = check_registry(registry()) {
+        eprintln!("hoi4-engine serve: {error}");
+        return 2;
+    }
     let out = Arc::new(Mutex::new(std::io::stdout()));
     let in_flight = Arc::new(InFlight::default());
     let mut input = BufReader::with_capacity(1 << 20, std::io::stdin().lock());
@@ -223,4 +271,32 @@ pub fn run() -> u8 {
     };
     in_flight.wait();
     code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_registry_of_every_crate_is_valid_and_hello_lists_it() {
+        let registry = build_registry();
+        assert_eq!(check_registry(&registry), Ok(()));
+        let hello = handle(&json!({ "op": "hello" }), &[]).result.unwrap();
+        let ops: Vec<&str> = hello["ops"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert_eq!(&ops[..BUILT_IN_OPS.len()], BUILT_IN_OPS);
+        assert_eq!(ops.len(), BUILT_IN_OPS.len() + registry.names().len());
+    }
+
+    #[test]
+    fn refuses_a_registered_op_that_shadows_a_built_in_one() {
+        let mut registry = hoi4_core::ops::Registry::new();
+        registry.add_fn("texture.decode", |_, _, _| hoi4_core::ops::OpResponse::ok(json!(null)));
+        assert!(check_registry(&registry).unwrap_err().contains("texture.decode"));
+    }
+
+    #[test]
+    fn an_op_nobody_registered_is_unknown() {
+        let error = handle(&json!({ "op": "nobody.registered" }), &[]).result.unwrap_err();
+        assert_eq!(error["code"], "unknown_op");
+    }
 }
