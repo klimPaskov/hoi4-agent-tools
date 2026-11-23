@@ -214,7 +214,7 @@ mod tests {
     fn scratch() -> PathBuf {
         let directory = std::env::temp_dir().join(random_id("hoi4-txn-lock"));
         fs::create_dir_all(&directory).unwrap();
-        fs::canonicalize(directory).unwrap()
+        crate::paths::canonical_path(&directory).unwrap()
     }
 
     fn plant_owner(cache: &Path, owner: Value) -> PathBuf {

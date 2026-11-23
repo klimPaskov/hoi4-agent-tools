@@ -44,8 +44,8 @@ fn fixture() -> Fixture {
     let root = std::env::temp_dir().join(random_id("hoi4-txn-test"));
     let mod_root = root.join("mods").join("demo");
     fs::create_dir_all(&mod_root).unwrap();
-    let root = fs::canonicalize(root).unwrap();
-    let mod_root = fs::canonicalize(mod_root).unwrap();
+    let root = crate::paths::canonical_path(&root).unwrap();
+    let mod_root = crate::paths::canonical_path(&mod_root).unwrap();
     let cache = mod_root.join(".hoi4-agent").join("cache");
     let state = root.join("state");
     fs::create_dir_all(&state).unwrap();
@@ -146,13 +146,18 @@ fn link_directory(link: &Path, target: &Path) {
     }
 }
 
+type PathHook = Box<dyn Fn(&str) -> Result<(), Refusal> + Send + Sync>;
+type IndexHook = Box<dyn Fn(&str, usize) -> Result<(), Refusal> + Send + Sync>;
+type PlainHook = Box<dyn Fn() -> Result<(), Refusal> + Send + Sync>;
+type BatchHook = Box<dyn Fn(&[String]) -> Result<(), Refusal> + Send + Sync>;
+
 /// A hook that runs one action at a chosen point.
 #[derive(Default)]
 struct At {
-    after_stage: Option<Box<dyn Fn(&str) -> Result<(), Refusal> + Send + Sync>>,
-    after_replace: Option<Box<dyn Fn(&str, usize) -> Result<(), Refusal> + Send + Sync>>,
-    before_post_validation: Option<Box<dyn Fn() -> Result<(), Refusal> + Send + Sync>>,
-    after_batch_intent: Option<Box<dyn Fn(&[String]) -> Result<(), Refusal> + Send + Sync>>,
+    after_stage: Option<PathHook>,
+    after_replace: Option<IndexHook>,
+    before_post_validation: Option<PlainHook>,
+    after_batch_intent: Option<BatchHook>,
 }
 
 impl Hooks for At {
@@ -415,7 +420,11 @@ fn refuses_a_journal_that_leaves_the_cache() {
     fs::create_dir_all(&outside).unwrap();
     link_directory(&fixture.cache.join(JOURNAL_FOLDER), &outside);
     let rewrite = plan(vec![change("a.txt", None, Some(b"x"))]);
-    assert_eq!(fixture.applier().apply(&rewrite).unwrap_err().code, "PATH_GENERATED_ROOT_ESCAPE");
+    // Recovery reads the journal first, under the lock, and refuses the escape.
+    let refusal = fixture.applier().apply(&rewrite).unwrap_err();
+    assert_eq!(refusal.code, "TRANSACTION_RECOVERY_REQUIRED");
+    assert!(refusal.message.contains("escapes its configured root"), "{}", refusal.message);
+    assert_eq!(fixture.applier().recover().unwrap_err().code, "PATH_GENERATED_ROOT_ESCAPE");
     assert!(fixture.read("a.txt").is_none());
     fixture.applier().dropping(Rule::JournalContainment).apply(&rewrite).unwrap();
     assert!(fixture.read("a.txt").is_some());
