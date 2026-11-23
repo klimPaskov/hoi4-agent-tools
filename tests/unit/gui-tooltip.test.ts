@@ -186,11 +186,12 @@ describe('immediate GUI tooltip preview', () => {
           ),
         ).toBe(false);
         const rendered = await renderGuiScene(preview, ['full'], new AbortController().signal);
-        expect(
-          rendered.images[0]!.svg.includes(
-            `<image x="980" y="100" width="160" height="${textHeight + 2 * padding}"`,
+        expect(rendered.images[0]!.svg).toMatch(
+          new RegExp(
+            `<use href="#gui-texture-[0-9a-f]{20}" x="980" y="100" width="160" height="${textHeight + 2 * padding}"/>`,
+            'u',
           ),
-        ).toBe(true);
+        );
         expect(
           rendered.images[0]!.svg.includes(
             `<rect x="${980 + padding}" y="${100 + padding}" width="${160 - 2 * padding}" height="${textHeight}"/>`,
