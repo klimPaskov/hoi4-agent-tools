@@ -118,3 +118,67 @@ describe('GUI font default colour', () => {
     expect(scene.elements.find(({ name }) => name === 'body')?.text?.colour).toBeUndefined();
   });
 });
+
+describe('GUI text_color_code', () => {
+  async function bodyText(box: string, fontBlock: string) {
+    const files = [
+      scanned(
+        'interface/window.gui',
+        `guiTypes = { containerWindowType = { name = "root" size = { width = 200 height = 100 }
+          ${box} } }`,
+      ),
+      scanned('interface/core.gfx', `bitmapfonts = { ${fontBlock} }`),
+      scanned('gfx/fonts/dark_font.fnt', 'info face="dark_font" size=22
+'),
+    ];
+    const scene = await buildGuiScene(
+      buildGuiSourceGraph(files, SymbolIndex.build(files)),
+      files,
+      'root',
+      parsePreviewScenario({ id: 'colour-code', resolution: { width: 320, height: 240 } }),
+    );
+    return scene.elements.find(({ name }) => name === 'body')?.text;
+  }
+  const font =
+    'bitmapfont = { name = "dark_font" fontfiles = { "gfx/fonts/dark_font" } color = 0xff000000 textcolors = { Y = { 10 20 30 } } }';
+  const plainFont =
+    'bitmapfont = { name = "dark_font" fontfiles = { "gfx/fonts/dark_font" } color = 0xff000000 }';
+
+  it("draws the box in its code's colour from the font's own table", async () => {
+    const text = await bodyText(
+      'instantTextBoxType = { name = "body" font = "dark_font" text = "Plain body" text_color_code = "Y" maxWidth = 150 maxHeight = 40 }',
+      font,
+    );
+    expect(text?.colour).toBe('#0a141e');
+  });
+
+  it('falls back to the standard code table when the font declares none', async () => {
+    const text = await bodyText(
+      'instantTextBoxType = { name = "body" font = "dark_font" text = "Plain body" text_color_code = "Y" maxWidth = 150 maxHeight = 40 }',
+      plainFont,
+    );
+    expect(text?.colour).toBe('#ffbd00');
+  });
+
+  it("keeps the font's colour for an unknown code or no code", async () => {
+    for (const code of ['text_color_code = "Q"', '']) {
+      const text = await bodyText(
+        `instantTextBoxType = { name = "body" font = "dark_font" text = "Plain body" ${code} maxWidth = 150 maxHeight = 40 }`,
+        plainFont,
+      );
+      expect(text?.colour).toBe('#000000ff');
+    }
+  });
+
+  it('returns to the code colour after in-text markup ends', async () => {
+    const text = await bodyText(
+      'instantTextBoxType = { name = "body" font = "dark_font" text = "ab§Gcd§!ef" text_color_code = "Y" maxWidth = 150 maxHeight = 40 }',
+      plainFont,
+    );
+    expect(text?.colourRuns?.[0]?.map(({ text: run, colour }) => [run, colour])).toEqual([
+      ['ab', '#ffbd00'],
+      ['cd', '#009f03'],
+      ['ef', '#ffbd00'],
+    ]);
+  });
+});
