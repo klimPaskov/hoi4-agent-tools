@@ -1,0 +1,1 @@
+- `hoi4.gui_render` writes each texture into an SVG once and draws every use of it by reference. A nine-slice texture used to be written nine times per element that drew it, so one large texture shared by a few dozen elements could reach the artifact ceiling (`ARTIFACT_LOGICAL_BATCH_LIMIT`).
