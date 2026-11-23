@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 /// The protocol version in `hello`; bumped when a request or response changes shape.
 pub const PROTOCOL: u32 = 1;
 /// The ops this file answers itself; registered ops may not reuse these names.
-const BUILT_IN_OPS: [&str; 5] = ["hello", "texture.decode", "focus.render", "map.provinces", "index.files"];
+const BUILT_IN_OPS: [&str; 6] = ["hello", "texture.decode", "focus.render", "map.provinces", "index.files", "paths.resolve"];
 
 /// The ops of the ported crates (ADR 0091). Every crate's `register` is called here once, so a
 /// packet adds an op in its own crate without editing this file.
@@ -158,6 +158,10 @@ fn handle(request: &Value, payload: &[u8]) -> Response {
         Some("index.files") => match hoi4_engine::symbol_index::records::respond(request, payload) {
             // The answer can be far larger than a header line may be, so it travels as the payload.
             Ok(result) => Response { result: Ok(json!({ "format": "json" })), payload: result },
+            Err(error) => Response { result: Err(error), payload: Vec::new() },
+        },
+        Some("paths.resolve") => match hoi4_engine::workspace_paths::respond(request) {
+            Ok(result) => Response::ok(result),
             Err(error) => Response { result: Err(error), payload: Vec::new() },
         },
         Some(other) => match registry().dispatch(other, &hoi4_core::ops::OpContext::default(), request, payload) {
