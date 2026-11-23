@@ -166,6 +166,8 @@ fn inventory(directory: &Path) -> Option<Inventory> {
 
 fn normalize(path: &Path) -> PathBuf {
     let text = path.to_string_lossy().into_owned();
+    // A canonical Windows path carries a verbatim prefix; the configured spelling does not.
+    let text = text.strip_prefix(r"\?\").map_or(text.clone(), str::to_owned);
     PathBuf::from(if cfg!(windows) { text.to_lowercase() } else { text })
 }
 
@@ -190,7 +192,18 @@ pub fn sweep_temporary_directories(parent: &Path, options: &SweepOptions, is_ali
     let mut protected: Vec<PathBuf> = Vec::new();
     for protected_root in &options.protected_roots {
         protected.push(PathBuf::from(protected_root));
-        if let Ok(real) = fs::canonicalize(protected_root) {
+        // The nearest existing ancestor is resolved, so a root that is not created yet still matches.
+        let mut existing = PathBuf::from(protected_root);
+        let mut tail = Vec::new();
+        while !existing.exists() {
+            let Some(name) = existing.file_name().map(|name| name.to_owned()) else { break };
+            tail.push(name);
+            if !existing.pop() {
+                break;
+            }
+        }
+        if let Ok(mut real) = fs::canonicalize(&existing) {
+            real.extend(tail.iter().rev());
             protected.push(real);
         }
     }
@@ -297,7 +310,7 @@ mod tests {
     }
 
     fn options() -> SweepOptions {
-        SweepOptions { owned_fixtures_only: true, current_uid: None, ..Default::default() }
+        SweepOptions { owned_fixtures_only: true, current_uid: None, stale_ms: Some(0), now_ms: Some(u64::MAX / 4), ..Default::default() }
     }
 
     #[test]

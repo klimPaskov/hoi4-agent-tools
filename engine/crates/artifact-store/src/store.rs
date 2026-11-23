@@ -1440,16 +1440,17 @@ mod tests {
     fn enforces_single_and_entry_limits_and_chunks_oversized_content() {
         let dir = tempfile::tempdir().unwrap();
         let ws = workspace(dir.path());
-        let store = ArtifactStore::new(StoreLimits { max_bytes: 10_000, max_entries: 50, max_single_bytes: 100 });
-        assert_eq!(store.put_batch(&ws, &[write("big.txt", &[b'x'; 101])], Some(&[])).unwrap_err().code, "ARTIFACT_SINGLE_LIMIT");
-        let content: Vec<u8> = (0..250u32).map(|n| (n % 251) as u8).collect();
+        let store = ArtifactStore::new(StoreLimits { max_bytes: 10_000, max_entries: 50, max_single_bytes: 2000 });
+        assert_eq!(store.put_batch(&ws, &[write("big.txt", &[b'x'; 2001])], Some(&[])).unwrap_err().code, "ARTIFACT_SINGLE_LIMIT");
+        let content: Vec<u8> = (0..5000u32).map(|n| (n % 251) as u8).collect();
         let (logical, physical, _) = store.put_chunked(&ws, &[write("big.bin", &content)], Some(&[])).unwrap();
         assert_eq!(physical.len(), 4);
+        assert_eq!(logical.len(), 1);
         assert_eq!(logical[0].link.mime_type, "application/json");
-        let whole = store.read_logical(&ws, &logical[0].link.uri, "application/json", 1000, 10).unwrap();
+        let whole = store.read_logical(&ws, &logical[0].link.uri, "application/json", 10_000, 10).unwrap();
         assert_eq!(whole.bytes, content);
         assert_eq!(whole.name, "big.bin");
-        let few = ArtifactStore::new(StoreLimits { max_bytes: 10_000, max_entries: 2, max_single_bytes: 100 });
+        let few = ArtifactStore::new(StoreLimits { max_bytes: 10_000, max_entries: 2, max_single_bytes: 2000 });
         assert_eq!(few.put_batch(&ws, &[write("a", b"1"), write("b", b"2"), write("c", b"3")], Some(&[])).unwrap_err().code, "ARTIFACT_STORAGE_LIMIT");
     }
 

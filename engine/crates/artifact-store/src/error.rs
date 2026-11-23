@@ -40,8 +40,3 @@ impl std::fmt::Display for StoreError {
 }
 
 impl std::error::Error for StoreError {}
-
-/// An unexpected I/O failure keeps its text out of the message (no paths reach agents).
-pub fn io_error(code: &'static str, message: &str) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
-    move |_| StoreError::new(code, message)
-}
