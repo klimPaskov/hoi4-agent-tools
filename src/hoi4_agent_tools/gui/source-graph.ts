@@ -91,6 +91,7 @@ const modelledElementAttributes = new Set([
   'text',
   'font',
   'fontSize',
+  'text_color_code',
   'maxWidth',
   'maxHeight',
   'fixedsize',

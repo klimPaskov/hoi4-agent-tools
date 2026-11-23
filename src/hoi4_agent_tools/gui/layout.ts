@@ -2282,10 +2282,15 @@ async function layoutElement(
     if (state === 'missing-localisation') displayText = `\u00a7R${rawText}_MISSING\u00a7!`;
     const fontName = scalarString(property(definition.attributes, 'font', 'buttonFont'));
     const fontDefinition = fontName === undefined ? undefined : catalog.fontDefinition(fontName);
-    const visibleText = visibleHoiText(displayText, {
-      ...context.graph.textColours,
-      ...fontDefinition?.textColours,
-    });
+    const textColours = { ...context.graph.textColours, ...fontDefinition?.textColours };
+    // `text_color_code` names the box's base colour with the same codes as in-text § markup;
+    // an unknown code leaves the font's own colour.
+    const colourCode = scalarString(property(definition.attributes, 'text_color_code'));
+    const baseColour =
+      (colourCode === undefined
+        ? undefined
+        : (textColours[colourCode] ?? hoi4TextColours[colourCode])) ?? fontDefinition?.colour;
+    const visibleText = visibleHoiText(displayText, textColours);
     displayText = visibleText.text;
     context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const resolvedFontMetrics = catalog.resolvedFontMetrics(fontName);
@@ -2405,7 +2410,7 @@ async function layoutElement(
             fontSize * scale,
             context.work,
             resolvedInlineIcons,
-            fontDefinition?.colour ?? defaultTextColour,
+            baseColour ?? defaultTextColour,
           ),
         )
       : undefined;
@@ -2425,7 +2430,7 @@ async function layoutElement(
       metricSource: wrapped.metricSource,
       ...alignment(definition.attributes, embeddedButtonText),
       ...(fontName === undefined ? {} : { fontName }),
-      ...(fontDefinition?.colour === undefined ? {} : { colour: fontDefinition.colour }),
+      ...(baseColour === undefined ? {} : { colour: baseColour }),
       ...(fontDefinition?.borderColour === undefined
         ? {}
         : { borderColour: fontDefinition.borderColour }),
