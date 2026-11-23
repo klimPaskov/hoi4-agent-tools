@@ -301,7 +301,7 @@ pub fn trace(graph: &Value, input: &TraceInput) -> Result<Value, Refusal> {
     }))
 }
 
-fn edges_where<'a>(graph: &'a Value, predicate: impl Fn(&Value) -> bool) -> Vec<&'a Value> {
+fn edges_where(graph: &Value, predicate: impl Fn(&Value) -> bool) -> Vec<&Value> {
     list(graph, "edges").iter().filter(|e| predicate(e)).collect()
 }
 
