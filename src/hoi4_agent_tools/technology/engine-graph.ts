@@ -65,8 +65,8 @@ function wireFile(file: ScannedFile): Record<string, unknown> {
     relativePath: file.relativePath,
     rootKind: file.rootKind,
     loadOrder: file.loadOrder,
-    size: file.size,
-    modifiedMs: file.modifiedMs,
+    size: Math.trunc(file.size),
+    modifiedMs: Math.trunc(file.modifiedMs),
     sha256: file.sha256,
     ...(file.shadowedBy === undefined ? {} : { shadowedBy: file.shadowedBy }),
   };
