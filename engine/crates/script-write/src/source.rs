@@ -131,7 +131,7 @@ fn encode_windows_1252(text: &str) -> WriteResult<Vec<u8>> {
         let byte = if code < 0x80 || (0xA0..=0xFF).contains(&code) {
             Some(code as u8)
         } else {
-            (0x80u8..=0x9F).find(|b| ch != '\u{FFFD}' && hoi4_syntax::encoding::decode(&[*b], hoi4_syntax::Encoding::Windows1252).chars().next() == Some(ch))
+            (0x80u8..=0x9F).find(|b| ch != '\u{FFFD}' && hoi4_syntax::encoding::decode(&[*b], hoi4_syntax::Encoding::Windows1252).starts_with(ch))
         };
         match byte {
             Some(byte) => out.push(byte),
@@ -285,17 +285,8 @@ pub fn indented_body(body: &str, inner: &str, newline: &str) -> String {
     while lines.last().is_some_and(String::is_empty) {
         lines.pop();
     }
-    let common = lines
-        .iter()
-        .filter(|line| !line.is_empty())
-        .map(|line| line.bytes().take_while(|&b| b == b' ' || b == b'\t').count())
-        .min()
-        .unwrap_or(0);
-    lines
-        .iter()
-        .map(|line| if line.is_empty() { String::new() } else { format!("{inner}{}", &line[common..]) })
-        .collect::<Vec<_>>()
-        .join(newline)
+    let common = lines.iter().filter(|line| !line.is_empty()).map(|line| line.bytes().take_while(|&b| b == b' ' || b == b'\t').count()).min().unwrap_or(0);
+    lines.iter().map(|line| if line.is_empty() { String::new() } else { format!("{inner}{}", &line[common..]) }).collect::<Vec<_>>().join(newline)
 }
 
 /// Splits on `\r\n`, `\r` and `\n`.

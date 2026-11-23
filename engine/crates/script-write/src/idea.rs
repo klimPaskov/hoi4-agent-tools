@@ -101,7 +101,9 @@ fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<Located<'b, 't>> {
 fn category_blocks<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
     assignments(root, Some("ideas"))
         .into_iter()
-        .flat_map(|ideas| block_of(ideas).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|ideas| {
+            block_of(ideas).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default()
+        })
         .collect()
 }
 
@@ -125,7 +127,9 @@ pub fn assert_body_is_one_block(id: &str, body: &str, code: &str, what: &str) ->
             format!("The body must be the text between the braces of one {what}: balanced braces and no definition of its own"),
             json!({ "diagnosticCodes": codes }),
         ),
-        Ok(true) => fail(code, format!("The body of {} {what} cannot be empty", if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }), json!({})),
+        Ok(true) => {
+            fail(code, format!("The body of {} {what} cannot be empty", if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }), json!({}))
+        }
         Ok(false) => Ok(()),
     }
 }
@@ -177,7 +181,8 @@ fn category_creation(source: &Source<'_>, input: &IdeaWriteInput, unit: &str, bo
     }
     let category_indent = format!("{}{unit}", line_indent(bytes, source.entry_range(ideas).start));
     let idea_indent = format!("{category_indent}{unit}");
-    let idea_text = format!("{idea_indent}{} = {{{newline}{}{newline}{idea_indent}}}{newline}", input.id, indented_body(body, &format!("{idea_indent}{unit}"), newline));
+    let idea_text =
+        format!("{idea_indent}{} = {{{newline}{}{newline}{idea_indent}}}{newline}", input.id, indented_body(body, &format!("{idea_indent}{unit}"), newline));
     Ok(Replacement {
         start: close_line_start,
         end: close_line_start,
@@ -325,7 +330,11 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
             }
             let category_indent = line_indent(text, source.entry_range(target).start);
             let idea_indent = format!("{category_indent}{unit}");
-            let idea_text = format!("{idea_indent}{} = {{{newline}{}{newline}{idea_indent}}}{newline}", input.id, indented_body(body, &format!("{idea_indent}{unit}"), newline));
+            let idea_text = format!(
+                "{idea_indent}{} = {{{newline}{}{newline}{idea_indent}}}{newline}",
+                input.id,
+                indented_body(body, &format!("{idea_indent}{unit}"), newline)
+            );
             Replacement {
                 start: close_line_start,
                 end: close_line_start,
@@ -392,7 +401,16 @@ pub fn plan_idea_write(bytes: &[u8], path: &str, input: &IdeaWriteInput) -> Writ
     if written.text() != after_text {
         return fail("IDEA_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
     }
-    Ok(IdeaWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
+    Ok(IdeaWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        category,
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edit,
+        untouched_definitions: untouched,
+    })
 }
 
 /// The removal of one definition: its own line when it is alone on it, and a blank line that only
@@ -473,7 +491,8 @@ mod tests {
 
     #[test]
     fn adds_at_the_end_of_a_category_after_a_blank_line() {
-        let result = plan(&input(Operation::Add, "third_spirit", Some("country"), Some("picture = third_spirit\nmodifier = {\n\tstability_factor = 0.05\n}"))).unwrap();
+        let result =
+            plan(&input(Operation::Add, "third_spirit", Some("country"), Some("picture = third_spirit\nmodifier = {\n\tstability_factor = 0.05\n}"))).unwrap();
         let expected = FILE.replace(
             "\t\t\tpicture = second_spirit\n\t\t}\n\t}",
             "\t\t\tpicture = second_spirit\n\t\t}\n\n\t\tthird_spirit = {\n\t\t\tpicture = third_spirit\n\t\t\tmodifier = {\n\t\t\t\tstability_factor = 0.05\n\t\t\t}\n\t\t}\n\t}",
@@ -495,7 +514,19 @@ mod tests {
     fn removes_the_idea_its_line_and_the_blank_line_before() {
         let result = plan(&input(Operation::Remove, "second_spirit", None, None)).unwrap();
         let text = String::from_utf8(result.bytes).unwrap();
-        assert_eq!(text, FILE.replace("\n\t\tsecond_spirit = {\n\t\t\tpicture = second_spirit\n\t\t}\n", "\n"));
+        assert_eq!(
+            text,
+            FILE.replace(
+                "
+
+		second_spirit = {
+			picture = second_spirit
+		}
+",
+                "
+"
+            )
+        );
         assert_eq!(result.untouched_definitions, 1);
     }
 
@@ -529,7 +560,10 @@ mod tests {
         assert_eq!(code(plan(&input(Operation::Remove, "first_spirit", None, Some("a = b")))), "IDEA_WRITE_BODY_UNEXPECTED");
         let twice = FILE.replace("second_spirit", "first_spirit");
         assert_eq!(code(plan_idea_write(twice.as_bytes(), "a.txt", &input(Operation::Remove, "first_spirit", None, None))), "IDEA_WRITE_DUPLICATE_ID");
-        assert_eq!(code(plan_idea_write(b"ideas = { country = {", "a.txt", &input(Operation::Add, "x_one", Some("country"), Some("a = b")))), "IDEA_WRITE_SOURCE_INVALID");
+        assert_eq!(
+            code(plan_idea_write(b"ideas = { country = {", "a.txt", &input(Operation::Add, "x_one", Some("country"), Some("a = b")))),
+            "IDEA_WRITE_SOURCE_INVALID"
+        );
     }
 
     #[test]
@@ -559,7 +593,11 @@ mod tests {
         let rewrite = |before: &[u8]| RewritePlan {
             workspace_id: "w".into(),
             operation_kind: "idea-write".into(),
-            changes: vec![FileChange { path: "a.txt".into(), before_sha256: Some(hoi4_core::canonical::sha256_hex(before)), after: Some(result.bytes.clone()) }],
+            changes: vec![FileChange {
+                path: "a.txt".into(),
+                before_sha256: Some(hoi4_core::canonical::sha256_hex(before)),
+                after: Some(result.bytes.clone()),
+            }],
             diagnostics: Vec::new(),
         };
         assert_eq!(applier.apply(&rewrite(b"other")).unwrap_err().code, "TRANSACTION_STALE");
@@ -588,13 +626,19 @@ mod tests {
         let removed = plan_idea_write(&added.bytes, "a.txt", &input(Operation::Remove, "third_spirit", None, None)).unwrap();
         assert_eq!(removed.bytes, latin);
         // A character Windows-1252 cannot hold is refused, not replaced.
-        assert_eq!(code(plan_idea_write(&latin, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = \u{4e2d}")))), "SOURCE_ENCODING_UNREPRESENTABLE");
+        assert_eq!(
+            code(plan_idea_write(&latin, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = \u{4e2d}")))),
+            "SOURCE_ENCODING_UNREPRESENTABLE"
+        );
     }
 
     #[test]
     fn refuses_a_windows_1252_file_that_would_not_round_trip() {
         let mut lossy = FILE.as_bytes().to_vec();
         lossy.extend_from_slice(b"# \x81\n");
-        assert_eq!(code(plan_idea_write(&lossy, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = x")))), "SOURCE_ENCODING_NOT_ROUND_TRIPPABLE");
+        assert_eq!(
+            code(plan_idea_write(&lossy, "a.txt", &input(Operation::Add, "third_spirit", Some("country"), Some("picture = x")))),
+            "SOURCE_ENCODING_NOT_ROUND_TRIPPABLE"
+        );
     }
 }

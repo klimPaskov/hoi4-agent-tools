@@ -11,8 +11,8 @@ use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, remove_edit};
 use crate::source::{
-    Block, Decoded, Entry, Replacement, Source, Value, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent, line_start,
-    probe_one_block, scalar_of,
+    Block, Decoded, Entry, Replacement, Source, Value, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent,
+    line_start, probe_one_block, scalar_of,
 };
 
 pub const EVENT_KINDS: [&str; 5] = ["country_event", "news_event", "state_event", "unit_leader_event", "operative_leader_event"];
@@ -263,7 +263,11 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
     if input.operation == Operation::Add {
         kind = kind_of(input);
         if let Some(first) = existing.first() {
-            return fail("EVENT_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.event.key.line }));
+            return fail(
+                "EVENT_WRITE_DUPLICATE_ID",
+                format!("{} is already defined in this file", input.id),
+                json!({ "id": input.id, "line": first.event.key.line }),
+            );
         }
         let id_line = checked_body(&kind, &input.id, body)?;
         let wanted = namespace_of(&input.id);
@@ -279,7 +283,12 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
                 let end = source.entry_range(last).end;
                 let line_end_at = text[end..].iter().position(|&b| b == b'\n').map(|at| end + at);
                 let at = line_end_at.map_or(text.len(), |at| at + 1);
-                edits.push(Replacement { start: at, end: at, text: format!("{}add_namespace = {wanted}{newline}", if line_end_at.is_none() { newline } else { "" }), description });
+                edits.push(Replacement {
+                    start: at,
+                    end: at,
+                    text: format!("{}add_namespace = {wanted}{newline}", if line_end_at.is_none() { newline } else { "" }),
+                    description,
+                });
             } else if let Some(first) = source.document.root.entries.first() {
                 let at = line_start(text, Source::item_start(first));
                 edits.push(Replacement { start: at, end: at, text: format!("add_namespace = {wanted}{newline}{newline}"), description });
@@ -322,7 +331,12 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
             let id_line = checked_body(&kind, &input.id, body)?;
             let indent = line_indent(text, range.start);
             let full = block_text(&kind, body, &id_line, &indent, &unit, newline);
-            edits.push(Replacement { start: range.start, end: range.end, text: full[indent.len()..].to_string(), description: format!("replace {}", input.id) });
+            edits.push(Replacement {
+                start: range.start,
+                end: range.end,
+                text: full[indent.len()..].to_string(),
+                description: format!("replace {}", input.id),
+            });
         } else {
             edits.push(remove_edit(&source, &input.id, range.start, range.end, true));
         }
@@ -332,7 +346,11 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
     let written_decoded = Decoded::new(&new_bytes);
     let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("EVENT_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
+        return fail(
+            "EVENT_WRITE_RESULT_INVALID",
+            "The edit would leave the file with syntax errors",
+            json!({ "diagnosticCodes": written.diagnostic_codes() }),
+        );
     }
     let before = definition_texts(&source, skip);
     let after = definition_texts(&written, None);
@@ -347,7 +365,17 @@ pub fn plan_event_write(bytes: &[u8], path: &str, input: &EventWriteInput) -> Wr
             }
         }
     }
-    Ok(EventWritePlan { operation: input.operation, id: input.id.clone(), kind, path: path.to_string(), text: after_text, bytes: new_bytes, edits, untouched_definitions: untouched, namespace_added })
+    Ok(EventWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        kind,
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edits,
+        untouched_definitions: untouched,
+        namespace_added,
+    })
 }
 
 /// The ids of the events in a source, and the namespaces it declares.
@@ -366,7 +394,8 @@ pub fn event_file_contents(bytes: &[u8], path: &str) -> (Vec<String>, Vec<String
 mod tests {
     use super::*;
 
-    const FILE: &str = "add_namespace = my_events\n\ncountry_event = {\n\tid = my_events.1\n\ttitle = x\n}\n\ncountry_event = {\n\tid = my_events.2\n\ttitle = y\n}\n";
+    const FILE: &str =
+        "add_namespace = my_events\n\ncountry_event = {\n\tid = my_events.1\n\ttitle = x\n}\n\ncountry_event = {\n\tid = my_events.2\n\ttitle = y\n}\n";
 
     fn input(operation: Operation, id: &str, body: Option<&str>) -> EventWriteInput {
         EventWriteInput { operation, id: id.into(), kind: None, body: body.map(Into::into), create_namespace: None, namespace_declared: None }

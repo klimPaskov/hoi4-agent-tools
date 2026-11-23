@@ -10,7 +10,10 @@ use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent, line_start};
+use crate::source::{
+    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
+    line_start,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +50,9 @@ impl TechWritePlan {
 fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
     assignments(root, Some("technologies"))
         .into_iter()
-        .flat_map(|technologies| block_of(technologies).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|technologies| {
+            block_of(technologies).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default()
+        })
         .collect()
 }
 
@@ -99,7 +104,9 @@ pub fn plan_new_technology_file(path: &str, input: &TechWriteInput) -> WriteResu
     }
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "TECH_WRITE_BODY_INVALID", "technology")?;
-    let text = ["technologies = {".to_string(), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()].join("\n");
+    let text =
+        ["technologies = {".to_string(), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()]
+            .join("\n");
     let decoded = Decoded::new(text.as_bytes());
     let written = Source::new(&decoded, path);
     if written.has_blocking() {
@@ -170,7 +177,11 @@ pub fn plan_technology_write(bytes: &[u8], path: &str, input: &TechWriteInput) -
             );
         }
         let technology_indent = format!("{}{unit}", line_indent(text, source.entry_range(technologies).start));
-        let technology_text = format!("{technology_indent}{} = {{{newline}{}{newline}{technology_indent}}}{newline}", input.id, indented_body(body, &format!("{technology_indent}{unit}"), newline));
+        let technology_text = format!(
+            "{technology_indent}{} = {{{newline}{}{newline}{technology_indent}}}{newline}",
+            input.id,
+            indented_body(body, &format!("{technology_indent}{unit}"), newline)
+        );
         edit = Replacement {
             start: close_line_start,
             end: close_line_start,
@@ -195,7 +206,11 @@ pub fn plan_technology_write(bytes: &[u8], path: &str, input: &TechWriteInput) -
             Replacement {
                 start: range.start,
                 end: range.end,
-                text: format!("{} = {{{newline}{}{newline}{technology_indent}}}", input.id, indented_body(body, &format!("{technology_indent}{unit}"), newline)),
+                text: format!(
+                    "{} = {{{newline}{}{newline}{technology_indent}}}",
+                    input.id,
+                    indented_body(body, &format!("{technology_indent}{unit}"), newline)
+                ),
                 description: format!("replace {}", input.id),
             }
         } else {
@@ -225,7 +240,15 @@ pub fn plan_technology_write(bytes: &[u8], path: &str, input: &TechWriteInput) -
     if written.text() != after_text {
         return fail("TECH_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
     }
-    Ok(TechWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
+    Ok(TechWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edit,
+        untouched_definitions: untouched,
+    })
 }
 
 #[cfg(test)]
@@ -264,7 +287,10 @@ mod tests {
         assert_eq!(code(plan(&input(Operation::Add, "bad id", Some("a = b")))), "TECH_WRITE_ID_INVALID");
         assert_eq!(code(plan(&input(Operation::Add, "tech_x", Some("a = {")))), "TECH_WRITE_BODY_INVALID");
         assert_eq!(code(plan(&input(Operation::Remove, "tech_alpha", Some("a = b")))), "TECH_WRITE_BODY_UNEXPECTED");
-        assert_eq!(code(plan_technology_write(b"technologies = {} technologies = {}", "a.txt", &input(Operation::Add, "tech_x", Some("a = b")))), "TECH_WRITE_LAYOUT_UNSUPPORTED");
+        assert_eq!(
+            code(plan_technology_write(b"technologies = {} technologies = {}", "a.txt", &input(Operation::Add, "tech_x", Some("a = b")))),
+            "TECH_WRITE_LAYOUT_UNSUPPORTED"
+        );
         assert_eq!(code(plan_technology_write(b"technologies = {", "a.txt", &input(Operation::Add, "tech_x", Some("a = b")))), "TECH_WRITE_SOURCE_INVALID");
     }
 

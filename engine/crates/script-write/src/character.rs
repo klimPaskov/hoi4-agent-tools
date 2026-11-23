@@ -10,7 +10,10 @@ use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent, line_start};
+use crate::source::{
+    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
+    line_start,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +50,9 @@ impl CharacterWritePlan {
 fn definitions<'b, 't>(root: &'b Block<'t>) -> Vec<&'b Entry<'t>> {
     assignments(root, Some("characters"))
         .into_iter()
-        .flat_map(|characters| block_of(characters).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default())
+        .flat_map(|characters| {
+            block_of(characters).map(|block| assignments(block, None).into_iter().filter(|e| block_of(e).is_some()).collect::<Vec<_>>()).unwrap_or_default()
+        })
         .collect()
 }
 
@@ -99,7 +104,9 @@ pub fn plan_new_character_file(path: &str, input: &CharacterWriteInput) -> Write
     }
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "CHARACTER_WRITE_BODY_INVALID", "character")?;
-    let text = ["characters = {".to_string(), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()].join("\n");
+    let text =
+        ["characters = {".to_string(), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()]
+            .join("\n");
     let decoded = Decoded::new(text.as_bytes());
     let written = Source::new(&decoded, path);
     if written.has_blocking() {
@@ -142,7 +149,11 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
     let mut skip = None;
     if input.operation == Operation::Add {
         if let Some(first) = existing.first() {
-            return fail("CHARACTER_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.key.line }));
+            return fail(
+                "CHARACTER_WRITE_DUPLICATE_ID",
+                format!("{} is already defined in this file", input.id),
+                json!({ "id": input.id, "line": first.key.line }),
+            );
         }
         let blocks: Vec<&Entry> = assignments(&source.document.root, Some("characters")).into_iter().filter(|e| block_of(e).is_some()).collect();
         if blocks.len() != 1 {
@@ -170,7 +181,11 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
             );
         }
         let character_indent = format!("{}{unit}", line_indent(text, source.entry_range(characters).start));
-        let character_text = format!("{character_indent}{} = {{{newline}{}{newline}{character_indent}}}{newline}", input.id, indented_body(body, &format!("{character_indent}{unit}"), newline));
+        let character_text = format!(
+            "{character_indent}{} = {{{newline}{}{newline}{character_indent}}}{newline}",
+            input.id,
+            indented_body(body, &format!("{character_indent}{unit}"), newline)
+        );
         edit = Replacement {
             start: close_line_start,
             end: close_line_start,
@@ -207,7 +222,11 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
     let written_decoded = Decoded::new(&new_bytes);
     let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("CHARACTER_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
+        return fail(
+            "CHARACTER_WRITE_RESULT_INVALID",
+            "The edit would leave the file with syntax errors",
+            json!({ "diagnosticCodes": written.diagnostic_codes() }),
+        );
     }
     let before = definition_texts(&source, skip);
     let after = definition_texts(&written, None);
@@ -225,7 +244,15 @@ pub fn plan_character_write(bytes: &[u8], path: &str, input: &CharacterWriteInpu
     if written.text() != after_text {
         return fail("CHARACTER_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
     }
-    Ok(CharacterWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
+    Ok(CharacterWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edit,
+        untouched_definitions: untouched,
+    })
 }
 
 #[cfg(test)]
@@ -264,7 +291,10 @@ mod tests {
         assert_eq!(code(plan(&input(Operation::Add, "bad id", Some("a = b")))), "CHARACTER_WRITE_ID_INVALID");
         assert_eq!(code(plan(&input(Operation::Add, "ONE_x", Some("a = {")))), "CHARACTER_WRITE_BODY_INVALID");
         assert_eq!(code(plan(&input(Operation::Remove, "ONE_alpha", Some("a = b")))), "CHARACTER_WRITE_BODY_UNEXPECTED");
-        assert_eq!(code(plan_character_write(b"characters = {} characters = {}", "a.txt", &input(Operation::Add, "ONE_x", Some("a = b")))), "CHARACTER_WRITE_LAYOUT_UNSUPPORTED");
+        assert_eq!(
+            code(plan_character_write(b"characters = {} characters = {}", "a.txt", &input(Operation::Add, "ONE_x", Some("a = b")))),
+            "CHARACTER_WRITE_LAYOUT_UNSUPPORTED"
+        );
         assert_eq!(code(plan_character_write(b"characters = {", "a.txt", &input(Operation::Add, "ONE_x", Some("a = b")))), "CHARACTER_WRITE_SOURCE_INVALID");
     }
 

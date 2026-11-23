@@ -11,7 +11,9 @@ use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent};
+use crate::source::{
+    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, block_of, fail, indented_body, key_of, line_indent,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,7 +141,11 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
     let mut skip = None;
     if input.operation == Operation::Add {
         if let Some(first) = existing.first() {
-            return fail("DOCTRINE_WRITE_DUPLICATE_ID", format!("{} is already defined in this file", input.id), json!({ "id": input.id, "line": first.key.line }));
+            return fail(
+                "DOCTRINE_WRITE_DUPLICATE_ID",
+                format!("{} is already defined in this file", input.id),
+                json!({ "id": input.id, "line": first.key.line }),
+            );
         }
         let lead = if text.is_empty() { String::new() } else { format!("{}{newline}", if text.ends_with(b"\n") { "" } else { newline }) };
         edit = Replacement {
@@ -178,7 +184,11 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
     let written_decoded = Decoded::new(&new_bytes);
     let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("DOCTRINE_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
+        return fail(
+            "DOCTRINE_WRITE_RESULT_INVALID",
+            "The edit would leave the file with syntax errors",
+            json!({ "diagnosticCodes": written.diagnostic_codes() }),
+        );
     }
     let before = definition_texts(&source, skip);
     let after = definition_texts(&written, None);
@@ -196,7 +206,15 @@ pub fn plan_doctrine_write(bytes: &[u8], path: &str, input: &DoctrineWriteInput)
     if written.text() != after_text {
         return fail("DOCTRINE_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
     }
-    Ok(DoctrineWritePlan { operation: input.operation, id: input.id.clone(), path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
+    Ok(DoctrineWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edit,
+        untouched_definitions: untouched,
+    })
 }
 
 #[cfg(test)]

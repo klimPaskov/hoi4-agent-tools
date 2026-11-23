@@ -43,11 +43,8 @@ fn idea_plan(_: &OpContext, request: &Value, payload: &[u8]) -> OpResponse {
         Ok(request) => request,
         Err(response) => return response,
     };
-    let plan = if request.new_file {
-        idea::plan_new_idea_file(&request.path, &request.input)
-    } else {
-        idea::plan_idea_write(payload, &request.path, &request.input)
-    };
+    let plan =
+        if request.new_file { idea::plan_new_idea_file(&request.path, &request.input) } else { idea::plan_idea_write(payload, &request.path, &request.input) };
     respond(plan.map(|plan| (plan.to_json(), plan.bytes)))
 }
 

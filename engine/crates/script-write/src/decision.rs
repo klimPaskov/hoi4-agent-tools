@@ -10,7 +10,10 @@ use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
-use crate::source::{Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent, line_start};
+use crate::source::{
+    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
+    line_start,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +126,9 @@ pub fn plan_new_decision_file(path: &str, input: &DecisionWriteInput) -> WriteRe
     };
     let body = input.body.as_deref().unwrap_or_default();
     assert_body_is_one_block(&input.id, body, "DECISION_WRITE_BODY_INVALID", "decision")?;
-    let text = [format!("{category} = {{"), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()].join("\n");
+    let text =
+        [format!("{category} = {{"), format!("\t{} = {{", input.id), indented_body(body, "\t\t", "\n"), "\t}".to_string(), "}".to_string(), String::new()]
+            .join("\n");
     let decoded = Decoded::new(text.as_bytes());
     let written = Source::new(&decoded, path);
     if written.has_blocking() {
@@ -227,7 +232,11 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
                 );
             }
             let decision_indent = format!("{}{unit}", line_indent(text, source.entry_range(target).start));
-            let decision_text = format!("{decision_indent}{} = {{{newline}{}{newline}{decision_indent}}}{newline}", input.id, indented_body(body, &format!("{decision_indent}{unit}"), newline));
+            let decision_text = format!(
+                "{decision_indent}{} = {{{newline}{}{newline}{decision_indent}}}{newline}",
+                input.id,
+                indented_body(body, &format!("{decision_indent}{unit}"), newline)
+            );
             Replacement {
                 start: close_line_start,
                 end: close_line_start,
@@ -275,7 +284,11 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
     let written_decoded = Decoded::new(&new_bytes);
     let written = Source::new(&written_decoded, path);
     if written.has_blocking() {
-        return fail("DECISION_WRITE_RESULT_INVALID", "The edit would leave the file with syntax errors", json!({ "diagnosticCodes": written.diagnostic_codes() }));
+        return fail(
+            "DECISION_WRITE_RESULT_INVALID",
+            "The edit would leave the file with syntax errors",
+            json!({ "diagnosticCodes": written.diagnostic_codes() }),
+        );
     }
     let before = definition_texts(&source, skip);
     let after = definition_texts(&written, None);
@@ -293,7 +306,16 @@ pub fn plan_decision_write(bytes: &[u8], path: &str, input: &DecisionWriteInput)
     if written.text() != after_text {
         return fail("DECISION_WRITE_RESULT_INVALID", "The written file does not match the planned edit", json!({}));
     }
-    Ok(DecisionWritePlan { operation: input.operation, id: input.id.clone(), category, path: path.to_string(), text: after_text, bytes: new_bytes, edit, untouched_definitions: untouched })
+    Ok(DecisionWritePlan {
+        operation: input.operation,
+        id: input.id.clone(),
+        category,
+        path: path.to_string(),
+        text: after_text,
+        bytes: new_bytes,
+        edit,
+        untouched_definitions: untouched,
+    })
 }
 
 /// The category blocks of a `common/decisions` file, or none when the file cannot be parsed.
