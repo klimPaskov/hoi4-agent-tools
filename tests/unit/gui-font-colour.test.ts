@@ -3,7 +3,10 @@ import { SymbolIndex } from '../../src/hoi4_agent_tools/core/index.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
 import { buildGuiScene } from '../../src/hoi4_agent_tools/gui/layout.js';
-import { buildGuiSourceGraph } from '../../src/hoi4_agent_tools/gui/source-graph.js';
+import {
+  buildGuiSourceGraph,
+  guiElementAttributeFidelity,
+} from '../../src/hoi4_agent_tools/gui/source-graph.js';
 import { parsePreviewScenario } from '../../src/hoi4_agent_tools/gui/scenario.js';
 
 function scanned(displayPath: string, content: string): ScannedFile {
@@ -128,8 +131,7 @@ describe('GUI text_color_code', () => {
           ${box} } }`,
       ),
       scanned('interface/core.gfx', `bitmapfonts = { ${fontBlock} }`),
-      scanned('gfx/fonts/dark_font.fnt', 'info face="dark_font" size=22
-'),
+      scanned('gfx/fonts/dark_font.fnt', 'info face="dark_font" size=22\n'),
     ];
     const scene = await buildGuiScene(
       buildGuiSourceGraph(files, SymbolIndex.build(files)),
@@ -150,6 +152,10 @@ describe('GUI text_color_code', () => {
       font,
     );
     expect(text?.colour).toBe('#0a141e');
+  });
+
+  it('counts text_color_code as a modelled attribute', () => {
+    expect(guiElementAttributeFidelity('text_color_code', 'instantTextBoxType')).toBe('modelled');
   });
 
   it('falls back to the standard code table when the font declares none', async () => {
