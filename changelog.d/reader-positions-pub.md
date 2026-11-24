@@ -1,1 +1,0 @@
-- The engine's TypeScript-compatible source reader now exposes its position table and a per-document token count, so the pieces moving to Rust (ADR 0089, ADR 0091) report source locations and token ceilings exactly as the TypeScript server does. No tool changes its behavior.

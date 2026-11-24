@@ -1,1 +1,0 @@
-- Adds the synthetic symbol index fixture to `engine/fixtures/symbol-index/` for the Rust engine port. The file is copied unchanged from `tests/fixtures/symbol-index/expected.json`. No runtime behavior changes.

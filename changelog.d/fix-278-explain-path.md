@@ -1,1 +1,0 @@
-- Fixed `hoi4.event_inspect` `explain_path` reporting no path between two events that the trace shows connected through a scripted-effect helper (issue 278). With helpers collapsed, the path search on a focused graph read only the helper-free edges and so skipped every route through a helper; it now collapses helpers lazily, as the trace does.
