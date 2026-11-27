@@ -2,12 +2,12 @@
 
 Sources this crate adapts, one row per adapted file. All sources are this repository's own TypeScript at commit `9b7dc80d`.
 
-| Rust file               | Adapted from                                                                                                                                   | Commit     |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `src/pos.rs`            | `engine/crates/engine/src/symbol_index/records.rs` (`Positions`), which ports `core/source/lexer.ts` (`createSourceLineIndex`, `positionAt`)    | `9b7dc80d` |
-| `src/source_analysis.rs` | `src/hoi4_agent_tools/technology/source-analysis.ts` (`analyzeTechnologySource`, its parsers, `technologySourceFiles`)                         | `9b7dc80d` |
-| `src/graph.rs`          | `src/hoi4_agent_tools/technology/graph.ts` (`technologyGraphAnalysis`, `diagnose`, `enrichPlacements`, `expandHelperReferences`) and `core/dependency-walk.ts` (`DependencyWalk.advance`, path policy) | `9b7dc80d` |
-| `src/queries.rs`        | `src/hoi4_agent_tools/technology/queries.ts` (every exported query and `technologyExplainSummary`)                                              | `9b7dc80d` |
+| Rust file                | Adapted from                                                                                                                                                                                           | Commit     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `src/pos.rs`             | `engine/crates/engine/src/symbol_index/records.rs` (`Positions`), which ports `core/source/lexer.ts` (`createSourceLineIndex`, `positionAt`)                                                           | `9b7dc80d` |
+| `src/source_analysis.rs` | `src/hoi4_agent_tools/technology/source-analysis.ts` (`analyzeTechnologySource`, its parsers, `technologySourceFiles`)                                                                                 | `9b7dc80d` |
+| `src/graph.rs`           | `src/hoi4_agent_tools/technology/graph.ts` (`technologyGraphAnalysis`, `diagnose`, `enrichPlacements`, `expandHelperReferences`) and `core/dependency-walk.ts` (`DependencyWalk.advance`, path policy) | `9b7dc80d` |
+| `src/queries.rs`         | `src/hoi4_agent_tools/technology/queries.ts` (every exported query and `technologyExplainSummary`)                                                                                                     | `9b7dc80d` |
 
 ## Differences from the TypeScript
 

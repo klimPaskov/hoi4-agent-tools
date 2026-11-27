@@ -58,11 +58,13 @@ if (!('path' in located)) {
 const hello = await sharedResidentEngine().request('hello', {}, undefined, {});
 const ops =
   hello.ok && Array.isArray((hello.response.result as { ops?: unknown }).ops)
-    ? ((hello.response.result as { ops: string[] }).ops)
+    ? (hello.response.result as { ops: string[] }).ops
     : [];
 for (const op of ['tech.analyze', 'tech.graph', 'tech.query'])
   if (!ops.includes(op)) {
-    process.stderr.write(`The engine at ${located.path} does not list ${op}; build this branch's own engine.\n`);
+    process.stderr.write(
+      `The engine at ${located.path} does not list ${op}; build this branch's own engine.\n`,
+    );
     process.exit(2);
   }
 
@@ -74,8 +76,23 @@ const corpora = corpusFileSchema
 
 type Json = Record<string, unknown>;
 const sections = [
-  'technologies', 'folders', 'placements', 'gridboxes', 'itemLayouts', 'yearMarkers', 'backgrounds', 'edges', 'categories',
-  'doctrineDefinitions', 'unlockTargets', 'unlocks', 'externalReferences', 'helperCalls', 'issues', 'diagnostics', 'unresolved',
+  'technologies',
+  'folders',
+  'placements',
+  'gridboxes',
+  'itemLayouts',
+  'yearMarkers',
+  'backgrounds',
+  'edges',
+  'categories',
+  'doctrineDefinitions',
+  'unlockTargets',
+  'unlocks',
+  'externalReferences',
+  'helperCalls',
+  'issues',
+  'diagnostics',
+  'unresolved',
 ] as const;
 
 function compareSection(before: unknown[], after: unknown[], samples: number) {
@@ -111,7 +128,14 @@ function compareSection(before: unknown[], after: unknown[], samples: number) {
       onlyEngine += group.length;
       if (examples.length < samples) examples.push({ key, only: 'engine', value: group[0] });
     }
-  return { typescript: before.length, engine: after.length, onlyTypescript, onlyEngine, changed, examples };
+  return {
+    typescript: before.length,
+    engine: after.length,
+    onlyTypescript,
+    onlyEngine,
+    changed,
+    examples,
+  };
 }
 
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-tech-parity-'));
@@ -137,14 +161,20 @@ try {
         version: 1,
         serverStateRoot: path.join(temporary, 'state', corpus.id),
         workspaces: [
-          { id: 'parity', name: corpus.name, root, ...(gameRoot === undefined ? {} : { gameRoot }) },
+          {
+            id: 'parity',
+            name: corpus.name,
+            root,
+            ...(gameRoot === undefined ? {} : { gameRoot }),
+          },
         ],
       }),
     );
     const engine = new CoreEngine(resolver);
     const workspace = resolver.get('parity');
     const snapshot = await scanTechnologySources(engine, 'parity', workspace);
-    const analysisMode = corpus.kind === 'game' || snapshot.files.length > 1_000 ? ('focused' as const) : undefined;
+    const analysisMode =
+      corpus.kind === 'game' || snapshot.files.length > 1_000 ? ('focused' as const) : undefined;
     const options = {
       workspaceIdentity: workspace.workspaceIdentity,
       ...(analysisMode === undefined ? {} : { analysisMode }),
@@ -158,7 +188,8 @@ try {
       const fields = technology.unsupportedFields as Json[] | undefined;
       if (fields !== undefined)
         technology.unsupportedFields = fields.filter(
-          (entry) => !(entry.field === 'force_use_small_tech_layout' && entry.expression === undefined),
+          (entry) =>
+            !(entry.field === 'force_use_small_tech_layout' && entry.expression === undefined),
         );
     }
     const typescriptMs = Math.round(performance.now() - started);
@@ -178,9 +209,12 @@ try {
       if (result.onlyTypescript + result.onlyEngine + result.changed > 0) corpusDiffers = true;
     }
     const scalars = ['revision', 'complete', 'analysisMode', 'skippedSourceCount'] as const;
-    const scalarDifferences = scalars.filter((key) => canonicalJson(expected[key]) !== canonicalJson(actual[key]));
+    const scalarDifferences = scalars.filter(
+      (key) => canonicalJson(expected[key]) !== canonicalJson(actual[key]),
+    );
     for (const key of ['statistics', 'sourceHashes', 'filesScanned', 'analysisBoundary'] as const)
-      if (canonicalJson(expected[key]) !== canonicalJson(actual[key])) scalarDifferences.push(key as never);
+      if (canonicalJson(expected[key]) !== canonicalJson(actual[key]))
+        scalarDifferences.push(key as never);
     entry.scalarDifferences = scalarDifferences;
     if (scalarDifferences.length > 0) corpusDiffers = true;
     entry.differs = corpusDiffers;

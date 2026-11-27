@@ -217,7 +217,9 @@ function sharedState(engine: CoreEngine): SharedTechnologyState {
   return state;
 }
 
-export function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['get']>): string[] {
+export function technologyScanPatterns(
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+): string[] {
   const roots = workspace.registration.roots;
   const under = (values: readonly string[], glob: string): string[] =>
     values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
@@ -878,7 +880,10 @@ export class TechnologyTreeViewer {
     if (input.mode === 'explain' && input.technologyId === undefined)
       throw new ServiceError('TECHNOLOGY_REQUIRED', 'Technology explanation requires technologyId');
     if (input.mode === 'impact' && input.impact === undefined)
-      throw new ServiceError('TECH_IMPACT_REQUIRED', 'Technology impact analysis requires a subject');
+      throw new ServiceError(
+        'TECH_IMPACT_REQUIRED',
+        'Technology impact analysis requires a subject',
+      );
     const answer = await queryTechnologyGraph(graph, {
       mode: input.mode,
       ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
@@ -955,7 +960,9 @@ export class TechnologyTreeViewer {
       report,
       reportJson,
       artifacts: [artifact, ...(graphArtifact === undefined ? [] : [graphArtifact])],
-      ...(answer.summary === undefined || answer.summary === null ? {} : { explainSummary: answer.summary }),
+      ...(answer.summary === undefined || answer.summary === null
+        ? {}
+        : { explainSummary: answer.summary }),
     };
   }
 
