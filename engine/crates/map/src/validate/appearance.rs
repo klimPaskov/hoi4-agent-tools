@@ -198,7 +198,8 @@ pub fn land_distance_field(kind: &[u8], width: usize, height: usize, limit: u8) 
     distance
 }
 
-fn check_size(index: &MapIndex, file: usize, image: &BmpImage, kinds: &Kinds, out: &mut Findings, code: &str, expected_width: f64, expected_height: f64) {
+fn check_size(index: &MapIndex, file: usize, image: &BmpImage, kinds: &Kinds, out: &mut Findings, code: &str, expected: (f64, f64)) {
+    let (expected_width, expected_height) = expected;
     if f64::from(image.width) != expected_width || f64::from(image.height) != expected_height {
         out.map(
             code,
@@ -234,7 +235,7 @@ fn validate_heightmap(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
         return format_error(index, file, out, "MAP_HEIGHT_FORMAT", "must be an 8-bit greyscale bitmap", image.bits_per_pixel);
     }
     if image.width != kinds.width || image.height != kinds.height {
-        return check_size(index, file, &image, kinds, out, "MAP_HEIGHT_SIZE", f64::from(kinds.width), f64::from(kinds.height));
+        return check_size(index, file, &image, kinds, out, "MAP_HEIGHT_SIZE", (f64::from(kinds.width), f64::from(kinds.height)));
     }
     let (width, height) = (kinds.width as usize, kinds.height as usize);
     let distance = kinds.kind.contains(&LAKE).then(|| land_distance_field(&kinds.kind, width, height, LAKE_BANK_ALLOWANCE_PX + 1));
@@ -369,7 +370,7 @@ fn validate_terrain_bitmap(index: &MapIndex, kinds: &Kinds, out: &mut Findings) 
         return format_error(index, file, out, "MAP_TERRAIN_BITMAP_FORMAT", "must be an 8-bit indexed bitmap", image.bits_per_pixel);
     }
     if image.width != kinds.width || image.height != kinds.height {
-        return check_size(index, file, &image, kinds, out, "MAP_TERRAIN_BITMAP_SIZE", f64::from(kinds.width), f64::from(kinds.height));
+        return check_size(index, file, &image, kinds, out, "MAP_TERRAIN_BITMAP_SIZE", (f64::from(kinds.width), f64::from(kinds.height)));
     }
     let Some(entries) = graphical_terrain(index) else { return };
     let mut by_index: HashMap<u64, &TerrainEntry> = HashMap::new();
@@ -452,7 +453,7 @@ fn validate_rivers(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
         );
     }
     if image.width != kinds.width || image.height != kinds.height {
-        return check_size(index, file, &image, kinds, out, "MAP_RIVER_SIZE", f64::from(kinds.width), f64::from(kinds.height));
+        return check_size(index, file, &image, kinds, out, "MAP_RIVER_SIZE", (f64::from(kinds.width), f64::from(kinds.height)));
     }
     let (width, height) = (kinds.width as usize, kinds.height as usize);
     let river = |v: u8| v <= 11;
@@ -595,14 +596,14 @@ fn validate_river_sources(index: &MapIndex, file: usize, image: &BmpImage, out: 
     let mut order: Vec<usize> = Vec::new();
     let mut sources: HashMap<usize, u64> = HashMap::new();
     let mut first_of: HashMap<usize, usize> = HashMap::new();
-    for i in 0..count {
+    for (i, &offset) in offsets.iter().enumerate().take(count) {
         let root = find(&mut parent, i);
-        first_of.entry(root).or_insert(offsets[i]);
-        let (x, y) = (offsets[i] % width, offsets[i] / width);
+        first_of.entry(root).or_insert(offset);
+        let (x, y) = (offset % width, offset / width);
         let source = row_of(image, y as u32)[x] == 0;
-        if !sources.contains_key(&root) {
+        if let std::collections::hash_map::Entry::Vacant(slot) = sources.entry(root) {
             order.push(root);
-            sources.insert(root, 0);
+            slot.insert(0);
         }
         if source {
             *sources.get_mut(&root).unwrap_or(&mut 0) += 1;
@@ -647,7 +648,7 @@ fn validate_trees(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
     let expected_width = (f64::from(kinds.width) * 75.0 / 256.0 + 0.5).floor();
     let expected_height = (f64::from(kinds.height) * 75.0 / 256.0 + 0.5).floor();
     if f64::from(image.width) != expected_width || f64::from(image.height) != expected_height {
-        return check_size(index, file, &image, kinds, out, "MAP_TREES_SIZE", expected_width, expected_height);
+        return check_size(index, file, &image, kinds, out, "MAP_TREES_SIZE", (expected_width, expected_height));
     }
     let (rw, rh) = (f64::from(kinds.width), f64::from(kinds.height));
     let (iw, ih) = (f64::from(image.width), f64::from(image.height));
@@ -858,7 +859,7 @@ fn land_colour_statistics(index: &MapIndex, file: usize, pixels: &Pixels, kinds:
     let deviation = (value_squares / c - mean * mean).max(0.0).sqrt();
     let distinct_minimum = COLORMAP_DISTINCT_MINIMUM.min((land_count / 100) as usize);
     let mut problems = Vec::new();
-    if mean < COLORMAP_MEAN_VALUE_RANGE[0] || mean > COLORMAP_MEAN_VALUE_RANGE[1] {
+    if !(COLORMAP_MEAN_VALUE_RANGE[0]..=COLORMAP_MEAN_VALUE_RANGE[1]).contains(&mean) {
         problems.push(format!("mean value {} is outside 50 to 100 (the base game's is 74; a brighter colour map leaves the atlas pale)", js_to_fixed(mean, 0)));
     }
     if distinct.len() < distinct_minimum {
@@ -886,7 +887,7 @@ fn validate_normals(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
     }
     let (ew, eh) = (f64::from(kinds.width) / 2.0, f64::from(kinds.height) / 2.0);
     if f64::from(image.width) != ew || f64::from(image.height) != eh {
-        return check_size(index, file, &image, kinds, out, "MAP_NORMAL_SIZE", ew, eh);
+        return check_size(index, file, &image, kinds, out, "MAP_NORMAL_SIZE", (ew, eh));
     }
     let (mut sampled, mut not_unit) = (0u64, 0u64);
     for y in (0..image.height).step_by(4) {
@@ -987,7 +988,7 @@ fn validate_cities(index: &MapIndex, kinds: &Kinds, out: &mut Findings) {
         return format_error(index, file, out, "MAP_CITIES_FORMAT", "must be an 8-bit indexed bitmap", image.bits_per_pixel);
     }
     if image.width != kinds.width || image.height != kinds.height {
-        return check_size(index, file, &image, kinds, out, "MAP_CITIES_SIZE", f64::from(kinds.width), f64::from(kinds.height));
+        return check_size(index, file, &image, kinds, out, "MAP_CITIES_SIZE", (f64::from(kinds.width), f64::from(kinds.height)));
     }
     let mut counts = [0u64; 256];
     for y in 0..image.height {

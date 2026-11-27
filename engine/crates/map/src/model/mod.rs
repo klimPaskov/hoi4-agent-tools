@@ -646,13 +646,13 @@ impl MapIndex {
         for (i, definition) in self.definitions.iter().enumerate() {
             self.duplicate_ids.entry(definition.id, Vec::new).push(i);
             self.duplicate_colors.entry(definition.color.key(), Vec::new).push(i);
-            if !self.definitions_by_id.contains_key(&definition.id) {
-                self.definitions_by_id.insert(definition.id, i);
+            if let std::collections::hash_map::Entry::Vacant(slot) = self.definitions_by_id.entry(definition.id) {
+                slot.insert(i);
                 self.definition_ids_in_order.push(definition.id);
             }
             let packed = definition.color.packed();
-            if !self.definitions_by_color.contains_key(&packed) {
-                self.definitions_by_color.insert(packed, i);
+            if let std::collections::hash_map::Entry::Vacant(slot) = self.definitions_by_color.entry(packed) {
+                slot.insert(i);
                 self.definition_colors_in_order.push(packed);
             }
         }

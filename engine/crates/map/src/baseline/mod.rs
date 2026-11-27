@@ -70,6 +70,9 @@ fn province_ids_in(value: &Value, into: &mut Vec<i64>) {
     }
 }
 
+/// Normalizes a diagnostic path to the workspace form, or `None` outside the workspace.
+type Normalizer<'n> = Box<dyn Fn(&str) -> Option<String> + 'n>;
+
 /// The objects a map write changes (`MapWriteFootprint`).
 pub struct Footprint<'n> {
     /// Workspace-relative paths the write changes, normalized as diagnostic paths are.
@@ -79,7 +82,7 @@ pub struct Footprint<'n> {
     /// Every province counts as touched (the bitmap changed size or could not be compared).
     pub all_provinces: bool,
     definition_rows: HashMap<String, HashMap<usize, i64>>,
-    normalize: Box<dyn Fn(&str) -> Option<String> + 'n>,
+    normalize: Normalizer<'n>,
 }
 
 impl Footprint<'_> {

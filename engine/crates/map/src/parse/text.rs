@@ -181,7 +181,7 @@ pub fn parse_integer(value: Option<&str>) -> Option<i64> {
     }
     let parsed: f64 = trimmed.parse().ok()?;
     const SAFE: f64 = 9_007_199_254_740_991.0;
-    (parsed.abs() <= SAFE).then(|| parsed as i64)
+    (parsed.abs() <= SAFE).then_some(parsed as i64)
 }
 
 /// `parseNumber`: `-?(?:\d+(?:\.\d*)?|\.\d+)` after trimming, finite.
