@@ -95,3 +95,4 @@ Implementation rationale for contributors. For using the server, start with the 
 85. [Agent Tools 5.0.0 is one Rust program](0089-agent-tools-5-all-rust.md)
 86. [A stated baseline for map writes over pre-existing errors](0090-stated-map-baseline.md)
 87. [Contracts for porting to Rust in parallel](0091-parallel-port-contracts.md)
+88. [The stdio server answers before the workspaces load](0092-stdio-answers-before-workspaces-load.md)

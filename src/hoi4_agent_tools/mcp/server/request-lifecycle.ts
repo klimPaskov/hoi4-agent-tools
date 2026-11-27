@@ -6,6 +6,7 @@ import { normalizeToolArguments } from '../../schemas/lenient-arguments.js';
 import { referenceTools } from '../tools/reference.js';
 import { jobControlTools } from '../tools/job.js';
 import { invalidArgumentsResult } from './argument-errors.js';
+import { startupFailureResult } from './startup-failure.js';
 import { taskToolCatalog } from './task-tool-catalog.js';
 import type { ToolDefinition } from './task-tool-definition.js';
 import { jobProgressReporter, progressReporter, withProgressHeartbeat } from './progress.js';
@@ -49,6 +50,8 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
         request as { params?: { name?: unknown; arguments?: unknown; task?: unknown } }
       ).params;
       if (params !== undefined && typeof params.name === 'string') {
+        const failed = startupFailureResult(engine, params.name);
+        if (failed !== undefined) return Promise.resolve(failed);
         params.arguments = normalizeToolArguments(params.name, params.arguments);
         // Answer invalid arguments with a tool error that names the fields and a working call.
         const schema = params.task === undefined ? inputSchema(params.name) : undefined;
