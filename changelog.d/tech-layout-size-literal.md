@@ -1,1 +1,0 @@
-- Fixed `hoi4.tech_inspect` reporting `force_use_small_tech_layout` as an unsupported field on every technology without it or with `= no`. Only a value that is not a literal `yes` or `no` is reported now.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 4.20.3 - 2026-11-27
+
+- Fixed recovery of an interrupted rewrite of more than 1,024 files, which failed with `TRANSACTION_MANIFEST_INVALID` and blocked rewrites of that workspace. Such rewrites replace files in batches of up to 256, but the journal check accepted at most 16 pending files per batch.
+- The MCP transport has started its move to Rust (ADR 0089 step 8, packet P15): the new `hoi4-server` crate holds the stdio and Streamable HTTP transports with bearer authentication (static tokens and the OAuth claim rules), Origin, Host and request-target checks, principal-to-workspace grants, request, body, rate, session and stream limits, credential-bound session isolation and the protocol gate. Its negative tests are ported from the TypeScript transport and drive the server over TCP. Nothing calls it yet: the TypeScript server stays the server until the tools are wired.
+- The stdio server answers `initialize` and `tools/list` before it has loaded the workspaces (issue 292). It used to resolve every mod under the configured mod roots first, which took 14.6 s with one real configuration and up to 26 s with six servers starting at once, so a client with a startup timeout showed the server connected with no tools. The server now reads the configuration, answers the handshake and the tool list from its profiles and plugins, and loads the workspaces in the background; a tool call, a resource read or any other request that needs a workspace waits for the loading, as it already waited for journal recovery. A configuration or workspace error that used to stop the server at startup no longer ends the process: it is written to stderr as a `startup_failed` event with the same `code`, and each call that needs a workspace fails with that code (for example `CONFIG_READ_FAILED`, `CONFIG_INVALID`, `WORKSPACE_MOD_ROOT_UNSAFE`). The HTTP server still loads everything before it listens. `createEngine` gets a `workspaces: 'background'` option for this, and `WorkspaceResolver` gets `prepare` and `populate`, the two halves of `create`.
+- Fixed `hoi4.tech_inspect` reporting `force_use_small_tech_layout` as an unsupported field on every technology without it or with `= no`. Only a value that is not a literal `yes` or `no` is reported now.
+
 ## 4.20.2 - 2026-11-27
 
 - Fixed `hoi4.gui_inspect` and `hoi4.gui_render` refusing with `GUI_LOCALISATION_BUDGET_BLOCKED` on a mod that has `localisation/replace/` files in many languages. Since 4.20.1 the scan read the replace files of every language. It now reads only those of the preview's languages (`replace/**/*_l_<language>.yml`), so replace files in other languages no longer count toward the 500,000-candidate ceiling.
