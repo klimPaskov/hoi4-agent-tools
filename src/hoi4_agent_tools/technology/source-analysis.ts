@@ -507,11 +507,12 @@ function parseTechnologyDefinitions(
             'The source coordinate expression is not a resolvable file-local numeric constant',
         }))
         .concat(
-          layoutSize === 'unknown'
+          // A missing field and a literal `no` are both plain sources, not unsupported ones.
+          layoutExpression !== undefined && smallLayout === undefined
             ? [
                 {
                   field: 'force_use_small_tech_layout',
-                  expression: layoutExpression!,
+                  expression: layoutExpression,
                   location: nodeLocation(document, block, id),
                   reason: 'The technology layout-size expression is not a literal yes or no',
                 },
