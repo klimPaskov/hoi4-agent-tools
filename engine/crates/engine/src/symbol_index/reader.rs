@@ -1048,7 +1048,8 @@ e = 4";
         let document = parse(text);
         let operators: Vec<&str> = document.root.assignments().map(|a| &text[a.operator.0 as usize..a.operator.1 as usize]).collect();
         assert_eq!(operators, ["=", "<=", "?=", "="]);
-        let inner: Vec<&str> = document.root.child_blocks("c").flat_map(|b| b.assignments()).map(|a| &text[a.operator.0 as usize..a.operator.1 as usize]).collect();
+        let inner: Vec<&str> =
+            document.root.child_blocks("c").flat_map(|b| b.assignments()).map(|a| &text[a.operator.0 as usize..a.operator.1 as usize]).collect();
         assert_eq!(inner, [">"]);
     }
 
