@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { sharedResidentEngine } from '../src/hoi4_agent_tools/core/resident-engine.js';
 import { ServiceError } from '../src/hoi4_agent_tools/core/result.js';
+import type * as NewSourceModule from '../src/hoi4_agent_tools/core/source/index.js';
 
 /**
  * Parity check for the script writers on the Rust engine (ADR 0089, packet P10). For every file of
@@ -65,25 +66,73 @@ interface Writer {
 
 async function load(rel: string, name: string): Promise<Record<string, unknown>> {
   void name;
-  return (await import(pathToFileURL(path.join(oldRoot, 'src/hoi4_agent_tools', rel)).href)) as Record<
+  return (await import(
+    pathToFileURL(path.join(oldRoot, 'src/hoi4_agent_tools', rel)).href
+  )) as Record<string, unknown>;
+}
+async function loadNew(rel: string): Promise<Record<string, unknown>> {
+  return (await import(pathToFileURL(path.resolve('src/hoi4_agent_tools', rel)).href)) as Record<
     string,
     unknown
   >;
 }
-async function loadNew(rel: string): Promise<Record<string, unknown>> {
-  return (await import(
-    pathToFileURL(path.resolve('src/hoi4_agent_tools', rel)).href
-  )) as Record<string, unknown>;
-}
 
 const writers: Writer[] = [];
 for (const [domain, rel, dir, oldFn, newFn, oldNew, newNew] of [
-  ['idea', 'ideas/write-plan.ts', 'common/ideas', 'planIdeaWrite', 'planIdeaWrite', 'planNewIdeaFile', 'planNewIdeaFile'],
-  ['character', 'characters/write-plan.ts', 'common/characters', 'planCharacterWrite', 'planCharacterWrite', 'planNewCharacterFile', 'planNewCharacterFile'],
-  ['decision', 'decision/write-plan.ts', 'common/decisions', 'planDecisionWrite', 'planDecisionWrite', 'planNewDecisionFile', 'planNewDecisionFile'],
-  ['doctrine', 'doctrine/write-plan.ts', 'common/doctrines', 'planDoctrineWrite', 'planDoctrineWrite', 'planNewDoctrineFile', 'planNewDoctrineFile'],
-  ['tech', 'technology/write-plan.ts', 'common/technologies', 'planTechWrite', 'planTechWrite', 'planNewTechFile', 'planNewTechFile'],
-  ['event', 'event/write-plan.ts', 'events', 'planEventWrite', 'planEventWrite', 'planNewEventFile', 'planNewEventFile'],
+  [
+    'idea',
+    'ideas/write-plan.ts',
+    'common/ideas',
+    'planIdeaWrite',
+    'planIdeaWrite',
+    'planNewIdeaFile',
+    'planNewIdeaFile',
+  ],
+  [
+    'character',
+    'characters/write-plan.ts',
+    'common/characters',
+    'planCharacterWrite',
+    'planCharacterWrite',
+    'planNewCharacterFile',
+    'planNewCharacterFile',
+  ],
+  [
+    'decision',
+    'decision/write-plan.ts',
+    'common/decisions',
+    'planDecisionWrite',
+    'planDecisionWrite',
+    'planNewDecisionFile',
+    'planNewDecisionFile',
+  ],
+  [
+    'doctrine',
+    'doctrine/write-plan.ts',
+    'common/doctrines',
+    'planDoctrineWrite',
+    'planDoctrineWrite',
+    'planNewDoctrineFile',
+    'planNewDoctrineFile',
+  ],
+  [
+    'tech',
+    'technology/write-plan.ts',
+    'common/technologies',
+    'planTechWrite',
+    'planTechWrite',
+    'planNewTechFile',
+    'planNewTechFile',
+  ],
+  [
+    'event',
+    'event/write-plan.ts',
+    'events',
+    'planEventWrite',
+    'planEventWrite',
+    'planNewEventFile',
+    'planNewEventFile',
+  ],
 ] as const) {
   const [oldModule, newModule] = [await load(rel, domain), await loadNew(rel)];
   writers.push({
@@ -97,7 +146,7 @@ for (const [domain, rel, dir, oldFn, newFn, oldNew, newNew] of [
 }
 const oldSource = (await import(
   pathToFileURL(path.join(oldRoot, 'src/hoi4_agent_tools/core/source/index.ts')).href
-)) as typeof import('../src/hoi4_agent_tools/core/source/index.js');
+)) as typeof NewSourceModule;
 
 async function files(dir: string): Promise<string[]> {
   const found: string[] = [];
@@ -132,7 +181,14 @@ async function settle(run: () => unknown): Promise<Answer> {
       },
     };
   } catch (error) {
-    if (error instanceof ServiceError) return { error: { code: error.code, message: error.message } };
+    // The old tree loads its own ServiceError class, so match by name as well as by class.
+    if (
+      error instanceof ServiceError ||
+      (error instanceof Error &&
+        error.name === 'ServiceError' &&
+        typeof (error as { code?: unknown }).code === 'string')
+    )
+      return { error: { code: (error as ServiceError).code, message: error.message } };
     return { error: { code: 'UNEXPECTED', message: String(error) } };
   }
 }
@@ -154,19 +210,26 @@ async function compare(
   byDomain.set(writer.domain, stats);
   if (JSON.stringify(before) !== JSON.stringify(after)) {
     stats.differences += 1;
-    differences.push(`${writer.domain} ${label}: old ${JSON.stringify(before).slice(0, 300)} new ${JSON.stringify(after).slice(0, 300)}`);
+    differences.push(
+      `${writer.domain} ${label}: old ${JSON.stringify(before).slice(0, 300)} new ${JSON.stringify(after).slice(0, 300)}`,
+    );
   }
 }
 
 function inputs(writer: Writer, id: string, body: string, category: string | undefined) {
   const base = { id, ...(category === undefined ? {} : { category }) };
   return {
-    add: { operation: 'add', ...base, body, ...(category === undefined ? {} : { createCategory: false }) },
+    add: {
+      operation: 'add',
+      ...base,
+      body,
+      ...(category === undefined ? {} : { createCategory: false }),
+    },
     replace: { operation: 'replace', id, body },
     remove: { operation: 'remove', id },
     addNew: {
       operation: 'add',
-      id: writer.domain === 'event' ? `parity_ns.${900001}` : 'parity_new_definition',
+      id: writer.domain === 'event' ? 'parity_ns.900001' : 'parity_new_definition',
       ...(category === undefined ? {} : { category }),
       body: body.length > 0 ? body : 'a = b',
       ...(writer.domain === 'event' ? { createNamespace: true } : {}),
@@ -201,10 +264,14 @@ for (const mod of values.mods.split(',')) {
           if (inner.value.type !== 'block') continue;
           if (['idea', 'decision'].includes(writer.domain)) {
             // idea files nest category blocks inside `ideas = { ... }`.
-            if (writer.domain === 'idea' && inner.value.type === 'block') {
+            if (writer.domain === 'idea') {
               for (const idea of oldSource.assignments(inner.value))
                 if (idea.value.type === 'block')
-                  candidates.push({ id: idea.key.value, category: inner.key.value, body: body(idea) });
+                  candidates.push({
+                    id: idea.key.value,
+                    category: inner.key.value,
+                    body: body(idea),
+                  });
               continue;
             }
             candidates.push({ id: inner.key.value, category: top.key.value, body: body(inner) });
@@ -214,8 +281,10 @@ for (const mod of values.mods.split(',')) {
       const picked =
         candidates.length <= maxPerFile
           ? candidates
-          : Array.from({ length: maxPerFile }, (_, index) =>
-              candidates[Math.floor((index * (candidates.length - 1)) / (maxPerFile - 1))]!,
+          : Array.from(
+              { length: maxPerFile },
+              (_, index) =>
+                candidates[Math.floor((index * (candidates.length - 1)) / (maxPerFile - 1))]!,
             );
       const source = { bytes, path: rel };
       for (const candidate of picked) {
@@ -231,13 +300,36 @@ for (const mod of values.mods.split(',')) {
         }
       }
       // A file that is not there yet, and the empty-source and CRLF variants of this one.
-      const probe = inputs(writer, 'parity_new_definition', 'a = b', writer.domain === 'idea' ? 'country' : 'parity_category');
-      await compare(writer, `${mod}:${rel} new-file`, () => writer.oldNewFile(`${writer.dir}/parity_new.txt`, probe.add as never), () => writer.newFile(`${writer.dir}/parity_new.txt`, probe.add as never));
-      const crlf = { bytes: Buffer.from(document.text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'), 'utf8'), path: rel };
+      const probe = inputs(
+        writer,
+        'parity_new_definition',
+        'a = b',
+        writer.domain === 'idea' ? 'country' : 'parity_category',
+      );
+      await compare(
+        writer,
+        `${mod}:${rel} new-file`,
+        () => writer.oldNewFile(`${writer.dir}/parity_new.txt`, probe.add as never),
+        () => writer.newFile(`${writer.dir}/parity_new.txt`, probe.add as never),
+      );
+      const crlf = {
+        bytes: Buffer.from(document.text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'), 'utf8'),
+        path: rel,
+      };
       if (picked[0] !== undefined) {
         const all = inputs(writer, picked[0].id, picked[0].body, picked[0].category);
-        await compare(writer, `${mod}:${rel} crlf replace`, () => writer.planOld(crlf, all.replace as never), () => writer.planNew(crlf, all.replace as never));
-        await compare(writer, `${mod}:${rel} crlf add`, () => writer.planOld(crlf, all.addNew as never), () => writer.planNew(crlf, all.addNew as never));
+        await compare(
+          writer,
+          `${mod}:${rel} crlf replace`,
+          () => writer.planOld(crlf, all.replace as never),
+          () => writer.planNew(crlf, all.replace as never),
+        );
+        await compare(
+          writer,
+          `${mod}:${rel} crlf add`,
+          () => writer.planOld(crlf, all.addNew as never),
+          () => writer.planNew(crlf, all.addNew as never),
+        );
       }
     }
   }
@@ -245,7 +337,9 @@ for (const mod of values.mods.split(',')) {
 
 process.stdout.write(`operations compared: ${operations}\n`);
 for (const [domain, stats] of byDomain)
-  process.stdout.write(`${domain}: ${stats.operations} operations, ${stats.differences} differences\n`);
+  process.stdout.write(
+    `${domain}: ${stats.operations} operations, ${stats.differences} differences\n`,
+  );
 process.stdout.write(`differences: ${differences.length}\n`);
 for (const line of differences.slice(0, 40)) process.stdout.write(`${line}\n`);
 process.exit(differences.length > 0 ? 1 : 0);

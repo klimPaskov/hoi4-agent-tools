@@ -41,11 +41,11 @@ export interface EnginePlanAnswer<T> {
 export async function callWritePlan<S extends z.ZodType>(
   call: EnginePlanCall<S>,
 ): Promise<EnginePlanAnswer<z.infer<S>>> {
-  const answer = await callEngineOperation({
+  const answer = await callEngineOperation<z.infer<S>>({
     op: call.op,
     body: { input: call.input, path: call.path, newFile: call.source === undefined },
     ...(call.source === undefined ? {} : { payload: Buffer.from(call.source) }),
-    result: call.result,
+    result: call.result as z.ZodType<z.infer<S>>,
   });
   const text = decodeSource(answer.payload).text;
   const before = call.source === undefined ? '' : decodeSource(call.source).text;
@@ -66,11 +66,11 @@ export async function callSourceQuery<S extends z.ZodType>(
   source: Uint8Array,
   result: S,
 ): Promise<z.infer<S>> {
-  const answer = await callEngineOperation({
+  const answer = await callEngineOperation<z.infer<S>>({
     op,
     body: { path },
     payload: Buffer.from(source),
-    result,
+    result: result as z.ZodType<z.infer<S>>,
   });
   return answer.result;
 }

@@ -87,14 +87,16 @@ describe('character_write plan: add', () => {
   });
 
   it('refuses a duplicate id, an invalid id, a missing or broken body, and a missing block', async () => {
-    const add = (id: string, body?: string) =>
+    const add = async (id: string, body?: string) =>
       await codeOf(() => plan({ operation: 'add', id, ...(body === undefined ? {} : { body }) }));
-    expect(add('TST_first', 'name = x')).toBe('CHARACTER_WRITE_DUPLICATE_ID');
-    expect(add('1 bad', 'name = x')).toBe('CHARACTER_WRITE_ID_INVALID');
-    expect(add('TST_new')).toBe('CHARACTER_WRITE_BODY_REQUIRED');
-    expect(add('TST_new', '   ')).toBe('CHARACTER_WRITE_BODY_REQUIRED');
-    expect(add('TST_new', 'name = { x')).toBe('CHARACTER_WRITE_BODY_INVALID');
-    expect(add('TST_new', 'a = b\n}\nTST_other = {\nc = d')).toBe('CHARACTER_WRITE_BODY_INVALID');
+    expect(await add('TST_first', 'name = x')).toBe('CHARACTER_WRITE_DUPLICATE_ID');
+    expect(await add('1 bad', 'name = x')).toBe('CHARACTER_WRITE_ID_INVALID');
+    expect(await add('TST_new')).toBe('CHARACTER_WRITE_BODY_REQUIRED');
+    expect(await add('TST_new', '   ')).toBe('CHARACTER_WRITE_BODY_REQUIRED');
+    expect(await add('TST_new', 'name = { x')).toBe('CHARACTER_WRITE_BODY_INVALID');
+    expect(await add('TST_new', 'a = b\n}\nTST_other = {\nc = d')).toBe(
+      'CHARACTER_WRITE_BODY_INVALID',
+    );
     expect(
       await codeOf(() =>
         plan({ operation: 'add', id: 'TST_new', body: 'name = x' }, '# nothing here\nfoo = bar\n'),
@@ -184,11 +186,13 @@ describe('character_write plan: a new file', () => {
   });
 
   it('only adds, and needs a valid body', async () => {
-    const make = (input: CharacterWriteInput) =>
+    const make = async (input: CharacterWriteInput) =>
       await codeOf(() => planNewCharacterFile('common/characters/new.txt', input));
-    expect(make({ operation: 'remove', id: 'TST_new' })).toBe('CHARACTER_WRITE_FILE_NOT_FOUND');
-    expect(make({ operation: 'add', id: 'TST_new' })).toBe('CHARACTER_WRITE_BODY_REQUIRED');
-    expect(make({ operation: 'add', id: 'TST_new', body: 'a = {' })).toBe(
+    expect(await make({ operation: 'remove', id: 'TST_new' })).toBe(
+      'CHARACTER_WRITE_FILE_NOT_FOUND',
+    );
+    expect(await make({ operation: 'add', id: 'TST_new' })).toBe('CHARACTER_WRITE_BODY_REQUIRED');
+    expect(await make({ operation: 'add', id: 'TST_new', body: 'a = {' })).toBe(
       'CHARACTER_WRITE_BODY_INVALID',
     );
   });

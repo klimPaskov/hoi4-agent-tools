@@ -91,12 +91,12 @@ describe('event_write plan: add', () => {
   });
 
   it('needs a declared namespace, and writes add_namespace only when told to', async () => {
-    const add = (input: Partial<EventWriteInput>) =>
+    const add = async (input: Partial<EventWriteInput>) =>
       plan({ operation: 'add', id: 'fresh.1', body: 'title = fresh.1.t', ...input });
     expect(await codeOf(() => add({}))).toBe('EVENT_WRITE_NAMESPACE_MISSING');
     // Another mod file declares it, so this file need not.
     expect(await codeOf(() => add({ namespaceDeclared: true }))).toBe('NO_ERROR');
-    const made = add({ createNamespace: true });
+    const made = await add({ createNamespace: true });
     expect(made.namespaceAdded).toBe(true);
     expect(made.text).toContain('add_namespace = tst\nadd_namespace = fresh\n\n# the first event');
     expect(made.text.endsWith('country_event = {\n\tid = fresh.1\n\ttitle = fresh.1.t\n}\n')).toBe(
@@ -113,15 +113,17 @@ describe('event_write plan: add', () => {
   });
 
   it('refuses a duplicate id, an invalid id, and a missing or broken body', async () => {
-    const add = (id: string, body?: string) =>
+    const add = async (id: string, body?: string) =>
       await codeOf(() => plan({ operation: 'add', id, ...(body === undefined ? {} : { body }) }));
-    expect(add('tst.1', 'title = x')).toBe('EVENT_WRITE_DUPLICATE_ID');
-    expect(add('tst', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
-    expect(add('tst.x', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
-    expect(add('tst.3')).toBe('EVENT_WRITE_BODY_REQUIRED');
-    expect(add('tst.3', 'title = { x')).toBe('EVENT_WRITE_BODY_INVALID');
-    expect(add('tst.3', 'a = b\n}\ncountry_event = {\nc = d')).toBe('EVENT_WRITE_BODY_INVALID');
-    expect(add('tst.3', 'id = tst.9\ntitle = x')).toBe('EVENT_WRITE_ID_MISMATCH');
+    expect(await add('tst.1', 'title = x')).toBe('EVENT_WRITE_DUPLICATE_ID');
+    expect(await add('tst', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
+    expect(await add('tst.x', 'title = x')).toBe('EVENT_WRITE_ID_INVALID');
+    expect(await add('tst.3')).toBe('EVENT_WRITE_BODY_REQUIRED');
+    expect(await add('tst.3', 'title = { x')).toBe('EVENT_WRITE_BODY_INVALID');
+    expect(await add('tst.3', 'a = b\n}\ncountry_event = {\nc = d')).toBe(
+      'EVENT_WRITE_BODY_INVALID',
+    );
+    expect(await add('tst.3', 'id = tst.9\ntitle = x')).toBe('EVENT_WRITE_ID_MISMATCH');
   });
 
   it('refuses createNamespace on replace, and a file with syntax errors', async () => {
@@ -210,9 +212,9 @@ describe('event_write plan: a new file and file contents', () => {
   it('leaves the namespace line out when another file declares it, and needs the flag otherwise', async () => {
     const input: EventWriteInput = { operation: 'add', id: 'fresh.1', body: 'title = x' };
     expect(
-      planNewEventFile('events/new.txt', { ...input, namespaceDeclared: true }).text.startsWith(
-        'country_event = {',
-      ),
+      (
+        await planNewEventFile('events/new.txt', { ...input, namespaceDeclared: true })
+      ).text.startsWith('country_event = {'),
     ).toBe(true);
     expect(await codeOf(() => planNewEventFile('events/new.txt', input))).toBe(
       'EVENT_WRITE_NAMESPACE_MISSING',

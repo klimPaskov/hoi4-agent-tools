@@ -92,13 +92,13 @@ describe('tech_write plan: add', () => {
   });
 
   it('refuses a duplicate id, an invalid id, a missing or broken body, and a missing block', async () => {
-    const add = (id: string, body?: string) =>
+    const add = async (id: string, body?: string) =>
       await codeOf(() => plan({ operation: 'add', id, ...(body === undefined ? {} : { body }) }));
-    expect(add('tst_tech_a', 'research_cost = 1')).toBe('TECH_WRITE_DUPLICATE_ID');
-    expect(add('1 bad', 'research_cost = 1')).toBe('TECH_WRITE_ID_INVALID');
-    expect(add('tst_new')).toBe('TECH_WRITE_BODY_REQUIRED');
-    expect(add('tst_new', 'research_cost = {')).toBe('TECH_WRITE_BODY_INVALID');
-    expect(add('tst_new', 'a = b\n}\ntst_x = {\nc = d')).toBe('TECH_WRITE_BODY_INVALID');
+    expect(await add('tst_tech_a', 'research_cost = 1')).toBe('TECH_WRITE_DUPLICATE_ID');
+    expect(await add('1 bad', 'research_cost = 1')).toBe('TECH_WRITE_ID_INVALID');
+    expect(await add('tst_new')).toBe('TECH_WRITE_BODY_REQUIRED');
+    expect(await add('tst_new', 'research_cost = {')).toBe('TECH_WRITE_BODY_INVALID');
+    expect(await add('tst_new', 'a = b\n}\ntst_x = {\nc = d')).toBe('TECH_WRITE_BODY_INVALID');
     expect(
       await codeOf(() =>
         plan({ operation: 'add', id: 'tst_new', body: 'a = b' }, '# nothing here\nfoo = bar\n'),
@@ -182,10 +182,10 @@ describe('tech_write plan: a new file', () => {
   });
 
   it('only adds, and needs a valid body', async () => {
-    const make = (input: TechWriteInput) =>
+    const make = async (input: TechWriteInput) =>
       await codeOf(() => planNewTechFile('common/technologies/new.txt', input));
-    expect(make({ operation: 'remove', id: 'tst_new' })).toBe('TECH_WRITE_FILE_NOT_FOUND');
-    expect(make({ operation: 'add', id: 'tst_new', body: 'a = {' })).toBe(
+    expect(await make({ operation: 'remove', id: 'tst_new' })).toBe('TECH_WRITE_FILE_NOT_FOUND');
+    expect(await make({ operation: 'add', id: 'tst_new', body: 'a = {' })).toBe(
       'TECH_WRITE_BODY_INVALID',
     );
   });
