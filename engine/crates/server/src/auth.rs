@@ -199,7 +199,10 @@ fn validate_static_token_secrets(config: &HttpConfig, secrets: SecretLookup<'_>)
     for configured in &config.tokens {
         let secret = secrets(&configured.token_env);
         let Some(secret) = secret.filter(|secret| secret.encode_utf16().count() >= 32) else {
-            return Err(ServiceError::new("HTTP_STATIC_TOKEN_INVALID", "Every configured static-token environment variable must contain at least 32 characters"));
+            return Err(ServiceError::new(
+                "HTTP_STATIC_TOKEN_INVALID",
+                "Every configured static-token environment variable must contain at least 32 characters",
+            ));
         };
         if !fingerprints.insert(hex_sha256(&secret)) {
             return Err(ServiceError::new("HTTP_STATIC_TOKEN_DUPLICATE", "Configured static bearer tokens must have distinct secret values"));
@@ -350,7 +353,10 @@ pub fn validate_http_deployment(config: &HttpConfig, secrets: SecretLookup<'_>) 
         None => None,
     };
     if config.oauth.is_some() && public_url.is_none() {
-        return Err(ServiceError::new("HTTP_OAUTH_PUBLIC_URL_REQUIRED", "OAuth Streamable HTTP requires a canonical publicUrl for Protected Resource Metadata"));
+        return Err(ServiceError::new(
+            "HTTP_OAUTH_PUBLIC_URL_REQUIRED",
+            "OAuth Streamable HTTP requires a canonical publicUrl for Protected Resource Metadata",
+        ));
     }
     if let Some(url) = &public_url
         && (!matches!(url.scheme(), "http" | "https")
@@ -526,7 +532,10 @@ mod tests {
     }
 
     fn oauth_auth(claims: Value) -> Authenticator {
-        let config = HttpConfig::from_json(&json!({ "publicUrl": "https://tools.example.test", "oauth": oauth_json(), "principals": [{ "principal": "fixture-user" }] })).unwrap();
+        let config = HttpConfig::from_json(
+            &json!({ "publicUrl": "https://tools.example.test", "oauth": oauth_json(), "principals": [{ "principal": "fixture-user" }] }),
+        )
+        .unwrap();
         Authenticator::new(&config, &|_| None, Some(Box::new(FixedClaims(claims.as_object().unwrap().clone()))))
     }
 
@@ -558,7 +567,10 @@ mod tests {
 
     #[test]
     fn oauth_without_a_verifier_refuses_every_token() {
-        let config = HttpConfig::from_json(&json!({ "publicUrl": "https://tools.example.test", "oauth": oauth_json(), "principals": [{ "principal": "fixture-user" }] })).unwrap();
+        let config = HttpConfig::from_json(
+            &json!({ "publicUrl": "https://tools.example.test", "oauth": oauth_json(), "principals": [{ "principal": "fixture-user" }] }),
+        )
+        .unwrap();
         let auth = Authenticator::new(&config, &|_| None, None);
         assert_eq!(http_error(auth.authenticate(Some("Bearer signed"), &scopes(&["hoi4:read"]), 0.0).unwrap_err()).code, "AUTH_INVALID");
     }
@@ -581,13 +593,30 @@ mod tests {
         assert_eq!(code(json!({ "oauth": oauth_json() })), Err("HTTP_OAUTH_PUBLIC_URL_REQUIRED"));
         assert_eq!(code(json!({ "oauth": oauth_json(), "publicUrl": "http://localhost:3210" })), Err("HTTP_PRINCIPAL_ALLOWLIST_REQUIRED"));
         let principals = json!([{ "principal": "p" }]);
-        assert_eq!(code(json!({ "oauth": oauth_json(), "publicUrl": "http://tools.example.test", "principals": principals })), Err("HTTP_PUBLIC_HTTPS_REQUIRED"));
+        assert_eq!(
+            code(json!({ "oauth": oauth_json(), "publicUrl": "http://tools.example.test", "principals": principals })),
+            Err("HTTP_PUBLIC_HTTPS_REQUIRED")
+        );
         let mut http_issuer = oauth_json();
         http_issuer["jwksUri"] = json!("http://identity.example.test/jwks");
-        assert_eq!(code(json!({ "oauth": http_issuer, "publicUrl": "https://tools.example.test", "principals": principals })), Err("HTTP_PUBLIC_OAUTH_HTTPS_REQUIRED"));
-        assert_eq!(code(json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "principals": principals })), Err("HTTP_ORIGIN_ALLOWLIST_REQUIRED"));
-        assert_eq!(code(json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "allowedOrigins": ["https://client.example.test"] })), Err("HTTP_PRINCIPAL_ALLOWLIST_REQUIRED"));
-        assert_eq!(code(json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "allowedOrigins": ["https://client.example.test"], "principals": principals })), Ok(()));
+        assert_eq!(
+            code(json!({ "oauth": http_issuer, "publicUrl": "https://tools.example.test", "principals": principals })),
+            Err("HTTP_PUBLIC_OAUTH_HTTPS_REQUIRED")
+        );
+        assert_eq!(
+            code(json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "principals": principals })),
+            Err("HTTP_ORIGIN_ALLOWLIST_REQUIRED")
+        );
+        assert_eq!(
+            code(json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "allowedOrigins": ["https://client.example.test"] })),
+            Err("HTTP_PRINCIPAL_ALLOWLIST_REQUIRED")
+        );
+        assert_eq!(
+            code(
+                json!({ "oauth": oauth_json(), "publicUrl": "https://tools.example.test", "allowedOrigins": ["https://client.example.test"], "principals": principals })
+            ),
+            Ok(())
+        );
     }
 
     #[test]

@@ -128,7 +128,13 @@ pub fn write_message(output: &mut impl Write, message: &Value) -> Result<(), Str
 
 /// Serves one stdio client until its input ends or a frame is refused. `report` receives each
 /// stable error code (`STDIO_INVALID_MESSAGE` for a skipped line); it must log to stderr only.
-pub fn serve_stdio<R: BufRead, W: Write>(input: R, mut output: W, service: &dyn McpService, lifetime: Option<&mut StdioLifetime>, report: &mut dyn FnMut(&'static str)) -> StdioExit {
+pub fn serve_stdio<R: BufRead, W: Write>(
+    input: R,
+    mut output: W,
+    service: &dyn McpService,
+    lifetime: Option<&mut StdioLifetime>,
+    report: &mut dyn FnMut(&'static str),
+) -> StdioExit {
     let caller = CallerContext::default();
     let mut reader = FrameReader::new(input, STDIO_MAX_FRAME_BYTES);
     let mut lifetime = lifetime;

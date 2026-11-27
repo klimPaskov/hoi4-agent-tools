@@ -183,7 +183,12 @@ impl SessionStore {
         self.prune(now_ms);
         let initial = bounded_session_expiration(principal, now_ms, self.ttl_ms());
         if initial <= now_ms {
-            return Err(SessionRefusal::Auth { status: 401, code: "AUTH_INVALID", bearer_error: BearerError::InvalidToken, required_scopes: required_scopes.to_vec() });
+            return Err(SessionRefusal::Auth {
+                status: 401,
+                code: "AUTH_INVALID",
+                bearer_error: BearerError::InvalidToken,
+                required_scopes: required_scopes.to_vec(),
+            });
         }
         let sessions = self.lock();
         let mut pending = self.pending.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -214,7 +219,12 @@ impl SessionStore {
             expires_at_ms: pending.initial_expiration_ms.min(bounded_session_expiration(&principal, now_ms, ttl)),
             credential_expires_at_ms: credential_expiry_ms(&principal),
             active_requests: 0,
-            event_store: BoundedEventStore::new(SESSION_MAX_EVENTS, ttl, self.config.max_session_event_bytes.min(self.config.max_event_store_bytes), Some(self.budget.clone())),
+            event_store: BoundedEventStore::new(
+                SESSION_MAX_EVENTS,
+                ttl,
+                self.config.max_session_event_bytes.min(self.config.max_event_store_bytes),
+                Some(self.budget.clone()),
+            ),
             standalone_stream: false,
         };
         self.lock().insert(id.clone(), session);
@@ -241,7 +251,12 @@ impl SessionStore {
             return Err(SessionRefusal::JsonRpc(403, "MCP session authorization context does not match"));
         }
         if session.scopes.iter().any(|scope| !principal.scopes.contains(scope)) {
-            return Err(SessionRefusal::Auth { status: 403, code: "AUTH_SCOPE_INSUFFICIENT", bearer_error: BearerError::InsufficientScope, required_scopes: session.scopes.clone() });
+            return Err(SessionRefusal::Auth {
+                status: 403,
+                code: "AUTH_SCOPE_INSUFFICIENT",
+                bearer_error: BearerError::InsufficientScope,
+                required_scopes: session.scopes.clone(),
+            });
         }
         for scope in &principal.scopes {
             if !session.scopes.contains(scope) {

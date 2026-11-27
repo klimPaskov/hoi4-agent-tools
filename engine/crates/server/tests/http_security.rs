@@ -20,7 +20,10 @@ const TOKEN_A: &str = "alice-static-secret-0123456789abcdef";
 const TOKEN_B: &str = "bob-static-secret-0123456789abcdefgh";
 
 fn service() -> Arc<CoreService> {
-    Arc::new(CoreService::new(ServerInfo { name: "hoi4-agent-tools".into(), version: "0.0.0-test".into(), website_url: None, instructions: None }, vec![json!({ "name": "hoi4.example", "inputSchema": { "type": "object" } })]))
+    Arc::new(CoreService::new(
+        ServerInfo { name: "hoi4-agent-tools".into(), version: "0.0.0-test".into(), website_url: None, instructions: None },
+        vec![json!({ "name": "hoi4.example", "inputSchema": { "type": "object" } })],
+    ))
 }
 
 fn static_server(extra: Value) -> HttpServerHandle {
@@ -39,14 +42,18 @@ fn static_server(extra: Value) -> HttpServerHandle {
     start_http_server(HttpConfig::from_json(&config).unwrap(), &|name| secrets.get(name).cloned(), None, service()).unwrap()
 }
 
-/// Accepts `<subject>:<scopes>:<n>` tokens; the trailing number makes distinct credentials.
+/// Accepts `<subject>:<scopes>:<n>[:<client>]` tokens; the number makes distinct credentials and the
+/// optional fourth part names the OAuth client.
 struct FakeVerifier;
 
 impl JwtVerifier for FakeVerifier {
     fn verify(&self, token: &str) -> Result<Map<String, Value>, String> {
         let mut parts = token.split(':');
         let (Some(subject), Some(scopes), Some(_)) = (parts.next(), parts.next(), parts.next()) else { return Err("unsigned".into()) };
-        let claims = json!({ "sub": subject, "exp": 4_000_000_000u64, "scope": scopes.replace('+', " ") });
+        let mut claims = json!({ "sub": subject, "exp": 4_000_000_000u64, "scope": scopes.replace('+', " ") });
+        if let Some(client) = parts.next() {
+            claims["client_id"] = json!(client);
+        }
         Ok(claims.as_object().cloned().unwrap_or_default())
     }
 }
@@ -113,7 +120,8 @@ fn parse_response(bytes: &[u8]) -> Response {
     let head = String::from_utf8_lossy(&bytes[..split]).to_string();
     let mut lines = head.split("\r\n");
     let status = lines.next().and_then(|line| line.split(' ').nth(1)).and_then(|code| code.parse().ok()).unwrap_or(0);
-    let headers: Vec<(String, String)> = lines.filter_map(|line| line.split_once(':')).map(|(name, value)| (name.to_owned(), value.trim().to_owned())).collect();
+    let headers: Vec<(String, String)> =
+        lines.filter_map(|line| line.split_once(':')).map(|(name, value)| (name.to_owned(), value.trim().to_owned())).collect();
     let raw_body = bytes.get(split + 4..).unwrap_or_default();
     let chunked = headers.iter().any(|(name, value)| name.eq_ignore_ascii_case("transfer-encoding") && value == "chunked");
     let body = if chunked { dechunk(raw_body) } else { raw_body.to_vec() };
@@ -303,9 +311,13 @@ fn bodies_are_typed_bounded_and_strict() {
 fn body_framing_cannot_be_smuggled() {
     let server = static_server(json!({}));
     let host = format!("127.0.0.1:{}", server.address().port());
-    let both = format!("POST /mcp HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {TOKEN_A}\r\nContent-Type: application/json\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
+    let both = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {TOKEN_A}\r\nContent-Type: application/json\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+    );
     assert_eq!(send_raw(&server, both.as_bytes()).status, 400);
-    let twice = format!("POST /mcp HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {TOKEN_A}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\n{{}}");
+    let twice = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {TOKEN_A}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\n{{}}"
+    );
     assert_eq!(send_raw(&server, twice.as_bytes()).status, 400);
     let body = initialize_body().to_string();
     let chunked = format!(
@@ -370,7 +382,10 @@ fn a_session_is_bound_to_its_credential_and_scopes() {
     let server = oauth_server();
     let id = open_session(&server, "alice:hoi4:read+hoi4:write:1");
     let other_credential = Request::post(&ping(2)).bearer("alice:hoi4:read+hoi4:write:2").session(&id).send(&server);
-    assert_eq!((other_credential.status, other_credential.json()["error"]["message"].clone()), (403, json!("MCP session authorization context does not match")));
+    assert_eq!(
+        (other_credential.status, other_credential.json()["error"]["message"].clone()),
+        (403, json!("MCP session authorization context does not match"))
+    );
     let same = Request::post(&ping(3)).bearer("alice:hoi4:read+hoi4:write:1").session(&id).send(&server);
     assert_eq!(same.status, 200);
 }
@@ -464,4 +479,62 @@ fn the_rate_limit_key_ignores_forwarded_headers_from_untrusted_peers() {
     }
     let third = Request::post(&ping(1)).bearer(TOKEN_A).header("X-Forwarded-For", "198.51.100.3").send(&server);
     assert_eq!(third.status, 429, "a spoofed X-Forwarded-For does not open a new window");
+}
+
+#[test]
+fn invalid_credentials_are_rate_limited_before_authentication() {
+    let server = static_server(json!({ "requestsPerMinute": 2 }));
+    for _ in 0..2 {
+        assert_eq!(Request::post(&ping(1)).bearer("not-the-secret-not-the-secret-not-it").send(&server).status, 401);
+    }
+    let limited = Request::post(&ping(1)).bearer("not-the-secret-not-the-secret-not-it").send(&server);
+    assert_eq!((limited.status, limited.json()), (429, json!({ "error": "rate_limit" })), "guessing stops at the client window");
+    let valid = Request::post(&ping(1)).bearer(TOKEN_A).send(&server);
+    assert_eq!(valid.status, 429, "the window counts the client address before any token is checked");
+}
+
+#[test]
+fn the_body_limit_holds_on_established_sessions() {
+    let server = static_server(json!({ "maxBodyBytes": 1024 }));
+    let id = open_session(&server, TOKEN_A);
+    let padded = format!("{}{}", ping(2), " ".repeat(2048));
+    let large = Request::post(&ping(2)).bearer(TOKEN_A).session(&id).raw_body(padded.as_bytes()).send(&server);
+    assert_eq!(large.status, 413);
+    let charset = Request::post(&ping(3)).bearer(TOKEN_A).session(&id).header("Content-Type", "application/json; charset=iso-8859-1").send(&server);
+    assert_eq!(charset.status, 415, "only UTF-8 JSON is accepted");
+    let ok = Request::post(&ping(4)).bearer(TOKEN_A).session(&id).send(&server);
+    assert_eq!(ok.status, 200);
+}
+
+#[test]
+fn an_older_revision_is_negotiated_and_then_required() {
+    let server = static_server(json!({}));
+    let mut body = initialize_body();
+    body["params"]["protocolVersion"] = json!("2025-06-18");
+    let response = Request::post(&body).bearer(TOKEN_A).send(&server);
+    assert_eq!(response.event()["result"]["protocolVersion"], "2025-06-18");
+    let id = response.header("mcp-session-id").unwrap().to_owned();
+    let older = Request::post(&ping(2)).bearer(TOKEN_A).session(&id).header("MCP-Protocol-Version", "2025-06-18").send(&server);
+    assert_eq!(older.status, 200, "a supported non-current revision is accepted after negotiation");
+    let unknown = Request::post(&json!({ "jsonrpc": "2.0", "id": 3, "method": "hoi4/unknown" })).bearer(TOKEN_A).session(&id).send(&server);
+    assert_eq!(unknown.event()["error"]["code"], -32_601);
+    let mut future = initialize_body();
+    future["params"]["protocolVersion"] = json!("2099-01-01");
+    assert_eq!(Request::post(&future).bearer(TOKEN_A).send(&server).event()["result"]["protocolVersion"], "2025-11-25");
+}
+
+#[test]
+fn oauth_challenges_name_the_resource_and_another_client_is_not_a_scope_failure() {
+    let server = oauth_server();
+    let missing = Request::post(&initialize_body()).send(&server);
+    assert_eq!(missing.status, 401);
+    let challenge = missing.header("www-authenticate").unwrap();
+    assert!(challenge.contains("resource_metadata=\"http://127.0.0.1/.well-known/oauth-protected-resource/mcp\""), "{challenge}");
+    let token = "alice:hoi4:read+hoi4:write:1:client-one";
+    let id = open_session(&server, token);
+    let other = Request::post(&ping(2)).bearer("alice:hoi4:read+hoi4:write:1:client-two").session(&id).send(&server);
+    assert_eq!(other.status, 403);
+    assert_eq!(other.json()["error"]["message"], "MCP session authorization context does not match");
+    assert!(!other.header("www-authenticate").unwrap_or_default().contains("insufficient_scope"), "a client mismatch is not a scope failure");
+    assert_eq!(Request::post(&ping(3)).bearer(token).session(&id).send(&server).status, 200);
 }

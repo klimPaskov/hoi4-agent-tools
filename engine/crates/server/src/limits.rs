@@ -53,7 +53,9 @@ pub fn rate_limit_client_address(socket_address: &str, forwarded_for: Option<&st
 pub fn is_control_method(method: Option<&str>) -> bool {
     match method {
         None => true,
-        Some(method) => method.starts_with("notifications/") || matches!(method, "ping" | "tools/list" | "resources/list" | "resources/templates/list" | "prompts/list"),
+        Some(method) => {
+            method.starts_with("notifications/") || matches!(method, "ping" | "tools/list" | "resources/list" | "resources/templates/list" | "prompts/list")
+        }
     }
 }
 

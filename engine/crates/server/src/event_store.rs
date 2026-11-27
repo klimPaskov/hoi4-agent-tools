@@ -79,7 +79,13 @@ impl BoundedEventStore {
         if size > self.max_bytes || self.budget.as_ref().is_some_and(|budget| !budget.reserve(size)) {
             return event_id;
         }
-        self.events.push_back(StoredEvent { event_id: event_id.clone(), stream_id: stream_id.to_owned(), message: message.clone(), created_at_ms: now_ms, size });
+        self.events.push_back(StoredEvent {
+            event_id: event_id.clone(),
+            stream_id: stream_id.to_owned(),
+            message: message.clone(),
+            created_at_ms: now_ms,
+            size,
+        });
         self.bytes += size;
         while self.events.len() > self.max_events || self.bytes > self.max_bytes {
             match self.events.pop_front() {
@@ -100,7 +106,13 @@ impl BoundedEventStore {
         self.prune(now_ms);
         let index = self.events.iter().position(|event| event.event_id == last_event_id).ok_or("Event ID is unknown or expired")?;
         let stream_id = self.events[index].stream_id.clone();
-        let replay = self.events.iter().skip(index + 1).filter(|event| event.stream_id == stream_id).map(|event| (event.event_id.clone(), event.message.clone())).collect();
+        let replay = self
+            .events
+            .iter()
+            .skip(index + 1)
+            .filter(|event| event.stream_id == stream_id)
+            .map(|event| (event.event_id.clone(), event.message.clone()))
+            .collect();
         Ok((stream_id, replay))
     }
 

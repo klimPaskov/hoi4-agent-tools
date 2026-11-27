@@ -45,7 +45,8 @@ pub fn classify(message: &Value) -> Option<MessageKind> {
     }
     let id_ok = object.get("id").is_some_and(valid_id);
     let result = object.contains_key("result");
-    let error = object.get("error").is_some_and(|error| error.get("code").is_some_and(|code| code.is_i64()) && error.get("message").is_some_and(Value::is_string));
+    let error =
+        object.get("error").is_some_and(|error| error.get("code").is_some_and(|code| code.is_i64()) && error.get("message").is_some_and(Value::is_string));
     (id_ok && (result != error)).then_some(MessageKind::Response)
 }
 
@@ -168,7 +169,10 @@ mod tests {
     }
 
     fn service() -> CoreService {
-        CoreService::new(ServerInfo { name: "test".into(), version: "0.0.0".into(), website_url: None, instructions: Some("hi".into()) }, vec![json!({ "name": "hoi4.example" })])
+        CoreService::new(
+            ServerInfo { name: "test".into(), version: "0.0.0".into(), website_url: None, instructions: Some("hi".into()) },
+            vec![json!({ "name": "hoi4.example" })],
+        )
     }
 
     #[test]

@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use url::Url;
 
-use crate::auth::{AuthFailure, Authenticator, HttpAuthError, JwtVerifier, SecretLookup, bearer_challenge, protected_resource_metadata, validate_http_deployment};
+use crate::auth::{
+    AuthFailure, Authenticator, HttpAuthError, JwtVerifier, SecretLookup, bearer_challenge, protected_resource_metadata, validate_http_deployment,
+};
 use crate::config::HttpConfig;
 use crate::error::ServiceError;
 use crate::grants::required_scopes_for_mcp_request;
@@ -76,11 +78,8 @@ impl Head {
 
     /// The path of an origin-form or absolute-form target, without its query.
     fn path(&self) -> String {
-        let raw = if self.target.starts_with('/') {
-            self.target.clone()
-        } else {
-            Url::parse(&self.target).map(|url| url.path().to_owned()).unwrap_or_default()
-        };
+        let raw =
+            if self.target.starts_with('/') { self.target.clone() } else { Url::parse(&self.target).map(|url| url.path().to_owned()).unwrap_or_default() };
         raw.split(['?', '#']).next().unwrap_or_default().to_owned()
     }
 }
@@ -228,7 +227,9 @@ fn write_reply(stream: &mut TcpStream, reply: &Reply) -> std::io::Result<()> {
 
 /// Writes the head of an event stream; events follow as chunks.
 fn write_stream_head(stream: &mut TcpStream, session_id: Option<&str>) -> std::io::Result<()> {
-    let mut head = String::from("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n");
+    let mut head = String::from(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n",
+    );
     if let Some(id) = session_id {
         head.push_str(&format!("mcp-session-id: {id}\r\n"));
     }
@@ -271,7 +272,9 @@ fn body_framing(head: &Head) -> Result<Framing, Reply> {
     }
     match lengths.as_slice() {
         [] => Ok(Framing::None),
-        [value] if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) => value.parse().map(Framing::Length).map_err(|_| Reply::json_rpc_error(413, "Payload too large", -32_000)),
+        [value] if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) => {
+            value.parse().map(Framing::Length).map_err(|_| Reply::json_rpc_error(413, "Payload too large", -32_000))
+        }
         _ => {
             let mut reply = Reply::json_rpc_error(400, "Ambiguous or unsupported request body framing", -32_000);
             reply.close = true;
@@ -435,13 +438,21 @@ impl Drop for HttpServerHandle {
 
 /// Starts the server after the deployment checks. `secrets` reads the static-token environment
 /// variables; `verifier` checks JWT signatures and is required when OAuth is configured.
-pub fn start_http_server(config: HttpConfig, secrets: SecretLookup<'_>, verifier: Option<Box<dyn JwtVerifier>>, service: Arc<dyn McpService>) -> Result<HttpServerHandle, ServiceError> {
+pub fn start_http_server(
+    config: HttpConfig,
+    secrets: SecretLookup<'_>,
+    verifier: Option<Box<dyn JwtVerifier>>,
+    service: Arc<dyn McpService>,
+) -> Result<HttpServerHandle, ServiceError> {
     config.validate()?;
     validate_http_deployment(&config, secrets)?;
     if config.oauth.is_some() && verifier.is_none() {
         return Err(ServiceError::new("HTTP_OAUTH_VERIFIER_UNAVAILABLE", "OAuth Streamable HTTP needs a JWT verifier, which this build does not have yet"));
     }
-    let mut allowed_hosts = vec![authority_hostname(&http_url_host(&config.host)).ok_or_else(|| ServiceError::new("HTTP_HOST_INVALID", "The configured HTTP host is not a valid hostname"))?];
+    let mut allowed_hosts = vec![
+        authority_hostname(&http_url_host(&config.host))
+            .ok_or_else(|| ServiceError::new("HTTP_HOST_INVALID", "The configured HTTP host is not a valid hostname"))?,
+    ];
     if let Some(public_url) = &config.public_url {
         let url = Url::parse(public_url).map_err(|_| ServiceError::new("HTTP_PUBLIC_URL_INVALID", "Streamable HTTP publicUrl must be a URL"))?;
         if let Some(host) = url.host_str() {
@@ -454,7 +465,8 @@ pub fn start_http_server(config: HttpConfig, secrets: SecretLookup<'_>, verifier
         (Some(_), Some(_)) => Some(protected_resource_metadata(&config)?.to_string()),
         _ => None,
     };
-    let listener = TcpListener::bind((config.host.trim_start_matches('[').trim_end_matches(']'), config.port)).map_err(|error| ServiceError::new("HTTP_LISTEN_FAILED", format!("Unable to listen: {}", error.kind())))?;
+    let listener = TcpListener::bind((config.host.trim_start_matches('[').trim_end_matches(']'), config.port))
+        .map_err(|error| ServiceError::new("HTTP_LISTEN_FAILED", format!("Unable to listen: {}", error.kind())))?;
     let address = listener.local_addr().map_err(|error| ServiceError::new("HTTP_LISTEN_FAILED", error.kind().to_string()))?;
     let url = match &config.public_url {
         Some(public_url) => Url::parse(public_url).and_then(|url| url.join("/mcp")).map(String::from).unwrap_or_default(),
@@ -575,7 +587,9 @@ fn serve_connection(stream: TcpStream, shared: &Shared) {
         served += 1;
         let deadline = Deadline(started + Duration::from_millis(shared.config.request_timeout_ms));
         let outcome = handle_request(&head, &mut reader, &mut writer, peer, shared, &deadline);
-        let last = head.http10 || served >= shared.config.max_requests_per_socket || head.header("connection").is_some_and(|value| value.eq_ignore_ascii_case("close"));
+        let last = head.http10
+            || served >= shared.config.max_requests_per_socket
+            || head.header("connection").is_some_and(|value| value.eq_ignore_ascii_case("close"));
         match outcome {
             Outcome::Reply(mut reply) => {
                 reply.close |= last;
@@ -634,7 +648,9 @@ fn auth_reply(config: &HttpConfig, error: &HttpAuthError) -> Reply {
 fn auth_failure_reply(config: &HttpConfig, failure: AuthFailure, required: &[String]) -> Reply {
     match failure {
         AuthFailure::Http(error) => auth_reply(config, &error),
-        AuthFailure::Service(_) => auth_reply(config, &HttpAuthError::new(401, "AUTH_INVALID", "Authentication failed", Some(crate::auth::BearerError::InvalidToken), required)),
+        AuthFailure::Service(_) => {
+            auth_reply(config, &HttpAuthError::new(401, "AUTH_INVALID", "Authentication failed", Some(crate::auth::BearerError::InvalidToken), required))
+        }
     }
 }
 
@@ -642,7 +658,9 @@ fn session_refusal_reply(config: &HttpConfig, refusal: SessionRefusal) -> Reply 
     match refusal {
         SessionRefusal::JsonRpc(status, message) => Reply::json_rpc_error(status, message, -32_000),
         SessionRefusal::Code(status, code) => Reply::error_code(status, code),
-        SessionRefusal::Auth { status, code, bearer_error, required_scopes } => auth_reply(config, &HttpAuthError::new(status, code, "", Some(bearer_error), &required_scopes)),
+        SessionRefusal::Auth { status, code, bearer_error, required_scopes } => {
+            auth_reply(config, &HttpAuthError::new(status, code, "", Some(bearer_error), &required_scopes))
+        }
     }
 }
 
@@ -662,7 +680,12 @@ fn check_request_target(head: &Head, allowed_hosts: &[String]) -> Result<(), Rep
     let header_authority = Url::parse(&format!("{}://{host}", target.scheme())).map_err(|_| refused())?;
     let authority = |url: &Url| format!("{}{}", url.host_str().unwrap_or_default(), url.port().map(|port| format!(":{port}")).unwrap_or_default());
     let hostname = target.host_str().unwrap_or_default().to_ascii_lowercase();
-    if !target.username().is_empty() || target.password().is_some() || target.fragment().is_some() || !allowed_hosts.iter().any(|allowed| allowed.eq_ignore_ascii_case(&hostname)) || !authority(&target).eq_ignore_ascii_case(&authority(&header_authority)) {
+    if !target.username().is_empty()
+        || target.password().is_some()
+        || target.fragment().is_some()
+        || !allowed_hosts.iter().any(|allowed| allowed.eq_ignore_ascii_case(&hostname))
+        || !authority(&target).eq_ignore_ascii_case(&authority(&header_authority))
+    {
         return Err(refused());
     }
     Ok(())
@@ -831,7 +854,10 @@ fn route_bodyless(head: &Head, path: &str, mcp: bool, shared: &Shared, ticket: &
 /// Full authentication with the scopes of the parsed body, then the per-principal rate.
 fn authenticate_request(head: &Head, body: Option<&Value>, shared: &Shared, now_seconds: f64) -> Result<crate::auth::AuthenticatedPrincipal, Reply> {
     let required = required_scopes_for_mcp_request(&shared.config, body);
-    let principal = shared.authenticator.authenticate(head.header("authorization"), &required, now_seconds).map_err(|failure| auth_failure_reply(&shared.config, failure, &required))?;
+    let principal = shared
+        .authenticator
+        .authenticate(head.header("authorization"), &required, now_seconds)
+        .map_err(|failure| auth_failure_reply(&shared.config, failure, &required))?;
     if !shared.rates.hit(&principal.principal, now_ms()) {
         return Err(Reply::error_code(429, "rate_limit").retry_after("60"));
     }
@@ -850,12 +876,16 @@ impl Drop for SessionRequest<'_> {
 }
 
 fn caller_for(shared: &Shared, session_id: &str) -> CallerContext {
-    shared.sessions.with_session(session_id, |session| CallerContext { principal: Some(session.principal.clone()), scopes: session.scopes.clone() }).unwrap_or_default()
+    shared
+        .sessions
+        .with_session(session_id, |session| CallerContext { principal: Some(session.principal.clone()), scopes: session.scopes.clone() })
+        .unwrap_or_default()
 }
 
 fn stream_answer(writer: &mut TcpStream, shared: &Shared, session_id: &str, answer: &Value, header_session: Option<&str>) -> Outcome {
     let stream_id = random_uuid();
-    let event_id = shared.sessions.with_session(session_id, |session| session.event_store.store_event(&stream_id, answer, now_ms())).unwrap_or_else(random_uuid);
+    let event_id =
+        shared.sessions.with_session(session_id, |session| session.event_store.store_event(&stream_id, answer, now_ms())).unwrap_or_else(random_uuid);
     let written = write_stream_head(writer, header_session).and_then(|()| write_event(writer, &event_id, answer)).and_then(|()| end_stream(writer));
     Outcome::Streamed { keep_alive: written.is_ok() }
 }
