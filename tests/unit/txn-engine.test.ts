@@ -3,7 +3,11 @@ import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod/v4';
-import { canonicalJson, hashCanonical, sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
+import {
+  canonicalJson,
+  hashCanonical,
+  sha256Bytes,
+} from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { callEngineOperation } from '../../src/hoi4_agent_tools/core/engine-operation.js';
 import { ResidentEngine } from '../../src/hoi4_agent_tools/core/resident-engine.js';
@@ -95,7 +99,9 @@ function engineApply(
         afterSize: change.after?.length ?? null,
       })),
     },
-    payload: Buffer.concat(changes.flatMap((change) => (change.after === null ? [] : [change.after]))),
+    payload: Buffer.concat(
+      changes.flatMap((change) => (change.after === null ? [] : [change.after])),
+    ),
     result: appliedSchema,
     ...(engine === undefined ? {} : { engine }),
   }).then(({ result }) => result.changedPaths);
@@ -187,8 +193,16 @@ const PARITY_CASES: Array<{
   {
     name: 'edit CRLF text, keep a BOM, write binary',
     changes: [
-      { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('value = after\r\n') },
-      { path: 'common/bom.txt', before: START['common/bom.txt']!, after: Buffer.from('﻿bom = 2\n') },
+      {
+        path: 'common/one.txt',
+        before: START['common/one.txt']!,
+        after: Buffer.from('value = after\r\n'),
+      },
+      {
+        path: 'common/bom.txt',
+        before: START['common/bom.txt']!,
+        after: Buffer.from('﻿bom = 2\n'),
+      },
       { path: 'map.bmp', before: START['map.bmp']!, after: Buffer.from([0x42, 0x4d, 9, 9]) },
     ],
   },
@@ -201,7 +215,9 @@ const PARITY_CASES: Array<{
   },
   {
     name: 'a source edited after planning',
-    changes: [{ path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') }],
+    changes: [
+      { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') },
+    ],
     edit: ['common/one.txt', Buffer.from('edited by the modder\n')],
   },
   {
@@ -232,7 +248,9 @@ const PARITY_CASES: Array<{
   },
   {
     name: 'nothing changes',
-    changes: [{ path: 'common/one.txt', before: START['common/one.txt']!, after: START['common/one.txt']! }],
+    changes: [
+      { path: 'common/one.txt', before: START['common/one.txt']!, after: START['common/one.txt']! },
+    ],
   },
 ];
 
@@ -261,12 +279,21 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
       operationKind: 'test',
       operations,
       changes: [
-        { relativePath: 'common/one.txt', content: Buffer.from('interrupted\n'), operationIds: ['op-1'] },
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('interrupted\n'),
+          operationIds: ['op-1'],
+        },
       ],
       validate: () => Promise.resolve({ diagnostics: [], checks }),
     });
     await writeFile(path.join(mod, 'common', 'one.txt'), 'interrupted\n');
-    const manifestPath = path.join(workspace.cacheRoot, 'transactions', plan.transactionId, 'manifest.json');
+    const manifestPath = path.join(
+      workspace.cacheRoot,
+      'transactions',
+      plan.transactionId,
+      'manifest.json',
+    );
     await updateJournal(resolver, manifestPath, (manifest) => {
       manifest.state = 'applying';
       manifest.appliedFiles = ['common/one.txt'];
@@ -274,19 +301,30 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
     expect(await engineRecover(binding)).toBe(1);
     expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(START['common/one.txt']);
     // The engine's successor revision is authenticated and protected: the manager reads it.
-    expect(await manager.status('test', plan.transactionId)).toMatchObject({ state: 'rolled_back', rollbackStatus: 'applied' });
+    expect(await manager.status('test', plan.transactionId)).toMatchObject({
+      state: 'rolled_back',
+      rollbackStatus: 'applied',
+    });
     expect(await manager.recover('test')).toEqual([]);
   });
 
   it('leaves a journal the TypeScript manager recovers when the engine crashes', async () => {
     const { mod, manager, binding } = await setup();
-    const crashing = new ResidentEngine({ env: { ...process.env, HOI4_TXN_TEST_ABORT_AFTER_REPLACE: '0' } });
+    const crashing = new ResidentEngine({
+      env: { ...process.env, HOI4_TXN_TEST_ABORT_AFTER_REPLACE: '0' },
+    });
     engines.push(crashing);
     const changes: Change[] = [
-      { path: 'common/bom.txt', before: START['common/bom.txt']!, after: Buffer.from('replaced\n') },
+      {
+        path: 'common/bom.txt',
+        before: START['common/bom.txt']!,
+        after: Buffer.from('replaced\n'),
+      },
       { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('never\n') },
     ];
-    await expect(engineApply(binding, changes, crashing)).rejects.toMatchObject({ code: 'ENGINE_UNAVAILABLE' });
+    await expect(engineApply(binding, changes, crashing)).rejects.toMatchObject({
+      code: 'ENGINE_UNAVAILABLE',
+    });
     expect((await readFile(path.join(mod, 'common', 'bom.txt'))).toString()).toBe('replaced\n');
     // The crashed engine left its lock and an applying journal; the manager clears the lock of
     // the dead process and restores the files.
@@ -294,7 +332,11 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
     expect(recovered).toHaveLength(1);
     expect(recovered[0]).toMatchObject({ state: 'rolled_back', rollbackStatus: 'applied' });
     expect(await snapshot(mod)).toEqual(
-      Object.fromEntries(Object.entries(START).map(([relative, bytes]) => [relative, bytes.toString('hex')]).sort()),
+      Object.fromEntries(
+        Object.entries(START)
+          .map(([relative, bytes]) => [relative, bytes.toString('hex')])
+          .sort(),
+      ),
     );
   });
 
@@ -312,17 +354,23 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
         processStartedAt: new Date().toISOString(),
       })}\n`,
     );
-    const changes: Change[] = [{ path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') }];
+    const changes: Change[] = [
+      { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') },
+    ];
     expect(await codeOf(engineApply(binding, changes))).toBe('TRANSACTION_LOCKED');
     expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(START['common/one.txt']);
   });
 
   it('refuses a wrong, short or missing journal key and writes nothing', async () => {
     const { mod, binding } = await setup();
-    const changes: Change[] = [{ path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') }];
+    const changes: Change[] = [
+      { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('x\n') },
+    ];
     for (const journalKey of ['00', binding.journalKey.slice(2), undefined]) {
       const { journalKey: _key, ...rest } = binding;
-      const code = await codeOf(engineApply(journalKey === undefined ? rest : { ...rest, journalKey }, changes));
+      const code = await codeOf(
+        engineApply(journalKey === undefined ? rest : { ...rest, journalKey }, changes),
+      );
       expect(['SERVER_STATE_KEY_INVALID', 'ENGINE_UNAVAILABLE']).toContain(code);
     }
     // A key of the right length but not the server's: the engine's journal is refused by the
@@ -330,10 +378,16 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
     const wrong = { ...binding, journalKey: 'ab'.repeat(32) };
     expect(await engineApply(wrong, changes)).toEqual(['common/one.txt']);
     expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(Buffer.from('x\n'));
-    const crashing = new ResidentEngine({ env: { ...process.env, HOI4_TXN_TEST_ABORT_AFTER_REPLACE: '0' } });
+    const crashing = new ResidentEngine({
+      env: { ...process.env, HOI4_TXN_TEST_ABORT_AFTER_REPLACE: '0' },
+    });
     engines.push(crashing);
-    const back: Change[] = [{ path: 'common/one.txt', before: Buffer.from('x\n'), after: Buffer.from('y\n') }];
-    await expect(engineApply(wrong, back, crashing)).rejects.toMatchObject({ code: 'ENGINE_UNAVAILABLE' });
+    const back: Change[] = [
+      { path: 'common/one.txt', before: Buffer.from('x\n'), after: Buffer.from('y\n') },
+    ];
+    await expect(engineApply(wrong, back, crashing)).rejects.toMatchObject({
+      code: 'ENGINE_UNAVAILABLE',
+    });
     expect(await codeOf(engineRecover(binding))).toBe('TRANSACTION_MANIFEST_AUTHENTICATION_FAILED');
     expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(Buffer.from('y\n'));
   });

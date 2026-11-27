@@ -749,6 +749,59 @@ fn keeps_an_untouched_pending_path_as_it_is() {
     assert_eq!(fixture.snapshot(), [("b.txt".to_string(), b"b".to_vec())]);
 }
 
+/// A rewrite of more than 1,024 files batches more than 16 files per write-ahead intent; a crash
+/// right after the first intent leaves a journal with that many pending files, which recovery
+/// accepts (up to `MAX_BATCH_FILES`) and restores. The TypeScript side of this case is PR 297.
+#[test]
+fn recovers_a_crash_after_a_batch_intent_of_more_than_sixteen_files() {
+    let fixture = fixture();
+    let count = 1_100;
+    let batch = crate::limits::batch_size(count);
+    assert!(batch > crate::limits::MAX_PENDING_FILES && batch <= crate::limits::MAX_BATCH_FILES, "batch of {batch}");
+    for index in 0..count {
+        fixture.write(
+            &format!("history/states/{index}.txt"),
+            format!(
+                "state = {index}
+"
+            )
+            .as_bytes(),
+        );
+    }
+    let before = fixture.snapshot();
+    let changes: Vec<FileChange> = (0..count)
+        .map(|index| {
+            change(
+                &format!("history/states/{index}.txt"),
+                Some(
+                    format!(
+                        "state = {index}
+"
+                    )
+                    .as_bytes(),
+                ),
+                Some(
+                    format!(
+                        "state = {}
+",
+                        index + 1
+                    )
+                    .as_bytes(),
+                ),
+            )
+        })
+        .collect();
+    let hooks = At { after_batch_intent: Some(Box::new(|_| panic!("simulated crash after the first batch intent"))), ..At::default() };
+    let applier = fixture.applier().with_hooks(Arc::new(hooks));
+    assert!(catch_unwind(AssertUnwindSafe(|| applier.apply(&plan(changes)))).is_err());
+    let id = fixture.only_journal();
+    let pending = fixture.with_journal(|journal| journal.load(&id, HeadMode::Verify, true).unwrap().pending_files.unwrap_or_default().len());
+    assert_eq!(pending, batch, "the journal holds the whole first batch as pending");
+    assert_eq!(fixture.applier().recover().unwrap(), 1);
+    assert_eq!(fixture.snapshot(), before);
+    assert_eq!(fixture.journal_state(&id), State::RolledBack);
+}
+
 /// "writes more than a thousand files while retaining stale-source protection and bounded
 /// manifests" and "applies more than 5,000 files in one transaction and rolls all of them back on
 /// failure" (with 1,100 files, several batches).
