@@ -29,6 +29,7 @@ import { isReferenceTool, ReferenceToolService } from '../../reference/operation
 import type { PluginToolFactory } from '../plugins.js';
 import { ModernTaskAdapter, TASKS_EXTENSION } from './modern-tasks.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
+import { startupFailureResult } from './startup-failure.js';
 import { jobProgressReporter, modernProgressReporter, withProgressHeartbeat } from './progress.js';
 import { taskToolCatalog } from './task-tool-catalog.js';
 import type { ToolDefinition } from './task-tool-definition.js';
@@ -131,6 +132,14 @@ export function createModernOperationServer(
     const definition = definitions.find(({ name }) => name === request.params.name);
     if (definition === undefined)
       throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Unknown tool');
+    const startupFailure = startupFailureResult(engine, definition.name);
+    if (startupFailure !== undefined)
+      return CallToolResultSchema.parse({
+        ...startupFailure,
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+      });
     const input = definition.inputSchema.safeParse(
       normalizeToolArguments(definition.name, request.params.arguments ?? {}),
     );

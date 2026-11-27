@@ -16,4 +16,5 @@ playwright-report/
 .DS_Store
 Thumbs.db
 /engine/target/
+/engine/target-*/
 /engine/bin/
