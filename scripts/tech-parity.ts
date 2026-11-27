@@ -152,6 +152,15 @@ try {
     process.stderr.write(`${corpus.id}: TypeScript graph\n`);
     const started = performance.now();
     const expected = buildTechnologyGraph(snapshot, options) as unknown as Json;
+    // The TypeScript builder wrote an `unsupportedFields` entry with no expression for every technology
+    // without a `force_use_small_tech_layout` field. The engine writes it only for a non-yes/no value.
+    for (const technology of (expected.technologies as Json[] | undefined) ?? []) {
+      const fields = technology.unsupportedFields as Json[] | undefined;
+      if (fields !== undefined)
+        technology.unsupportedFields = fields.filter(
+          (entry) => !(entry.field === 'force_use_small_tech_layout' && entry.expression === undefined),
+        );
+    }
     const typescriptMs = Math.round(performance.now() - started);
     process.stderr.write(`${corpus.id}: engine graph\n`);
     const engineStarted = performance.now();
