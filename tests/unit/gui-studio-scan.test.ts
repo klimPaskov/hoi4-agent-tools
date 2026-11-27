@@ -134,6 +134,68 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
     expect(text('army')).toBe('Army');
   });
 
+  it("reads only the preview language's replace files", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-loc-replace-languages-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'mod');
+    const write = async (relative: string, content: string) => {
+      await mkdir(path.dirname(path.join(modRoot, relative)), { recursive: true });
+      await writeFile(path.join(modRoot, relative), content);
+    };
+    await write(
+      'interface/tabs.gui',
+      `guiTypes = { containerWindowType = { name = "tabs" size = { width = 300 height = 40 }
+        instantTextBoxType = { name = "trade" position = { x = 0 y = 0 } text = "TRADE" maxWidth = 200 maxHeight = 20 }
+      } }`,
+    );
+    await write('localisation/replace/tabs_l_english.yml', '﻿l_english:\n TRADE:0 "Commerce"\n');
+    // Nine other languages, together over the 500,000-candidate ceiling, in both replace layouts.
+    const languages = [
+      'braz_por',
+      'french',
+      'german',
+      'japanese',
+      'korean',
+      'polish',
+      'russian',
+      'simp_chinese',
+      'spanish',
+    ];
+    const entries = 60_000;
+    for (const [index, language] of languages.entries()) {
+      const lines = [
+        String.fromCharCode(0xfeff) + `l_${language}:`,
+        ` TRADE:0 "Trade ${language}"`,
+      ];
+      for (let key = 0; key < entries; key += 1) lines.push(` K${key}:0 "v"`);
+      await write(
+        index % 2 === 0
+          ? `localisation/replace/${language}/big_l_${language}.yml`
+          : `localisation/replace/big_l_${language}.yml`,
+        `${lines.join('\n')}\n`,
+      );
+    }
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          workspaceStorageRoot: path.join(root, 'storage'),
+          workspaces: [{ id: 'languages', name: 'Languages', root: modRoot }],
+        }),
+      ),
+    );
+    const { graph, scene } = await new ScriptedGuiStudio(engine).lint({
+      workspaceId: 'languages',
+      windowName: 'tabs',
+      scenario: { id: 'languages' },
+      generatedScenarios: { enabled: false },
+    });
+    expect(graph.filesScanned).toContain('mod:localisation/replace/tabs_l_english.yml');
+    expect(graph.filesScanned.filter((file) => file.includes('big_l_'))).toEqual([]);
+    expect(scene.elements.find((element) => element.name === 'trade')?.text?.text).toBe('Commerce');
+  }, 60_000);
+
   it('indexes configured definition roots and loads only selected-window assets', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-custom-roots-'));
     temporaryRoots.push(root);
