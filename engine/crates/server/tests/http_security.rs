@@ -42,13 +42,13 @@ fn static_server(extra: Value) -> HttpServerHandle {
     start_http_server(HttpConfig::from_json(&config).unwrap(), &|name| secrets.get(name).cloned(), None, service()).unwrap()
 }
 
-/// Accepts `<subject>:<scopes>:<n>[:<client>]` tokens; the number makes distinct credentials and the
+/// Accepts `<subject>/<scopes>/<n>[/<client>]` tokens (scopes contain `:`); the number makes distinct credentials and the
 /// optional fourth part names the OAuth client.
 struct FakeVerifier;
 
 impl JwtVerifier for FakeVerifier {
     fn verify(&self, token: &str) -> Result<Map<String, Value>, String> {
-        let mut parts = token.split(':');
+        let mut parts = token.split('/');
         let (Some(subject), Some(scopes), Some(_)) = (parts.next(), parts.next(), parts.next()) else { return Err("unsigned".into()) };
         let mut claims = json!({ "sub": subject, "exp": 4_000_000_000u64, "scope": scopes.replace('+', " ") });
         if let Some(client) = parts.next() {
@@ -331,7 +331,7 @@ fn body_framing_cannot_be_smuggled() {
 
 #[test]
 fn a_slow_head_times_out() {
-    let server = static_server(json!({ "headersTimeoutMs": 1000, "keepAliveTimeoutMs": 999 }));
+    let server = static_server(json!({ "headersTimeoutMs": 2000, "keepAliveTimeoutMs": 1000 }));
     let mut stream = TcpStream::connect(server.address()).unwrap();
     stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
     stream.write_all(b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n").unwrap();
@@ -380,20 +380,20 @@ fn sessions_are_isolated_between_principals() {
 #[test]
 fn a_session_is_bound_to_its_credential_and_scopes() {
     let server = oauth_server();
-    let id = open_session(&server, "alice:hoi4:read+hoi4:write:1");
-    let other_credential = Request::post(&ping(2)).bearer("alice:hoi4:read+hoi4:write:2").session(&id).send(&server);
+    let id = open_session(&server, "alice/hoi4:read+hoi4:write/1");
+    let other_credential = Request::post(&ping(2)).bearer("alice/hoi4:read+hoi4:write/2").session(&id).send(&server);
     assert_eq!(
         (other_credential.status, other_credential.json()["error"]["message"].clone()),
         (403, json!("MCP session authorization context does not match"))
     );
-    let same = Request::post(&ping(3)).bearer("alice:hoi4:read+hoi4:write:1").session(&id).send(&server);
+    let same = Request::post(&ping(3)).bearer("alice/hoi4:read+hoi4:write/1").session(&id).send(&server);
     assert_eq!(same.status, 200);
 }
 
 #[test]
 fn write_tools_need_the_write_scope_and_principals_an_allowlist() {
     let server = oauth_server();
-    let reader = "alice:hoi4:read:1";
+    let reader = "alice/hoi4:read/1";
     let id = open_session(&server, reader);
     let call = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": "hoi4.focus_rewrite", "arguments": {} } });
     let refused = Request::post(&call).bearer(reader).session(&id).send(&server);
@@ -402,7 +402,7 @@ fn write_tools_need_the_write_scope_and_principals_an_allowlist() {
     assert!(challenge.starts_with("Bearer error=\"insufficient_scope\", scope=\"hoi4:read hoi4:write\", resource_metadata=\"http://127.0.0.1/.well-known/oauth-protected-resource/mcp\""), "{challenge}");
     let read_call = json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "hoi4.example" } });
     assert_eq!(Request::post(&read_call).bearer(reader).session(&id).send(&server).status, 200);
-    let stranger = Request::post(&initialize_body()).bearer("mallory:hoi4:read:1").send(&server);
+    let stranger = Request::post(&initialize_body()).bearer("mallory/hoi4:read/1").send(&server);
     assert_eq!((stranger.status, stranger.json()["error"].clone()), (403, json!("AUTH_PRINCIPAL_FORBIDDEN")));
     let unsigned = Request::post(&initialize_body()).bearer("unsigned").send(&server);
     assert_eq!(unsigned.status, 401);
@@ -530,9 +530,9 @@ fn oauth_challenges_name_the_resource_and_another_client_is_not_a_scope_failure(
     assert_eq!(missing.status, 401);
     let challenge = missing.header("www-authenticate").unwrap();
     assert!(challenge.contains("resource_metadata=\"http://127.0.0.1/.well-known/oauth-protected-resource/mcp\""), "{challenge}");
-    let token = "alice:hoi4:read+hoi4:write:1:client-one";
+    let token = "alice/hoi4:read+hoi4:write/1/client-one";
     let id = open_session(&server, token);
-    let other = Request::post(&ping(2)).bearer("alice:hoi4:read+hoi4:write:1:client-two").session(&id).send(&server);
+    let other = Request::post(&ping(2)).bearer("alice/hoi4:read+hoi4:write/1/client-two").session(&id).send(&server);
     assert_eq!(other.status, 403);
     assert_eq!(other.json()["error"]["message"], "MCP session authorization context does not match");
     assert!(!other.header("www-authenticate").unwrap_or_default().contains("insufficient_scope"), "a client mismatch is not a scope failure");
