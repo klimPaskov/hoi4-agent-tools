@@ -1,1 +1,0 @@
-- Fixed recovery of an interrupted rewrite of more than 1,024 files, which failed with `TRANSACTION_MANIFEST_INVALID` and blocked rewrites of that workspace. Such rewrites replace files in batches of up to 256, but the journal check accepted at most 16 pending files per batch.
