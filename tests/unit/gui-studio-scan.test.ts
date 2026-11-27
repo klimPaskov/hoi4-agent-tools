@@ -69,6 +69,71 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
     });
   });
 
+  it("draws the mod's localisation/replace text over the game's", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-loc-replace-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'mod'),
+      gameRoot = path.join(root, 'game');
+    const write = async (base: string, relative: string, content: string) => {
+      await mkdir(path.dirname(path.join(base, relative)), { recursive: true });
+      await writeFile(path.join(base, relative), content);
+    };
+    await write(
+      modRoot,
+      'interface/tabs.gui',
+      `guiTypes = { containerWindowType = { name = "tabs" size = { width = 300 height = 120 }
+        instantTextBoxType = { name = "trade" position = { x = 0 y = 0 } text = "TRADE" maxWidth = 200 maxHeight = 20 }
+        instantTextBoxType = { name = "politics" position = { x = 0 y = 30 } text = "POLITICS" maxWidth = 200 maxHeight = 20 }
+        instantTextBoxType = { name = "production" position = { x = 0 y = 60 } text = "PRODUCTION" maxWidth = 200 maxHeight = 20 }
+        instantTextBoxType = { name = "army" position = { x = 0 y = 90 } text = "ARMY" maxWidth = 200 maxHeight = 20 }
+      } }`,
+    );
+    await write(
+      gameRoot,
+      'localisation/english/core_l_english.yml',
+      '﻿l_english:\n TRADE:0 "Trade"\n POLITICS:0 "Political"\n PRODUCTION:0 "Production"\n ARMY:0 "Army"\n',
+    );
+    // The mod's own ordinary file repeats one key; its replace folders win over it.
+    await write(
+      modRoot,
+      'localisation/english/mod_l_english.yml',
+      '﻿l_english:\n PRODUCTION:0 "Workshops (ordinary file)"\n',
+    );
+    await write(
+      modRoot,
+      'localisation/replace/tabs_l_english.yml',
+      '﻿l_english:\n TRADE:0 "Commerce"\n POLITICS:0 "Court"\n',
+    );
+    await write(
+      modRoot,
+      'localisation/english/replace/tabs_l_english.yml',
+      '﻿l_english:\n PRODUCTION:0 "Workshops"\n',
+    );
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          workspaceStorageRoot: path.join(root, 'storage'),
+          workspaces: [{ id: 'replace', name: 'Replace', root: modRoot, gameRoot }],
+        }),
+      ),
+    );
+    const { graph, scene } = await new ScriptedGuiStudio(engine).lint({
+      workspaceId: 'replace',
+      windowName: 'tabs',
+      scenario: { id: 'replace' },
+      generatedScenarios: { enabled: false },
+    });
+    expect(graph.filesScanned).toContain('mod:localisation/replace/tabs_l_english.yml');
+    const text = (name: string) =>
+      scene.elements.find((element) => element.name === name)?.text?.text;
+    expect(text('trade')).toBe('Commerce');
+    expect(text('politics')).toBe('Court');
+    expect(text('production')).toBe('Workshops');
+    expect(text('army')).toBe('Army');
+  });
+
   it('indexes configured definition roots and loads only selected-window assets', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-custom-roots-'));
     temporaryRoots.push(root);

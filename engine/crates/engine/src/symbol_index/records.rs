@@ -68,8 +68,9 @@ pub struct Request {
 pub type Loc = [u32; 6];
 
 /// `createSourceLineIndex` and `positionAt`: positions in UTF-16 code units, reached from byte
-/// offsets through a table of line starts.
-struct Positions<'t> {
+/// offsets through a table of line starts. Public for the ported domains (ADR 0091), which report
+/// reader nodes and diagnostics at TypeScript `SourceLocation`s.
+pub struct Positions<'t> {
     text: &'t str,
     ascii: bool,
     /// Byte offset and UTF-16 offset of each line's start.
@@ -79,7 +80,7 @@ struct Positions<'t> {
 }
 
 impl<'t> Positions<'t> {
-    fn new(text: &'t str) -> Self {
+    pub fn new(text: &'t str) -> Self {
         let ascii = text.is_ascii();
         let bytes = text.as_bytes();
         let mut starts = vec![(0u32, 0u32)];
@@ -116,7 +117,7 @@ impl<'t> Positions<'t> {
     }
 
     /// UTF-16 offset of a byte offset (a character boundary).
-    fn unit(&self, byte: u32) -> u32 {
+    pub fn unit(&self, byte: u32) -> u32 {
         let byte = byte.min(self.text.len() as u32);
         let line = self.line_of_byte(byte);
         let (start_byte, start_unit) = self.starts[line];
@@ -135,7 +136,7 @@ impl<'t> Positions<'t> {
     }
 
     /// `positionAt` of a byte offset: line, column and UTF-16 offset.
-    fn position(&self, byte: u32) -> [u32; 3] {
+    pub fn position(&self, byte: u32) -> [u32; 3] {
         let bytes = self.text.as_bytes();
         let byte = byte.min(bytes.len() as u32);
         let line = self.line_of_byte(byte);
@@ -150,7 +151,7 @@ impl<'t> Positions<'t> {
     }
 
     /// `positionAt` of a UTF-16 offset.
-    fn position_of_unit(&self, unit: u32) -> [u32; 3] {
+    pub fn position_of_unit(&self, unit: u32) -> [u32; 3] {
         let bounded = unit.min(self.units);
         let line = self.starts.partition_point(|&(_, start)| start <= bounded).max(1) - 1;
         let (start_byte, start_unit) = self.starts[line];
@@ -178,7 +179,7 @@ impl<'t> Positions<'t> {
     }
 
     /// A full TypeScript `SourceLocation`, for diagnostics.
-    fn location(path: &str, start: [u32; 3], end: [u32; 3], symbol: Option<&str>) -> Value {
+    pub fn location(path: &str, start: [u32; 3], end: [u32; 3], symbol: Option<&str>) -> Value {
         let position = |p: [u32; 3]| json!({ "line": p[0], "column": p[1], "offset": p[2] });
         let mut location = json!({ "path": path, "start": position(start), "end": position(end) });
         if let Some(symbol) = symbol {
@@ -187,24 +188,28 @@ impl<'t> Positions<'t> {
         location
     }
 
+    /// The TypeScript `SourceLocation` of a reader place, without a symbol.
+    pub fn source_location(&self, path: &str, at: At) -> Value {
+        match at {
+            At::Bytes(start, end) => Self::location(path, self.position(start), self.position(end), None),
+            At::Utf16(start, end) => Self::location(path, self.position_of_unit(start), self.position_of_unit(end), None),
+            At::Fixed(line, column, offset) => Self::location(path, [line, column, offset], [line, column, offset], None),
+            At::FixedAtByte(line, column, byte) => {
+                let offset = self.unit(byte);
+                Self::location(path, [line, column, offset], [line, column, offset], None)
+            }
+        }
+    }
+
     /// A source diagnostic as the TypeScript `Diagnostic` object.
-    fn diagnostic(&self, path: &str, diagnostic: &SourceDiagnostic) -> Value {
+    pub fn diagnostic(&self, path: &str, diagnostic: &SourceDiagnostic) -> Value {
         let mut out = Map::new();
         out.insert("code".into(), diagnostic.code.into());
         out.insert("severity".into(), diagnostic.severity.into());
         out.insert("category".into(), "syntax".into());
         out.insert("message".into(), diagnostic.message.clone().into());
         if let Some(at) = diagnostic.at {
-            let location = match at {
-                At::Bytes(start, end) => Self::location(path, self.position(start), self.position(end), None),
-                At::Utf16(start, end) => Self::location(path, self.position_of_unit(start), self.position_of_unit(end), None),
-                At::Fixed(line, column, offset) => Self::location(path, [line, column, offset], [line, column, offset], None),
-                At::FixedAtByte(line, column, byte) => {
-                    let offset = self.unit(byte);
-                    Self::location(path, [line, column, offset], [line, column, offset], None)
-                }
-            };
-            out.insert("location".into(), location);
+            out.insert("location".into(), self.source_location(path, at));
         }
         if let Some(details) = &diagnostic.details {
             out.insert("details".into(), details.clone());
@@ -527,6 +532,17 @@ mod tests {
         assert_eq!(positions.position(12), [3, 1, 9]);
         assert_eq!(positions.position_of_unit(6), [2, 4, 6]);
         assert_eq!(positions.position_of_unit(2), [2, 1, 2]);
+    }
+
+    #[test]
+    fn source_location_maps_every_kind_of_reader_place() {
+        let positions = Positions::new("a\r\nü𝄞=x\nz");
+        let point = |line: u32, column: u32, offset: u32| json!({ "line": line, "column": column, "offset": offset });
+        let at = |start: Value, end: Value| json!({ "path": "mod:x.txt", "start": start, "end": end });
+        assert_eq!(positions.source_location("mod:x.txt", At::Bytes(3, 9)), at(point(2, 1, 3), point(2, 4, 6)));
+        assert_eq!(positions.source_location("mod:x.txt", At::Utf16(3, 6)), at(point(2, 1, 3), point(2, 4, 6)));
+        assert_eq!(positions.source_location("mod:x.txt", At::Fixed(4, 2, 7)), at(point(4, 2, 7), point(4, 2, 7)));
+        assert_eq!(positions.source_location("mod:x.txt", At::FixedAtByte(2, 4, 9)), at(point(2, 4, 6), point(2, 4, 6)));
     }
 
     #[test]

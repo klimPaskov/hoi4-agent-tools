@@ -55,6 +55,39 @@ function bitmapDefinitionId(key: string, layer: 'face' | 'border' = 'face'): str
   return `gui-font-bitmap-${layer === 'face' ? '' : 'border-'}${sha256Bytes(key).slice(0, 20)}`;
 }
 
+/**
+ * The textures of one SVG. Each texture's bytes are written once, as a unit-square symbol in
+ * `<defs>`, and every draw is a `<use>` that stretches it over its rectangle. Writing the bytes
+ * at every use made one nine-slice texture shared by many elements fill the artifact ceiling.
+ */
+class TextureDefinitions {
+  private readonly ids = new Map<string, string>();
+
+  private id(dataUri: string): string {
+    let id = this.ids.get(dataUri);
+    if (id === undefined) {
+      id = `gui-texture-${sha256Bytes(dataUri).slice(0, 20)}`;
+      this.ids.set(dataUri, id);
+    }
+    return id;
+  }
+
+  /** The texture stretched over `rect`, like `<image preserveAspectRatio="none">`. */
+  use(dataUri: string, rect: GuiRect, attributes = ''): string {
+    return `<use${attributes} href="#${this.id(dataUri)}" ${rectAttributes(rect)}/>`;
+  }
+
+  definitions(): string {
+    return [...this.ids.entries()]
+      .sort(([, left], [, right]) => compareCodeUnits(left, right))
+      .map(
+        ([dataUri, id]) =>
+          `<symbol id="${id}" viewBox="0 0 1 1" preserveAspectRatio="none"><image width="1" height="1" href="${dataUri}" preserveAspectRatio="none"/></symbol>`,
+      )
+      .join('');
+  }
+}
+
 function sceneGlyphDefinitions(scene: GuiScene): string {
   const outlines = new Map<string, string>();
   const bitmaps = new Map<
@@ -128,7 +161,11 @@ function actualGlyphMarkup(
   return '';
 }
 
-function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRenderer): string {
+function renderText(
+  element: GuiSceneElement,
+  toolText: DeterministicSvgTextRenderer,
+  textures: TextureDefinitions,
+): string {
   const text = element.text;
   if (text === undefined || text.lines.length === 0) return '';
   const rect = element.unclippedRect;
@@ -166,7 +203,11 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
           height: icon.height,
         };
         if (icon.sprite?.supported === true && icon.sprite.dataUri !== undefined)
-          return `<image data-inline-icon="${escapeXml(icon.token)}" ${rectAttributes(iconRect)} href="${icon.sprite.dataUri}" preserveAspectRatio="xMidYMid meet"/>`;
+          return textures.use(
+            icon.sprite.dataUri,
+            containedRect(iconRect, icon.sprite.width, icon.sprite.height),
+            ` data-inline-icon="${escapeXml(icon.token)}"`,
+          );
         return `<g data-inline-icon-missing="${escapeXml(icon.token)}"><rect ${rectAttributes(iconRect)} fill="#331f3f" stroke="#ff42d0" stroke-width="1"/><path d="M ${finite(iconRect.x)} ${finite(iconRect.y)} L ${finite(iconRect.x + iconRect.width)} ${finite(iconRect.y + iconRect.height)} M ${finite(iconRect.x + iconRect.width)} ${finite(iconRect.y)} L ${finite(iconRect.x)} ${finite(iconRect.y + iconRect.height)}" stroke="#ff42d0"/></g>`;
       })
       .join('');
@@ -279,15 +320,32 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
   return `${clipDefinition}<g data-source-id="${escapeXml(element.sourceId)}" fill="#f5f2e8" stroke="#12151a" stroke-width="0.6" paint-order="stroke"${clip}>${lines.join('')}</g>`;
 }
 
-function renderSpriteImage(sprite: NonNullable<GuiSceneElement['sprite']>, rect: GuiRect): string {
+/** `rect` shrunk to the texture's aspect ratio and centred, like `xMidYMid meet`. */
+function containedRect(rect: GuiRect, width: number, height: number): GuiRect {
+  if (!(width > 0) || !(height > 0) || rect.width <= 0 || rect.height <= 0) return rect;
+  const scale = Math.min(rect.width / width, rect.height / height);
+  return {
+    x: rect.x + (rect.width - width * scale) / 2,
+    y: rect.y + (rect.height - height * scale) / 2,
+    width: width * scale,
+    height: height * scale,
+  };
+}
+
+function renderSpriteImage(
+  sprite: NonNullable<GuiSceneElement['sprite']>,
+  rect: GuiRect,
+  textures: TextureDefinitions,
+): string {
   if (!sprite.supported || sprite.dataUri === undefined) return '';
-  return `<image ${rectAttributes(rect)} href="${sprite.dataUri}" preserveAspectRatio="none"/>`;
+  return textures.use(sprite.dataUri, rect);
 }
 
 function renderSpriteSlice(
   sprite: NonNullable<GuiSceneElement['sprite']>,
   source: GuiRect,
   destination: GuiRect,
+  textures: TextureDefinitions,
 ): string {
   if (
     !sprite.supported ||
@@ -298,7 +356,7 @@ function renderSpriteSlice(
     destination.height <= 0
   )
     return '';
-  return `<svg ${rectAttributes(destination)} viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden"><image x="0" y="0" width="${finite(sprite.width)}" height="${finite(sprite.height)}" href="${sprite.dataUri}" preserveAspectRatio="none"/></svg>`;
+  return `<svg ${rectAttributes(destination)} viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden">${textures.use(sprite.dataUri, { x: 0, y: 0, width: sprite.width, height: sprite.height })}</svg>`;
 }
 
 function renderTiledSpriteSlice(
@@ -306,6 +364,7 @@ function renderTiledSpriteSlice(
   sprite: NonNullable<GuiSceneElement['sprite']>,
   source: GuiRect,
   destination: GuiRect,
+  textures: TextureDefinitions,
 ): string {
   if (
     !sprite.supported ||
@@ -319,10 +378,10 @@ function renderTiledSpriteSlice(
   const tileWidth = Math.max(1, source.width * element.scale);
   const tileHeight = Math.max(1, source.height * element.scale);
   const id = `gui-tile-${sha256Bytes(`${element.id}:${source.x}:${source.y}:${source.width}:${source.height}`).slice(0, 20)}`;
-  return `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" x="${finite(destination.x)}" y="${finite(destination.y)}" width="${finite(tileWidth)}" height="${finite(tileHeight)}"><svg width="${finite(tileWidth)}" height="${finite(tileHeight)}" viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden"><image x="0" y="0" width="${finite(sprite.width)}" height="${finite(sprite.height)}" href="${sprite.dataUri}" preserveAspectRatio="none"/></svg></pattern></defs><rect ${rectAttributes(destination)} fill="url(#${id})"/>`;
+  return `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" x="${finite(destination.x)}" y="${finite(destination.y)}" width="${finite(tileWidth)}" height="${finite(tileHeight)}"><svg width="${finite(tileWidth)}" height="${finite(tileHeight)}" viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden">${textures.use(sprite.dataUri, { x: 0, y: 0, width: sprite.width, height: sprite.height })}</svg></pattern></defs><rect ${rectAttributes(destination)} fill="url(#${id})"/>`;
 }
 
-function renderCorneredTile(element: GuiSceneElement): string {
+function renderCorneredTile(element: GuiSceneElement, textures: TextureDefinitions): string {
   const sprite = element.sprite;
   const rect = element.unclippedRect;
   const border = element.spriteBorderSize;
@@ -333,7 +392,7 @@ function renderCorneredTile(element: GuiSceneElement): string {
     border.width < 0 ||
     border.height < 0
   )
-    return sprite === undefined ? '' : renderSpriteImage(sprite, rect);
+    return sprite === undefined ? '' : renderSpriteImage(sprite, rect, textures);
   const sourceBorderX = Math.min(border.width, sprite.width / 2);
   const sourceBorderY = Math.min(border.height, sprite.height / 2);
   const destinationBorderX = Math.min(sourceBorderX * element.scale, rect.width / 2);
@@ -379,15 +438,15 @@ function renderCorneredTile(element: GuiSceneElement): string {
       };
       parts.push(
         row === 1 && column === 1 && element.spriteTilingCenter === true
-          ? renderTiledSpriteSlice(element, sprite, source, destination)
-          : renderSpriteSlice(sprite, source, destination),
+          ? renderTiledSpriteSlice(element, sprite, source, destination, textures)
+          : renderSpriteSlice(sprite, source, destination, textures),
       );
     }
   }
   return parts.join('');
 }
 
-function renderProgressbar(element: GuiSceneElement): string {
+function renderProgressbar(element: GuiSceneElement, textures: TextureDefinitions): string {
   const rect = element.unclippedRect;
   const sprite = element.sprite;
   const secondary = element.secondarySprite;
@@ -427,7 +486,7 @@ function renderProgressbar(element: GuiSceneElement): string {
       width: (region.width / rect.width) * texture.width,
       height: (region.height / rect.height) * texture.height,
     };
-    return renderSpriteSlice(texture, source, region);
+    return renderSpriteSlice(texture, source, region, textures);
   };
   const content = `${layer(secondary, remainder, element.progressColours?.second)}${layer(sprite, filled, element.progressColours?.first)}`;
   const filtering = element.progressShader?.textureFiltering;
@@ -440,38 +499,39 @@ function renderProgressbar(element: GuiSceneElement): string {
   return `<g image-rendering="${mode === 'nearest' ? 'optimizeSpeed' : 'optimizeQuality'}">${content}</g>`;
 }
 
-function renderMaskedShield(element: GuiSceneElement): string {
+function renderMaskedShield(element: GuiSceneElement, textures: TextureDefinitions): string {
   const rect = element.unclippedRect;
   const sprite = element.sprite;
   const mask = element.secondarySprite;
   if (sprite?.supported !== true || sprite.dataUri === undefined) return '';
   if (mask?.supported !== true || mask.dataUri === undefined)
-    return renderSpriteImage(sprite, rect);
+    return renderSpriteImage(sprite, rect, textures);
   const id = `gui-mask-${sha256Bytes(element.id).slice(0, 20)}`;
-  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" ${rectAttributes(rect)}><image ${rectAttributes(rect)} href="${mask.dataUri}" preserveAspectRatio="none"/></mask></defs><image ${rectAttributes(rect)} href="${sprite.dataUri}" preserveAspectRatio="none" mask="url(#${id})"/>`;
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" ${rectAttributes(rect)}>${textures.use(mask.dataUri, rect)}</mask></defs>${textures.use(sprite.dataUri, rect, ` mask="url(#${id})"`)}`;
 }
 
-function renderElementSprite(element: GuiSceneElement): string {
+function renderElementSprite(element: GuiSceneElement, textures: TextureDefinitions): string {
   if (element.sprite?.supported !== true || element.sprite.dataUri === undefined) return '';
-  if (element.spriteRenderMode === 'cornered-tile') return renderCorneredTile(element);
-  if (element.spriteRenderMode === 'progressbar') return renderProgressbar(element);
-  if (element.spriteRenderMode === 'masked-shield') return renderMaskedShield(element);
-  return renderSpriteImage(element.sprite, element.unclippedRect);
+  if (element.spriteRenderMode === 'cornered-tile') return renderCorneredTile(element, textures);
+  if (element.spriteRenderMode === 'progressbar') return renderProgressbar(element, textures);
+  if (element.spriteRenderMode === 'masked-shield') return renderMaskedShield(element, textures);
+  return renderSpriteImage(element.sprite, element.unclippedRect, textures);
 }
 
 function renderBaseElement(
   element: GuiSceneElement,
   clipId: string | undefined,
   toolText: DeterministicSvgTextRenderer,
+  textures: TextureDefinitions,
 ): string {
   if (!element.visible) return '';
   const rect = element.unclippedRect;
   const clip = clipId === undefined ? '' : ` clip-path="url(#${clipId})"`;
   const content: string[] = [];
   if (element.spriteRenderMode === 'progressbar' && element.progressColours !== undefined) {
-    content.push(renderProgressbar(element));
+    content.push(renderProgressbar(element, textures));
   } else if (element.sprite?.supported === true && element.sprite.dataUri !== undefined) {
-    const sprite = renderElementSprite(element);
+    const sprite = renderElementSprite(element, textures);
     if (element.spriteShader === undefined) content.push(sprite);
     else {
       const id = `gui-shader-${sha256Bytes(element.id).slice(0, 20)}`;
@@ -495,7 +555,7 @@ function renderBaseElement(
       `<rect x="${finite(rect.x)}" y="${finite(rect.y)}" width="${finite(rect.width * element.progressRatio)}" height="${finite(rect.height)}" fill="#5ecf8d" fill-opacity="0.65"/>`,
     );
   }
-  content.push(renderText(element, toolText));
+  content.push(renderText(element, toolText, textures));
   return `<g id="${escapeXml(element.id)}" data-source="${escapeXml(element.sourcePath)}" data-source-id="${escapeXml(element.sourceId)}"${clip}>${content.join('')}</g>`;
 }
 
@@ -528,12 +588,16 @@ function renderOverlay(
   return '';
 }
 
-function renderTooltipPreview(scene: GuiScene, toolText: DeterministicSvgTextRenderer): string {
+function renderTooltipPreview(
+  scene: GuiScene,
+  toolText: DeterministicSvgTextRenderer,
+  textures: TextureDefinitions,
+): string {
   const tooltip = scene.tooltipPreview;
   if (tooltip === undefined) return '';
   return (
-    renderBaseElement(tooltip.element, undefined, toolText) +
-    renderBaseElement(tooltip.textElement, undefined, toolText)
+    renderBaseElement(tooltip.element, undefined, toolText, textures) +
+    renderBaseElement(tooltip.textElement, undefined, toolText, textures)
   );
 }
 
@@ -583,6 +647,7 @@ export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
   const view = viewFor(scene, variant);
   assertRenderDimensions(view.width, view.height, `GUI ${variant} SVG`);
   const toolText = new DeterministicSvgTextRenderer();
+  const textures = new TextureDefinitions();
   const clipDefinitions = scene.elements.flatMap((element, index) =>
     element.clipRect === undefined
       ? []
@@ -595,14 +660,15 @@ export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
           element,
           element.clipRect === undefined ? undefined : `clip-${index}`,
           toolText,
+          textures,
         ),
       )
-      .join('') + renderTooltipPreview(scene, toolText);
+      .join('') + renderTooltipPreview(scene, toolText, textures);
   const overlays = scene.elements
     .map((element) => renderOverlay(element, variant, toolText))
     .join('');
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${textures.definitions()}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
 }
 
 async function cooperativeParts<T>(
@@ -630,6 +696,7 @@ async function sceneToSvgCooperative(
   const view = viewFor(scene, variant);
   assertRenderDimensions(view.width, view.height, `GUI ${variant} SVG`);
   const toolText = new DeterministicSvgTextRenderer();
+  const textures = new TextureDefinitions();
   const clipDefinitions = await cooperativeParts(
     scene.elements,
     (element, index) =>
@@ -646,16 +713,17 @@ async function sceneToSvgCooperative(
           element,
           element.clipRect === undefined ? undefined : `clip-${index}`,
           toolText,
+          textures,
         ),
       signal,
-    )) + renderTooltipPreview(scene, toolText);
+    )) + renderTooltipPreview(scene, toolText, textures);
   const overlays = await cooperativeParts(
     scene.elements,
     (element) => renderOverlay(element, variant, toolText),
     signal,
   );
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${textures.definitions()}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
 }
 
 export function hierarchyToSvg(scene: GuiScene): string {
