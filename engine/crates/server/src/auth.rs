@@ -85,12 +85,38 @@ impl From<HttpAuthError> for AuthFailure {
     }
 }
 
-/// Checks a JWT's signature, issuer, audience and algorithm, and returns its payload claims.
+/// The clock tolerance of `jwtVerify` in the TypeScript server, for `nbf` (and the verifier's own
+/// `exp` check; the server then checks `exp` again without tolerance).
+pub const JWT_CLOCK_TOLERANCE_SECONDS: f64 = 5.0;
+
+/// What a [`JwtVerifier`] must enforce, from the OAuth configuration, as the TypeScript server
+/// passes it to `jwtVerify`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JwtExpectations<'a> {
+    pub issuer: &'a str,
+    pub audience: &'a str,
+    /// The only signature algorithms accepted; `none` is never among them.
+    pub algorithms: &'a [String],
+    pub clock_tolerance_seconds: f64,
+}
+
+/// Checks a JWT's signature against the configured JWKS, with only the expected algorithms, and
+/// its issuer, audience, `exp` and `nbf` within the given tolerance, then returns its payload
+/// claims. Any failure is reported as `Err`.
 ///
-/// An implementation verifies against the configured JWKS with a 5-second clock tolerance, as
-/// `jwtVerify` does in the TypeScript server. Any failure is reported as `Err`.
+/// [`Authenticator`] checks `iss`, `aud`, `nbf`, `exp` and `sub` of the returned claims again,
+/// so a verifier that skips a claim check cannot widen access.
 pub trait JwtVerifier: Send + Sync {
-    fn verify(&self, token: &str) -> Result<Map<String, Value>, String>;
+    fn verify(&self, token: &str, expected: &JwtExpectations<'_>) -> Result<Map<String, Value>, String>;
+}
+
+/// True when the `aud` claim, a string or an array of strings, names `audience`.
+fn audience_matches(claim: Option<&Value>, audience: &str) -> bool {
+    match claim {
+        Some(Value::String(value)) => value == audience,
+        Some(Value::Array(values)) => values.iter().any(|value| value.as_str() == Some(audience)),
+        _ => false,
+    }
 }
 
 fn is_scope_token(scope: &str) -> bool {
@@ -274,8 +300,25 @@ impl Authenticator {
 
     fn authenticate_oauth(&self, token: &str, presented: String, required: &[String], now_seconds: f64) -> Result<AuthenticatedPrincipal, AuthFailure> {
         let failed = || AuthFailure::Http(HttpAuthError::invalid("Bearer token verification failed", required));
-        let Some(verifier) = &self.verifier else { return Err(failed()) };
-        let payload = verifier.verify(token).map_err(|_| failed())?;
+        let (Some(verifier), Some(oauth)) = (&self.verifier, &self.config.oauth) else { return Err(failed()) };
+        let expected = JwtExpectations {
+            issuer: &oauth.issuer,
+            audience: &oauth.audience,
+            algorithms: &oauth.algorithms,
+            clock_tolerance_seconds: JWT_CLOCK_TOLERANCE_SECONDS,
+        };
+        let payload = verifier.verify(token, &expected).map_err(|_| failed())?;
+        if payload.get("iss").and_then(Value::as_str) != Some(oauth.issuer.as_str()) || !audience_matches(payload.get("aud"), &oauth.audience) {
+            return Err(failed());
+        }
+        // `jwtVerify` refuses a token that is not yet valid, beyond its clock tolerance.
+        match payload.get("nbf") {
+            None => {}
+            Some(nbf) => match nbf.as_f64() {
+                Some(nbf) if nbf.is_finite() && nbf <= now_seconds + JWT_CLOCK_TOLERANCE_SECONDS => {}
+                _ => return Err(failed()),
+            },
+        }
         let subject = match payload.get("sub") {
             Some(Value::String(subject)) if !subject.is_empty() => subject.clone(),
             _ => return Err(failed()),
@@ -523,20 +566,53 @@ mod tests {
         assert_eq!(metadata["scopes_supported"], json!(["hoi4:read", "hoi4:write"]));
     }
 
+    /// Returns fixed claims for the token `signed`, after checking that the server passed the
+    /// configured expectations. It checks no claim itself, so the server's own claim checks are
+    /// what the tests see.
     struct FixedClaims(Map<String, Value>);
 
     impl JwtVerifier for FixedClaims {
-        fn verify(&self, token: &str) -> Result<Map<String, Value>, String> {
+        fn verify(&self, token: &str, expected: &JwtExpectations<'_>) -> Result<Map<String, Value>, String> {
+            assert_eq!((expected.issuer, expected.audience), ("https://identity.example.test/", "hoi4-agent-tools"));
+            assert!(!expected.algorithms.is_empty() && !expected.algorithms.iter().any(|algorithm| algorithm.eq_ignore_ascii_case("none")));
+            assert_eq!(expected.clock_tolerance_seconds, 5.0);
             if token == "signed" { Ok(self.0.clone()) } else { Err("bad signature".to_owned()) }
         }
     }
 
+    /// Claims with the configured issuer and audience unless the test sets its own.
     fn oauth_auth(claims: Value) -> Authenticator {
+        let mut claims = claims.as_object().unwrap().clone();
+        claims.entry("iss").or_insert_with(|| json!("https://identity.example.test/"));
+        claims.entry("aud").or_insert_with(|| json!("hoi4-agent-tools"));
         let config = HttpConfig::from_json(
             &json!({ "publicUrl": "https://tools.example.test", "oauth": oauth_json(), "principals": [{ "principal": "fixture-user" }] }),
         )
         .unwrap();
-        Authenticator::new(&config, &|_| None, Some(Box::new(FixedClaims(claims.as_object().unwrap().clone()))))
+        Authenticator::new(&config, &|_| None, Some(Box::new(FixedClaims(claims))))
+    }
+
+    // jose's jwtVerify checks of tests/unit/oauth-auth.test.ts, enforced again by the server.
+    #[test]
+    fn oauth_refuses_wrong_issuer_audience_and_a_token_not_yet_valid() {
+        let read = scopes(&["hoi4:read"]);
+        let base = || json!({ "sub": "fixture-user", "exp": 2000.0, "scope": "hoi4:read" });
+        let with = |key: &str, value: Value| {
+            let mut claims = base();
+            claims[key] = value;
+            claims
+        };
+        let refused = |claims: Value| http_error(oauth_auth(claims).authenticate(Some("Bearer signed"), &read, 1000.0).unwrap_err()).code;
+        assert_eq!(refused(with("iss", json!("https://evil.example.test/"))), "AUTH_INVALID");
+        assert_eq!(refused(with("iss", Value::Null)), "AUTH_INVALID");
+        assert_eq!(refused(with("aud", json!("another-resource"))), "AUTH_INVALID");
+        assert_eq!(refused(with("aud", json!(["another-resource"]))), "AUTH_INVALID");
+        assert_eq!(refused(with("aud", json!(7))), "AUTH_INVALID");
+        assert!(oauth_auth(with("aud", json!(["another-resource", "hoi4-agent-tools"]))).authenticate(Some("Bearer signed"), &read, 1000.0).is_ok());
+        assert_eq!(refused(with("nbf", json!(1005.5))), "AUTH_INVALID", "nbf beyond the 5 s tolerance");
+        assert_eq!(refused(with("nbf", json!("1000"))), "AUTH_INVALID", "a non-numeric nbf");
+        assert!(oauth_auth(with("nbf", json!(1005.0))).authenticate(Some("Bearer signed"), &read, 1000.0).is_ok(), "nbf within the tolerance");
+        assert!(oauth_auth(with("nbf", json!(900.0))).authenticate(Some("Bearer signed"), &read, 1000.0).is_ok());
     }
 
     // Ported from tests/unit/oauth-auth.test.ts (the claim rules after a verified signature).

@@ -35,7 +35,7 @@ pub struct Session {
 }
 
 impl Session {
-    fn expired(&self, now_ms: u64) -> bool {
+    pub(crate) fn expired(&self, now_ms: u64) -> bool {
         self.credential_expires_at_ms.is_some_and(|at| at <= now_ms) || (self.active_requests == 0 && self.expires_at_ms <= now_ms)
     }
 }

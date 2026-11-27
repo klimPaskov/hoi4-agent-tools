@@ -22,3 +22,7 @@ Sources this crate adapts, one row per adapted file. Every source is in this rep
 Unit tests ported beside their modules: `tests/unit/auth-edge-cases.test.ts` and `oauth-auth.test.ts` (claim rules) and `http-deployment.test.ts` in `auth.rs`; `http-client-address.test.ts` in `limits.rs`; `event-store.test.ts` in `event_store.rs`; `bounded-stdio.test.ts` and `stdio-lifetime.test.ts` in `stdio.rs`.
 
 Not yet ported, and refused instead of guessed: the 2026-07-28 modern protocol of `routeModernRequest` and `create-modern-operations.ts`, JWT signature verification against a JWKS (an OAuth deployment without a verifier refuses to start), and tool schemas generated from Rust types (they come with the tool wiring, ADR 0089 step 8).
+
+The priming event of each POST stream (an id with empty data, for clients at 2025-11-25 or later) follows `writePrimingEvent` of `@modelcontextprotocol/sdk` `webStandardStreamableHttp.js`. The server checks `iss`, `aud`, `nbf` (5-second tolerance) and `exp` of verified claims itself, as `jwtVerify` does in `auth.ts`, so a verifier cannot widen access by skipping one.
+
+Waiting for the tool wiring, and owed when it lands (D-88): the workspace isolation between principals of `tests/integration/http-security.test.ts` ("isolates workspace discovery, tool access, and sessions between principals"), which needs grants wired to the workspace tools. Session isolation between principals is tested now; workspace discovery and tool access per grant are not, because no tool is wired yet.

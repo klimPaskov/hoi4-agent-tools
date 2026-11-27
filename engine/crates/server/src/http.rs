@@ -40,8 +40,13 @@ use crate::session::{SessionRefusal, SessionStore};
 pub const MAX_HEADER_BYTES: usize = 16_384;
 const STREAM_POLL: Duration = Duration::from_millis(250);
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as u64)
+/// Wall-clock milliseconds since the Unix epoch. Session lifetimes, credential expiry and rate
+/// windows read it; socket deadlines use the monotonic clock instead.
+pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
+
+/// The system wall clock.
+pub fn system_clock() -> Clock {
+    Arc::new(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as u64))
 }
 
 /// A configured bind host as it appears in an authority: IPv6 in brackets.
@@ -285,6 +290,8 @@ fn body_framing(head: &Head) -> Result<Framing, Reply> {
 
 enum BodyError {
     TooLarge,
+    /// Chunked framing that is not valid HTTP/1.1.
+    Malformed,
     Io,
 }
 
@@ -298,7 +305,7 @@ impl Deadline {
 }
 
 fn read_exact_bounded(reader: &mut BufReader<TcpStream>, deadline: &Deadline, length: usize, body: &mut Vec<u8>) -> Result<(), BodyError> {
-    let target = body.len() + length;
+    let target = body.len().checked_add(length).ok_or(BodyError::TooLarge)?;
     while body.len() < target {
         deadline.arm(reader.get_ref())?;
         let mut chunk = [0u8; 8192];
@@ -345,18 +352,22 @@ fn read_body(reader: &mut BufReader<TcpStream>, framing: &Framing, limit: u64, d
         Framing::Chunked => loop {
             let line = read_line_bounded(reader, deadline)?;
             let size_text = line.split(';').next().unwrap_or_default().trim();
-            let size = u64::from_str_radix(size_text, 16).map_err(|_| BodyError::Io)?;
+            if size_text.is_empty() || !size_text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(BodyError::Malformed);
+            }
+            // A size beyond u64 is larger than any limit.
+            let size = u64::from_str_radix(size_text, 16).map_err(|_| BodyError::TooLarge)?;
             if size == 0 {
                 // Trailers are read and ignored.
                 while !read_line_bounded(reader, deadline)?.is_empty() {}
                 break;
             }
-            if body.len() as u64 + size > limit {
+            if (body.len() as u64).checked_add(size).is_none_or(|total| total > limit) {
                 return Err(BodyError::TooLarge);
             }
             read_exact_bounded(reader, deadline, size as usize, &mut body)?;
             if !read_line_bounded(reader, deadline)?.is_empty() {
-                return Err(BodyError::Io);
+                return Err(BodyError::Malformed);
             }
         },
     }
@@ -377,6 +388,13 @@ struct Shared {
     metadata: Option<String>,
     shutdown: AtomicBool,
     connections: AtomicU64,
+    clock: Clock,
+}
+
+impl Shared {
+    fn now_ms(&self) -> u64 {
+        (self.clock)()
+    }
 }
 
 /// A running Streamable HTTP server.
@@ -444,6 +462,18 @@ pub fn start_http_server(
     verifier: Option<Box<dyn JwtVerifier>>,
     service: Arc<dyn McpService>,
 ) -> Result<HttpServerHandle, ServiceError> {
+    start_http_server_with_clock(config, secrets, verifier, service, system_clock())
+}
+
+/// [`start_http_server`] with the wall clock it reads, so tests can move time forward instead
+/// of sleeping through a session lifetime.
+pub fn start_http_server_with_clock(
+    config: HttpConfig,
+    secrets: SecretLookup<'_>,
+    verifier: Option<Box<dyn JwtVerifier>>,
+    service: Arc<dyn McpService>,
+    clock: Clock,
+) -> Result<HttpServerHandle, ServiceError> {
     config.validate()?;
     validate_http_deployment(&config, secrets)?;
     if config.oauth.is_some() && verifier.is_none() {
@@ -484,6 +514,7 @@ pub fn start_http_server(
         metadata,
         shutdown: AtomicBool::new(false),
         connections: AtomicU64::new(0),
+        clock,
         config,
     });
     let accept_shared = Arc::clone(&shared);
@@ -500,7 +531,7 @@ pub fn start_http_server(
             while !cleanup_shared.shutdown.load(Ordering::SeqCst) {
                 std::thread::sleep(STREAM_POLL);
                 if last.elapsed() >= interval {
-                    cleanup_shared.sessions.prune(now_ms());
+                    cleanup_shared.sessions.prune(cleanup_shared.now_ms());
                     last = Instant::now();
                 }
             }
@@ -712,7 +743,42 @@ fn admission_reply(refusal: AdmissionRefusal) -> Reply {
     }
 }
 
+/// Handles one request. The body framing is worked out first, and a request whose body is left
+/// unread never keeps its connection: the unread bytes would otherwise be parsed as the next
+/// request on the socket (a desync that mixes up responses behind a connection-reusing proxy).
 fn handle_request(head: &Head, reader: &mut BufReader<TcpStream>, writer: &mut TcpStream, peer: SocketAddr, shared: &Shared, deadline: &Deadline) -> Outcome {
+    let framing = match body_framing(head) {
+        Ok(framing) => framing,
+        Err(mut reply) => {
+            reply.close = true;
+            return reply.into();
+        }
+    };
+    let mut consumed = matches!(framing, Framing::None | Framing::Length(0));
+    let outcome = handle_framed_request(head, &framing, &mut consumed, reader, writer, peer, shared, deadline);
+    if consumed {
+        return outcome;
+    }
+    match outcome {
+        Outcome::Reply(mut reply) => {
+            reply.close = true;
+            Outcome::Reply(reply)
+        }
+        Outcome::Streamed { .. } => Outcome::Streamed { keep_alive: false },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_framed_request(
+    head: &Head,
+    framing: &Framing,
+    consumed: &mut bool,
+    reader: &mut BufReader<TcpStream>,
+    writer: &mut TcpStream,
+    peer: SocketAddr,
+    shared: &Shared,
+    deadline: &Deadline,
+) -> Outcome {
     let config = &shared.config;
     let names = head.headers.iter().map(|(name, _)| name.as_str());
     if has_ambiguous_security_headers(names) {
@@ -740,53 +806,58 @@ fn handle_request(head: &Head, reader: &mut BufReader<TcpStream>, writer: &mut T
             return Reply::json_rpc_error(415, "Unsupported Media Type: Content-Encoding must be identity", -32_000).into();
         }
     }
-    let framing = match body_framing(head) {
-        Ok(framing) => framing,
-        Err(reply) => return reply.into(),
-    };
     // A chunked POST declares no length, so it reserves the whole body limit.
-    let declared = match &framing {
+    let declared = match framing {
         Framing::Length(length) => Some(length.to_string()),
         Framing::None | Framing::Chunked => None,
     };
     let mut ticket = match shared.admission.admit(method == "POST", declared.as_deref()) {
         Ok(ticket) => ticket,
-        Err(refusal) => return close_unless_bodyless(admission_reply(refusal), &framing),
+        Err(refusal) => return Outcome::from(admission_reply(refusal)),
     };
     let socket = match peer.ip() {
         std::net::IpAddr::V4(address) => address.to_string(),
         std::net::IpAddr::V6(address) => address.to_string(),
     };
     let Some(client) = rate_limit_client_address(&socket, head.header("x-forwarded-for"), &config.trusted_proxy_addresses) else {
-        return close_unless_bodyless(Reply::error_code(400, "invalid_forwarded_for"), &framing);
+        return Outcome::from(Reply::error_code(400, "invalid_forwarded_for"));
     };
-    if !shared.pre_auth_rates.hit(&client, now_ms()) {
-        return close_unless_bodyless(Reply::error_code(429, "rate_limit").retry_after("60"), &framing);
+    if !shared.pre_auth_rates.hit(&client, shared.now_ms()) {
+        return Outcome::from(Reply::error_code(429, "rate_limit").retry_after("60"));
     }
     let base_scopes = required_scopes_for_mcp_request(config, None);
-    let now_seconds = now_ms() as f64 / 1000.0;
+    let now_seconds = shared.now_ms() as f64 / 1000.0;
     if mcp && !matches!(method, "GET" | "POST" | "DELETE") {
-        let reply = match shared.authenticator.authenticate(head.header("authorization"), &base_scopes, now_seconds) {
+        // Authentication, then the per-principal rate, as `authenticateMiddleware` runs first.
+        let reply = match authenticate_request(head, None, shared, now_seconds) {
             Ok(_) => {
                 let mut reply = Reply::json_rpc_error(405, "Method not allowed.", -32_000);
                 reply.headers.push(("Allow", "GET, POST, DELETE".to_owned()));
                 reply
             }
-            Err(failure) => auth_failure_reply(config, failure, &base_scopes),
+            Err(reply) => reply,
         };
-        return close_unless_bodyless(reply, &framing);
+        return Outcome::from(reply);
     }
     let mut body: Option<Value> = None;
     if mcp && method == "POST" {
         // Authenticate before reading the body, so an unauthenticated caller cannot hold a slot
         // and body budget while it sends one slowly.
         if let Err(failure) = shared.authenticator.authenticate(head.header("authorization"), &base_scopes, now_seconds) {
-            return close_unless_bodyless(auth_failure_reply(config, failure, &base_scopes), &framing);
+            return Outcome::from(auth_failure_reply(config, failure, &base_scopes));
         }
-        let bytes = match read_body(reader, &framing, config.max_body_bytes, deadline) {
-            Ok(bytes) => bytes,
+        let bytes = match read_body(reader, framing, config.max_body_bytes, deadline) {
+            Ok(bytes) => {
+                *consumed = true;
+                bytes
+            }
             Err(BodyError::TooLarge) => {
                 let mut reply = Reply::json_rpc_error(413, "Payload too large", -32_000);
+                reply.close = true;
+                return reply.into();
+            }
+            Err(BodyError::Malformed) => {
+                let mut reply = Reply::json_rpc_error(400, "Malformed chunked request body", -32_000);
                 reply.close = true;
                 return reply.into();
             }
@@ -812,7 +883,7 @@ fn handle_request(head: &Head, reader: &mut BufReader<TcpStream>, writer: &mut T
             return Reply::error_code(429, "concurrency_limit").retry_after("1").into();
         }
         body = Some(parsed);
-    } else if !matches!(framing, Framing::None) {
+    } else if !*consumed {
         // Only an MCP POST reads a body; any other request with one cannot keep the connection.
         let mut reply = route_bodyless(head, &path, mcp, shared, &mut ticket, writer, now_seconds);
         if let Outcome::Reply(reply) = &mut reply {
@@ -824,13 +895,6 @@ fn handle_request(head: &Head, reader: &mut BufReader<TcpStream>, writer: &mut T
         return handle_post(head, body.unwrap_or(Value::Null), writer, shared, now_seconds);
     }
     route_bodyless(head, &path, mcp, shared, &mut ticket, writer, now_seconds)
-}
-
-fn close_unless_bodyless(mut reply: Reply, framing: &Framing) -> Outcome {
-    if !matches!(framing, Framing::None) {
-        reply.close = true;
-    }
-    reply.into()
 }
 
 fn route_bodyless(head: &Head, path: &str, mcp: bool, shared: &Shared, ticket: &mut AdmissionTicket, writer: &mut TcpStream, now_seconds: f64) -> Outcome {
@@ -858,7 +922,7 @@ fn authenticate_request(head: &Head, body: Option<&Value>, shared: &Shared, now_
         .authenticator
         .authenticate(head.header("authorization"), &required, now_seconds)
         .map_err(|failure| auth_failure_reply(&shared.config, failure, &required))?;
-    if !shared.rates.hit(&principal.principal, now_ms()) {
+    if !shared.rates.hit(&principal.principal, shared.now_ms()) {
         return Err(Reply::error_code(429, "rate_limit").retry_after("60"));
     }
     Ok(principal)
@@ -871,23 +935,56 @@ struct SessionRequest<'a> {
 
 impl Drop for SessionRequest<'_> {
     fn drop(&mut self) {
-        self.shared.sessions.finish(&self.id, now_ms());
+        self.shared.sessions.finish(&self.id, self.shared.now_ms());
     }
 }
 
-fn caller_for(shared: &Shared, session_id: &str) -> CallerContext {
-    shared
-        .sessions
-        .with_session(session_id, |session| CallerContext { principal: Some(session.principal.clone()), scopes: session.scopes.clone() })
-        .unwrap_or_default()
+/// The caller of an authenticated HTTP request: always its principal and the credential's scopes,
+/// never a default. A default `CallerContext` has no principal, which is the trusted stdio caller.
+fn caller_for(principal: &crate::auth::AuthenticatedPrincipal) -> CallerContext {
+    CallerContext { principal: Some(principal.principal.clone()), scopes: principal.scopes.clone() }
 }
 
-fn stream_answer(writer: &mut TcpStream, shared: &Shared, session_id: &str, answer: &Value, header_session: Option<&str>) -> Outcome {
+/// The revision a POST speaks for the priming decision: the `initialize` request's own, else the
+/// header, else the SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION`.
+fn post_protocol_version<'a>(head: &'a Head, body: &'a Value) -> &'a str {
+    if is_initialize_request(body) {
+        return body.get("params").and_then(|params| params.get("protocolVersion")).and_then(Value::as_str).unwrap_or_default();
+    }
+    head.header("mcp-protocol-version").unwrap_or(DEFAULT_NEGOTIATED_PROTOCOL_VERSION)
+}
+
+/// The first revision whose clients accept the empty-data priming event.
+const PRIMING_PROTOCOL_VERSION: &str = "2025-11-25";
+const DEFAULT_NEGOTIATED_PROTOCOL_VERSION: &str = "2025-03-26";
+
+/// Answers on a new event stream of a session. As the SDK's `writePrimingEvent`, a client at
+/// 2025-11-25 or later first gets a stored priming event (an id with empty data) to resume from.
+fn stream_answer(writer: &mut TcpStream, shared: &Shared, session_id: &str, answer: &Value, protocol_version: &str) -> Outcome {
     let stream_id = random_uuid();
-    let event_id =
-        shared.sessions.with_session(session_id, |session| session.event_store.store_event(&stream_id, answer, now_ms())).unwrap_or_else(random_uuid);
-    let written = write_stream_head(writer, header_session).and_then(|()| write_event(writer, &event_id, answer)).and_then(|()| end_stream(writer));
+    let now = shared.now_ms();
+    let (priming, event_id) = shared
+        .sessions
+        .with_session(session_id, |session| {
+            let priming = (protocol_version >= PRIMING_PROTOCOL_VERSION)
+                .then(|| session.event_store.store_event(&stream_id, &Value::Object(serde_json::Map::new()), now));
+            (priming, session.event_store.store_event(&stream_id, answer, now))
+        })
+        .unwrap_or_else(|| (None, random_uuid()));
+    let mut written = write_stream_head(writer, Some(session_id));
+    if let Some(priming) = &priming {
+        written = written.and_then(|()| write_priming_event(writer, priming));
+    }
+    let written = written.and_then(|()| write_event(writer, &event_id, answer)).and_then(|()| end_stream(writer));
     Outcome::Streamed { keep_alive: written.is_ok() }
+}
+
+fn write_priming_event(stream: &mut TcpStream, event_id: &str) -> std::io::Result<()> {
+    let data = format!("id: {event_id}\ndata: \n\n");
+    stream.write_all(format!("{:x}\r\n", data.len()).as_bytes())?;
+    stream.write_all(data.as_bytes())?;
+    stream.write_all(b"\r\n")?;
+    stream.flush()
 }
 
 fn handle_post(head: &Head, body: Value, writer: &mut TcpStream, shared: &Shared, now_seconds: f64) -> Outcome {
@@ -904,7 +1001,7 @@ fn handle_post(head: &Head, body: Value, writer: &mut TcpStream, shared: &Shared
         return Reply::json_rpc_error(400, "JSON-RPC batching is not supported", -32_000).into();
     }
     let both = ["application/json", "text/event-stream"];
-    let now = now_ms();
+    let now = shared.now_ms();
     if session_header.is_none() {
         if !is_initialize_request(&body) {
             return Reply::json_rpc_error(400, "No valid session ID or initialize request", -32_000).into();
@@ -917,7 +1014,7 @@ fn handle_post(head: &Head, body: Value, writer: &mut TcpStream, shared: &Shared
             Ok(pending) => pending,
             Err(refusal) => return session_refusal_reply(config, refusal).into(),
         };
-        let caller = CallerContext { principal: Some(principal.principal.clone()), scopes: principal.scopes.clone() };
+        let caller = caller_for(&principal);
         let Some(answer) = shared.service.handle(&body, &caller) else { return Reply::json_rpc_error(500, "Internal server error", -32_000).into() };
         if answer.get("result").is_none() {
             // A failed initialize opens no session.
@@ -926,7 +1023,7 @@ fn handle_post(head: &Head, body: Value, writer: &mut TcpStream, shared: &Shared
         }
         let requested = body.get("params").and_then(|params| params.get("protocolVersion")).and_then(Value::as_str);
         let id = shared.sessions.open(pending, negotiate(requested), now);
-        return stream_answer(writer, shared, &id, &answer, Some(&id));
+        return stream_answer(writer, shared, &id, &answer, post_protocol_version(head, &body));
     }
     let id = match shared.sessions.begin(session_header, &principal, now) {
         Ok(id) => id,
@@ -940,10 +1037,12 @@ fn handle_post(head: &Head, body: Value, writer: &mut TcpStream, shared: &Shared
     if is_initialize_request(&body) {
         return Reply::json_rpc_error(400, "Invalid Request: Server already initialized", -32_600).into();
     }
-    let caller = caller_for(shared, &request.id);
+    // `begin` checked this credential against the session. The caller comes from the credential,
+    // so a session removed meanwhile cannot turn the request into an ungranted one.
+    let caller = caller_for(&principal);
     let answer = shared.service.handle(&body, &caller);
     match (kind, answer) {
-        (MessageKind::Request, Some(answer)) => stream_answer(writer, shared, &request.id, &answer, Some(&request.id)),
+        (MessageKind::Request, Some(answer)) => stream_answer(writer, shared, &request.id, &answer, post_protocol_version(head, &body)),
         (MessageKind::Request, None) => Reply::json_rpc_error(500, "Internal server error", -32_000).into(),
         _ => Reply::empty(202).into(),
     }
@@ -976,7 +1075,7 @@ fn handle_get(head: &Head, writer: &mut TcpStream, shared: &Shared, ticket: &mut
     if let Err(message) = check_protocol_header(head.header("mcp-protocol-version"), true) {
         return Reply::json_rpc_error(400, &message, -32_000).into();
     }
-    let id = match shared.sessions.begin(head.header("mcp-session-id"), &principal, now_ms()) {
+    let id = match shared.sessions.begin(head.header("mcp-session-id"), &principal, shared.now_ms()) {
         Ok(id) => id,
         Err(refusal) => return session_refusal_reply(config, refusal).into(),
     };
@@ -992,7 +1091,7 @@ fn handle_get(head: &Head, writer: &mut TcpStream, shared: &Shared, ticket: &mut
     // A long-lived stream holds no request slot.
     ticket.release();
     let replay = match head.header("last-event-id") {
-        Some(last) => match shared.sessions.with_session(&request.id, |session| session.event_store.replay_events_after(last, now_ms())) {
+        Some(last) => match shared.sessions.with_session(&request.id, |session| session.event_store.replay_events_after(last, shared.now_ms())) {
             Some(Ok((_, events))) => events,
             _ => return Reply::json_rpc_error(400, "Event ID is unknown or expired", -32_000).into(),
         },
@@ -1006,12 +1105,25 @@ fn handle_get(head: &Head, writer: &mut TcpStream, shared: &Shared, ticket: &mut
     for (event_id, message) in &replay {
         open = open && write_event(writer, event_id, message).is_ok();
     }
-    while open && !shared.shutdown.load(Ordering::SeqCst) && shared.sessions.contains(&request.id) && peer_open(writer) {
+    while open && !shared.shutdown.load(Ordering::SeqCst) && session_live(shared, &request.id) && peer_open(writer) {
         std::thread::sleep(STREAM_POLL);
     }
     shared.sessions.with_session(&request.id, |session| session.standalone_stream = false);
     let ended = open && end_stream(writer).is_ok();
     Outcome::Streamed { keep_alive: ended && !shared.shutdown.load(Ordering::SeqCst) }
+}
+
+/// True while a session exists and has not expired. An expired session is removed at once, as the
+/// TypeScript per-session timer does at its `expiresAt`, so a stream never outlives its credential.
+fn session_live(shared: &Shared, id: &str) -> bool {
+    match shared.sessions.with_session(id, |session| session.expired(shared.now_ms())) {
+        None => false,
+        Some(false) => true,
+        Some(true) => {
+            shared.sessions.remove(id);
+            false
+        }
+    }
 }
 
 fn handle_delete(head: &Head, shared: &Shared, now_seconds: f64) -> Outcome {
@@ -1022,7 +1134,7 @@ fn handle_delete(head: &Head, shared: &Shared, now_seconds: f64) -> Outcome {
     if let Err(message) = check_protocol_header(head.header("mcp-protocol-version"), true) {
         return Reply::json_rpc_error(400, &message, -32_000).into();
     }
-    let id = match shared.sessions.begin(head.header("mcp-session-id"), &principal, now_ms()) {
+    let id = match shared.sessions.begin(head.header("mcp-session-id"), &principal, shared.now_ms()) {
         Ok(id) => id,
         Err(refusal) => return session_refusal_reply(&shared.config, refusal).into(),
     };
