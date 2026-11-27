@@ -3,7 +3,8 @@
 //! Ported from `src/hoi4_agent_tools/core/transactions.ts` (`TransactionManager.plan`,
 //! `commitPlannedJournal`, `pruneExpiredJournals`, `apply`, `recover`, `recoverTransaction`,
 //! `assertRecoveryPrincipal`, `restoreInterruptedTransaction`, `restoreBeforeState`, `safeFailure`,
-//! `TransactionHooks`), commit `9b7dc80d`. The TypeScript manager plans and applies in two calls
+//! `TransactionHooks`), commit `9b7dc80d`, and its refused-rollback cleanup (`withRetainedBackups`,
+//! `discardSettledBackups`, `workspaceAtAfterState`, `discardFailed`), commit `d9b0268b`. The TypeScript manager plans and applies in two calls
 //! bound by a plan hash; the engine plans and applies in one call under one hold of the workspace
 //! lock, writing the same journal, so a tool call writes the whole plan or refuses it and nothing
 //! about the journal reaches agents.
@@ -15,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hoi4_core::canonical::{canonical_json, compare_code_units, hash_canonical, sha256_hex};
-use hoi4_core::diagnostics::has_blocking;
+use hoi4_core::diagnostics::{Category, Diagnostic, Severity, has_blocking};
 use hoi4_core::plan::{Applied, PlanApplier, Refusal, RewritePlan};
 use rayon::prelude::*;
 use serde_json::{Value, json};
@@ -76,6 +77,35 @@ struct Work {
     after_sha256: Option<String>,
 }
 
+/// What [`TxnApplier::discard_failed`] removed and what it left.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiscardedJournal {
+    /// Backups that still held their recorded before bytes and were removed.
+    pub removed_backups: usize,
+    /// Workspace-relative paths whose backup file holds other bytes and stays, in code-unit order.
+    pub retained_backups: Vec<String>,
+}
+
+/// The diagnostic code that names the rollback backups a refusal leaves in the workspace.
+pub const RETAINED_BACKUPS_CODE: &str = "TRANSACTION_BACKUPS_RETAINED";
+
+/// `withRetainedBackups`: adds the paths whose rollback backups stay in the workspace to a
+/// rollback refusal, as the details `retainedBackupCount` and `retainedBackups` (the first 20)
+/// of one informational diagnostic.
+fn with_retained_backups(mut refusal: Refusal, retained: &[String]) -> Refusal {
+    if retained.is_empty() {
+        return refusal;
+    }
+    let mut details = serde_json::Map::new();
+    details.insert("retainedBackupCount".into(), json!(retained.len()));
+    details.insert("retainedBackups".into(), json!(retained.iter().take(20).collect::<Vec<_>>()));
+    let mut diagnostic =
+        Diagnostic::new(RETAINED_BACKUPS_CODE, Severity::Info, Category::Validation, format!("{} rollback backup(s) stay in the workspace", retained.len()));
+    diagnostic.details = Some(details);
+    refusal.diagnostics.push(diagnostic);
+    refusal
+}
+
 fn invalid_manifest() -> Refusal {
     Refusal::new("TRANSACTION_MANIFEST_INVALID", "Transaction manifest is invalid")
 }
@@ -121,6 +151,12 @@ impl TxnApplier {
     pub fn with_journal_budget(mut self, bytes: u64, journals: usize) -> Self {
         self.max_journal_bytes = bytes;
         self.max_journals = journals;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_ttl_seconds(mut self, seconds: u64) -> Self {
+        self.ttl_seconds = seconds;
         self
     }
 
@@ -305,9 +341,100 @@ impl TxnApplier {
                 manifest.state = State::Failed;
                 manifest.failure = Some(Failure { code: refusal.code.clone(), message: "Interrupted transaction could not be recovered safely".into() });
                 journal.write_manifest(manifest)?;
-                Err(refusal)
+                let retained = self.discard_settled_backups(journal, manifest);
+                Err(with_retained_backups(refusal, &retained))
             }
         }
+    }
+
+    /// `discardSettledBackups`: after a rollback that could not complete, a file still holding
+    /// this rewrite's after bytes keeps its result, and its before bytes are in the journal's
+    /// verified blobs. Its in-workspace backup would only linger in the mod tree, where searches,
+    /// syncs and packagers would pick it up, so it is removed. A file in any other state keeps
+    /// its backup. Returns the workspace-relative paths whose backups remain, in code-unit order.
+    /// Cleanup never masks the original failure.
+    fn discard_settled_backups(&self, journal: &Journal<'_>, manifest: &Manifest) -> Vec<String> {
+        let mut retained = Vec::new();
+        for file in &manifest.files {
+            let settle = || -> Result<bool, Refusal> {
+                let target = self.resolve(&file.relative_path)?;
+                let backup = with_suffix(&target, &format!(".hoi4-agent-{}.backup", manifest.transaction_id));
+                if !exists(&backup) {
+                    return Ok(true);
+                }
+                let settled = file.before_sha256.is_some()
+                    && hash_regular(&target)? == file.after_sha256
+                    && hash_regular(&backup)? == file.before_sha256
+                    && journal.read_before_blob(manifest, file).is_ok();
+                if settled {
+                    fs::remove_file(&backup).map_err(|error| io_refusal("TRANSACTION_ROLLBACK_FAILED", "A settled backup cannot be removed", &error))?;
+                }
+                Ok(settled)
+            };
+            if !settle().unwrap_or(false) {
+                retained.push(file.relative_path.clone());
+            }
+        }
+        retained.sort_by(|left, right| compare_code_units(left, right));
+        retained
+    }
+
+    /// `workspaceAtAfterState`: every file of the journal holds its after bytes and no backup of
+    /// it remains.
+    fn workspace_at_after_state(&self, journal: &Journal<'_>, manifest: &Manifest) -> bool {
+        for file in &manifest.files {
+            match self.resolve(&file.relative_path).and_then(|target| hash_regular(&target)) {
+                Ok(current) if current == file.after_sha256 => {}
+                _ => return false,
+            }
+        }
+        self.discard_settled_backups(journal, manifest).is_empty()
+    }
+
+    /// `discardFailed`: discards a failed rewrite's journal for good, the owner accepting the
+    /// workspace as it is. Its remaining in-workspace backups are removed when they still hold
+    /// the recorded before bytes; any other file of that name is left alone and reported.
+    /// Library callers only; no engine operation or MCP tool exposes this.
+    pub fn discard_failed(&self, transaction_id: &str) -> Result<DiscardedJournal, Refusal> {
+        let principal_mismatch = || Refusal::new("TRANSACTION_PRINCIPAL_MISMATCH", "Transaction belongs to another principal");
+        let journal = self.journal()?;
+        let initial = self.load(&journal, transaction_id, HeadMode::None, true)?;
+        if initial.principal != self.binding.principal {
+            return Err(principal_mismatch());
+        }
+        let _lock = WorkspaceLock::acquire(&self.workspace.cache_root, transaction_id, self.lock_wait)?;
+        let manifest = self.load(&journal, transaction_id, HeadMode::Reconcile, true)?;
+        if manifest.principal != self.binding.principal {
+            return Err(principal_mismatch());
+        }
+        if manifest.state != State::Failed {
+            let mut refusal = Refusal::new("TRANSACTION_STATE_INVALID", "Only a failed transaction can be discarded");
+            let mut details = serde_json::Map::new();
+            details.insert("state".into(), serde_json::to_value(manifest.state).map_err(|_| invalid_manifest())?);
+            let mut diagnostic =
+                Diagnostic::new("TRANSACTION_STATE_INVALID", Severity::Error, Category::Validation, "Only a failed transaction can be discarded");
+            diagnostic.details = Some(details);
+            refusal.diagnostics.push(diagnostic);
+            return Err(refusal);
+        }
+        let mut removed_backups = 0;
+        let mut retained_backups = Vec::new();
+        for file in &manifest.files {
+            let target = self.resolve(&file.relative_path)?;
+            let backup = with_suffix(&target, &format!(".hoi4-agent-{}.backup", manifest.transaction_id));
+            if !exists(&backup) {
+                continue;
+            }
+            if file.before_sha256.is_some() && hash_regular(&backup)? == file.before_sha256 {
+                fs::remove_file(&backup).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "A failed journal's backup cannot be removed", &error))?;
+                removed_backups += 1;
+            } else {
+                retained_backups.push(file.relative_path.clone());
+            }
+        }
+        journal.reclaim(transaction_id)?;
+        retained_backups.sort_by(|left, right| compare_code_units(left, right));
+        Ok(DiscardedJournal { removed_backups, retained_backups })
     }
 
     /// `restoreBeforeState`: puts every file of an interrupted or failed rewrite back to its
@@ -464,6 +591,12 @@ impl TxnApplier {
                 }
             };
             if reclaim && manifest.state == State::Applied {
+                journal.reclaim(id)?;
+            } else if manifest.expires_at <= now && manifest.state == State::Failed && self.workspace_at_after_state(journal, &manifest) {
+                // A failed journal whose workspace still holds every after byte, with no backup
+                // left, is an applied journal in all but name. Once expired it stops counting
+                // against the quota; one whose files changed since stays until its owner
+                // discards it.
                 journal.reclaim(id)?;
             } else if manifest.expires_at <= now && matches!(manifest.state, State::Planned | State::RolledBack) {
                 journal.remove(id)?;
@@ -632,7 +765,10 @@ impl TxnApplier {
                 journal.write_manifest(&mut manifest)?;
                 Err(match rollback {
                     Ok(()) => error,
-                    Err(rollback) => rollback,
+                    Err(rollback) => {
+                        let retained = self.discard_settled_backups(&journal, &manifest);
+                        with_retained_backups(rollback, &retained)
+                    }
                 })
             }
         }
@@ -767,11 +903,10 @@ impl PlanApplier for TxnApplier {
         let resolved = self.resolve_all(plan)?;
         let transaction_id = random_id("txn");
         let _lock = WorkspaceLock::acquire(&self.workspace.cache_root, &transaction_id, self.lock_wait)?;
-        self.recover_locked().map_err(|refusal| {
-            Refusal::new(
-                "TRANSACTION_RECOVERY_REQUIRED",
-                format!("Rewrites of this workspace wait until its interrupted rewrite journal can be recovered: {}", refusal.message),
-            )
+        self.recover_locked().map_err(|refusal| Refusal {
+            code: "TRANSACTION_RECOVERY_REQUIRED".into(),
+            message: format!("Rewrites of this workspace wait until its interrupted rewrite journal can be recovered: {}", refusal.message),
+            diagnostics: refusal.diagnostics,
         })?;
         // The stale-source check runs under the lock, against the bytes as they are now. Every
         // check joins before the first refusal is reported, and no replacement starts before.

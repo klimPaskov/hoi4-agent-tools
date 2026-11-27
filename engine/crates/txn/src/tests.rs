@@ -872,3 +872,153 @@ fn applies_and_recovers_through_the_engine_operations() {
         assert!(refused["code"] == "SERVER_STATE_KEY_INVALID" || refused["code"] == "invalid_request");
     }
 }
+
+// --- A refused rollback -------------------------------------------------------------------
+//
+// Ported from `tests/unit/transaction-refused-rollback.test.ts`, commit `d9b0268b`.
+
+/// Every rollback backup below `common/`, by file name, in order.
+fn backups(fixture: &Fixture) -> Vec<String> {
+    let mut found: Vec<String> = fs::read_dir(fixture.mod_root.join("common"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".backup"))
+        .collect();
+    found.sort();
+    found
+}
+
+/// Applies three edits while another writer appends to `common/two.txt` before post-write
+/// validation, which then fails. Rollback must refuse: the appended bytes are not this rewrite's.
+fn refused_rollback(fixture: &Fixture, ttl_seconds: Option<u64>) -> (Refusal, String) {
+    for name in ["one", "two", "three"] {
+        fixture.write(&format!("common/{name}.txt"), format!("{name} = before\n").as_bytes());
+    }
+    let rewrite = plan(
+        ["one", "two", "three"]
+            .iter()
+            .map(|name| change(&format!("common/{name}.txt"), Some(format!("{name} = before\n").as_bytes()), Some(format!("{name} = after\n").as_bytes())))
+            .collect(),
+    );
+    let target = fixture.mod_root.join("common/two.txt");
+    let hooks = At {
+        before_post_validation: Some(Box::new(move || {
+            fs::write(&target, b"two = after\nlane = appended\n").unwrap();
+            Ok(())
+        })),
+        ..At::default()
+    };
+    let mut applier = fixture.applier().with_hooks(Arc::new(hooks));
+    if let Some(seconds) = ttl_seconds {
+        applier = applier.with_ttl_seconds(seconds);
+    }
+    let refusal = applier.apply(&rewrite).unwrap_err();
+    (refusal, fixture.only_journal())
+}
+
+/// "removes the backups of files still at their after-bytes and names the rest".
+#[test]
+fn a_refused_rollback_removes_settled_backups_and_names_the_rest() {
+    let fixture = fixture();
+    let (refusal, id) = refused_rollback(&fixture, None);
+    assert_eq!(refusal.code, "TRANSACTION_ROLLBACK_STALE");
+    let retained: Vec<_> = refusal.diagnostics.iter().filter(|diagnostic| diagnostic.code == crate::RETAINED_BACKUPS_CODE).collect();
+    assert_eq!(retained.len(), 1, "{:?}", refusal.diagnostics);
+    let details = retained[0].details.as_ref().unwrap();
+    assert_eq!(details["retainedBackupCount"], json!(1));
+    assert_eq!(details["retainedBackups"], json!(["common/two.txt"]));
+    // The applied files keep their result and lose their backups; the other writer's bytes stay.
+    assert_eq!(fixture.read("common/one.txt").unwrap(), b"one = after\n");
+    assert_eq!(fixture.read("common/three.txt").unwrap(), b"three = after\n");
+    assert_eq!(fixture.read("common/two.txt").unwrap(), b"two = after\nlane = appended\n");
+    assert_eq!(backups(&fixture), vec![format!("two.txt.hoi4-agent-{id}.backup")]);
+    assert_eq!(fixture.journal_state(&id), State::Failed);
+}
+
+/// A backup whose bytes are not the recorded before bytes is never removed as settled.
+#[test]
+fn a_refused_rollback_keeps_a_backup_that_does_not_hold_the_before_bytes() {
+    let fixture = fixture();
+    for name in ["one", "two"] {
+        fixture.write(&format!("common/{name}.txt"), format!("{name} = before\n").as_bytes());
+    }
+    let rewrite = plan(
+        ["one", "two"]
+            .iter()
+            .map(|name| change(&format!("common/{name}.txt"), Some(format!("{name} = before\n").as_bytes()), Some(format!("{name} = after\n").as_bytes())))
+            .collect(),
+    );
+    let common = fixture.mod_root.join("common");
+    let two = common.join("two.txt");
+    let hooks = At {
+        before_post_validation: Some(Box::new(move || {
+            fs::write(&two, b"two = edited\n").unwrap();
+            for entry in fs::read_dir(&common).unwrap() {
+                let path = entry.unwrap().path();
+                if path.to_string_lossy().contains("one.txt.hoi4-agent-") && path.to_string_lossy().ends_with(".backup") {
+                    fs::write(path, b"one = tampered\n").unwrap();
+                }
+            }
+            Ok(())
+        })),
+        ..At::default()
+    };
+    let refusal = fixture.applier().with_hooks(Arc::new(hooks)).apply(&rewrite).unwrap_err();
+    // The tampered backup fails integrity validation first, before any file changes.
+    assert_eq!(refusal.code, "TRANSACTION_BLOB_INTEGRITY_FAILED");
+    let details = refusal.diagnostics.iter().find(|diagnostic| diagnostic.code == crate::RETAINED_BACKUPS_CODE).unwrap().details.clone().unwrap();
+    assert_eq!(details["retainedBackups"], json!(["common/one.txt", "common/two.txt"]));
+    assert_eq!(backups(&fixture).len(), 2);
+}
+
+/// "lets its owner discard the failed journal and its remaining backups".
+#[test]
+fn the_owner_discards_a_failed_journal_and_its_remaining_backups() {
+    let fixture = fixture();
+    let (_, id) = refused_rollback(&fixture, None);
+    let mut other = fixture.binding();
+    other.principal = Some("someone-else".into());
+    let stranger = fixture.applier_with(&fixture.mod_root, &fixture.cache, other, KEY);
+    assert!(stranger.discard_failed(&id).is_err(), "another principal cannot discard it");
+    assert_eq!(backups(&fixture).len(), 1);
+    let discarded = fixture.applier().discard_failed(&id).unwrap();
+    assert_eq!(discarded, crate::DiscardedJournal { removed_backups: 1, retained_backups: Vec::new() });
+    assert!(backups(&fixture).is_empty());
+    assert!(fixture.journals().is_empty(), "the journal is gone");
+    assert_eq!(fixture.read("common/two.txt").unwrap(), b"two = after\nlane = appended\n");
+}
+
+/// "refuses to discard a journal that did not fail".
+#[test]
+fn refuses_to_discard_a_journal_that_did_not_fail() {
+    let fixture = fixture();
+    let (rewrite, _) = three_file_plan(&fixture);
+    crash_after_replace(&fixture, &rewrite, 0);
+    let id = fixture.only_journal();
+    assert_eq!(fixture.journal_state(&id), State::Applying);
+    assert_eq!(fixture.applier().discard_failed(&id).unwrap_err().code, "TRANSACTION_STATE_INVALID");
+    assert_eq!(fixture.applier().recover().unwrap(), 1);
+    assert_eq!(fixture.journal_state(&id), State::RolledBack);
+    assert_eq!(fixture.applier().discard_failed(&id).unwrap_err().code, "TRANSACTION_STATE_INVALID");
+}
+
+/// "reclaims / keeps an expired failed journal when the workspace is at / not at its after-state".
+#[test]
+fn reclaims_an_expired_failed_journal_only_at_its_after_state() {
+    for (two_bytes, reclaimed) in [(&b"two = after\n"[..], true), (&b"two = after\nlane = appended\n"[..], false)] {
+        let fixture = fixture();
+        let (_, id) = refused_rollback(&fixture, Some(0));
+        fixture.write("common/two.txt", two_bytes);
+        std::thread::sleep(Duration::from_millis(5));
+        // The next rewrite prunes expired journals.
+        fixture.applier().apply(&plan(vec![change("common/one.txt", Some(b"one = after\n"), Some(b"one = later\n"))])).unwrap();
+        if reclaimed {
+            assert!(fixture.journals().is_empty(), "{:?}", fixture.journals());
+            assert!(backups(&fixture).is_empty());
+        } else {
+            assert_eq!(fixture.journals(), vec![id.clone()]);
+            assert_eq!(fixture.journal_state(&id), State::Failed);
+            assert_eq!(backups(&fixture).len(), 1);
+        }
+    }
+}

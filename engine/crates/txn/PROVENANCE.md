@@ -1,6 +1,6 @@
 # Provenance: hoi4-txn
 
-Sources this crate adapts, one row per adapted file. All sources are from this repository at commit `9b7dc80d`.
+Sources this crate adapts, one row per adapted file. All sources are from this repository at commit `9b7dc80d`, except where a row names `d9b0268b`.
 
 | Rust file | Adapted from | Commit |
 | --------- | ------------ | ------ |
@@ -11,9 +11,9 @@ Sources this crate adapts, one row per adapted file. All sources are from this r
 | `src/lock.rs` | `src/hoi4_agent_tools/core/transactions.ts` (`withWorkspaceLock`, `withWorkspaceLockWaiting`, `clearCrashedProcessLock`, `retireStaleLock`) | `9b7dc80d` |
 | `src/state.rs` | `src/hoi4_agent_tools/core/server-state.ts` (`authenticateJournal`, `authenticateCanonicalJournal`, `verifyJournal`, the journal-head methods, `assertNoLinkComponents`, `atomicCreate`) | `9b7dc80d` |
 | `src/journal.rs` | `src/hoi4_agent_tools/core/transactions.ts` (`TransactionManifest` and its payload helpers, `inferMediaType`, `writeManifest`, `load`, `verifyManifestText`, `readVerifiedBlob`, `journalUsage`, `transactionDirectory`, `reclaimAutonomousAppliedJournal`, `removeReclamationDirectories`, `removeOrphanJournalHeads`); `src/hoi4_agent_tools/schemas/transaction.ts` (`transactionManifestSchema`) | `9b7dc80d` |
-| `src/applier.rs` | `src/hoi4_agent_tools/core/transactions.ts` (`TransactionManager.plan`, `commitPlannedJournal`, `pruneExpiredJournals`, `apply`, `recover`, `recoverTransaction`, `assertRecoveryPrincipal`, `restoreInterruptedTransaction`, `restoreBeforeState`, `TransactionHooks`) | `9b7dc80d` |
+| `src/applier.rs` | `src/hoi4_agent_tools/core/transactions.ts` (`TransactionManager.plan`, `commitPlannedJournal`, `pruneExpiredJournals`, `apply`, `recover`, `recoverTransaction`, `assertRecoveryPrincipal`, `restoreInterruptedTransaction`, `restoreBeforeState`, `TransactionHooks`) at `9b7dc80d`; `withRetainedBackups`, `discardSettledBackups`, `workspaceAtAfterState`, `discardFailed` and the failed-journal branch of `pruneExpiredJournals` at `d9b0268b` | `9b7dc80d`, `d9b0268b` |
 | `src/ops.rs` | new: the `txn.apply` and `txn.recover` engine operations (ADR 0091) | — |
-| `src/tests.rs` | `tests/unit/transactions.test.ts`, `tests/unit/transaction-batches.test.ts`, `tests/unit/transaction-size.test.ts`, `tests/unit/transaction-root-change.test.ts` (each test names the case it carries) | `9b7dc80d` |
+| `src/tests.rs` | `tests/unit/transactions.test.ts`, `tests/unit/transaction-batches.test.ts`, `tests/unit/transaction-size.test.ts`, `tests/unit/transaction-root-change.test.ts` at `9b7dc80d`; `tests/unit/transaction-refused-rollback.test.ts` at `d9b0268b` (each test names the case it carries) | `9b7dc80d`, `d9b0268b` |
 
 ## Differences from the TypeScript engine
 

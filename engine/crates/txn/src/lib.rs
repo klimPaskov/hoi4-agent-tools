@@ -33,7 +33,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-pub use applier::{TEST_ABORT_VARIABLE, TxnApplier};
+pub use applier::{DiscardedJournal, RETAINED_BACKUPS_CODE, TEST_ABORT_VARIABLE, TxnApplier};
 pub use journal::Binding;
 pub use paths::Workspace;
 pub use state::ServerState;
