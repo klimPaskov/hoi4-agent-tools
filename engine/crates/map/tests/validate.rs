@@ -128,6 +128,49 @@ fn request(files: &[ScannedFile]) -> (Value, Vec<u8>) {
     (json!({ "id": 1, "op": "map.validate", "files": entries, "toolVersion": "4.20.0", "options": { "diagnosticLimit": 50000 } }), payload)
 }
 
+/// The answer of `map.validate`: `{format:'json'}` in the header, the findings in the payload.
+fn validated(registry: &Registry, body: &Value, payload: &[u8]) -> Value {
+    let response = registry.dispatch("map.validate", &OpContext::default(), body, payload).unwrap();
+    assert_eq!(response.result.unwrap(), json!({ "format": "json" }));
+    serde_json::from_slice(&response.payload).unwrap()
+}
+
+/// Files the engine reads itself: a request of paths and checksums, no bytes.
+#[test]
+fn reads_scanned_files_by_path_and_refuses_a_stale_one() {
+    let dir = std::env::temp_dir().join(format!("hoi4-map-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = map_files();
+    let mut entries = Vec::new();
+    for f in &files {
+        let path = dir.join(f.relative_path.replace('/', "_"));
+        std::fs::write(&path, &f.bytes).unwrap();
+        entries.push(json!({ "displayPath": f.display_path, "relativePath": f.relative_path, "rootKind": "mod", "loadOrder": f.load_order,
+            "size": f.bytes.len(), "sha256": f.sha256, "path": path.to_string_lossy() }));
+    }
+    let mut registry = Registry::new();
+    hoi4_map::register(&mut registry);
+    let body = json!({ "id": 1, "op": "map.validate", "files": entries, "toolVersion": "4.20.0", "options": { "diagnosticLimit": 50000 } });
+    let (inline_body, inline_payload) = request(&files);
+    let by_path = validated(&registry, &body, &[]);
+    assert_eq!(by_path, validated(&registry, &inline_body, &inline_payload));
+    // A changed file (same length, other bytes) is refused, never validated as it is now.
+    let definition = dir.join("map_definition.csv");
+    let mut changed = std::fs::read(&definition).unwrap();
+    changed[2] = b'9';
+    std::fs::write(&definition, &changed).unwrap();
+    let refused = registry.dispatch("map.validate", &OpContext::default(), &body, &[]).unwrap().result.unwrap_err();
+    assert_eq!(refused["code"], "MAP_SOURCE_STALE");
+    // A file of another size is refused on its size alone; a missing one is unreadable.
+    std::fs::write(&definition, b"short").unwrap();
+    let refused = registry.dispatch("map.validate", &OpContext::default(), &body, &[]).unwrap().result.unwrap_err();
+    assert_eq!(refused["code"], "MAP_SOURCE_STALE");
+    std::fs::remove_file(&definition).unwrap();
+    let refused = registry.dispatch("map.validate", &OpContext::default(), &body, &[]).unwrap().result.unwrap_err();
+    assert_eq!(refused["code"], "MAP_SOURCE_UNREADABLE");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn answers_the_registered_operations() {
     let mut registry = Registry::new();
@@ -135,7 +178,7 @@ fn answers_the_registered_operations() {
     assert_eq!(registry.names(), ["map.index", "map.validate"]);
     let files = map_files();
     let (body, payload) = request(&files);
-    let answer = registry.dispatch("map.validate", &OpContext::default(), &body, &payload).unwrap().result.unwrap();
+    let answer = validated(&registry, &body, &payload);
     assert_eq!(answer["passed"], false);
     assert_eq!(answer["baselineFingerprint"].as_str().unwrap().len(), 64);
     assert!(answer["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "MAP_PROVINCE_ID_GAP"));
@@ -147,7 +190,7 @@ fn answers_the_registered_operations() {
     assert_eq!(refused["code"], "MAP_ENGINE_REQUEST_INVALID");
     let mut crossings = body.clone();
     crossings["only"] = json!("crossings");
-    let answer = registry.dispatch("map.validate", &OpContext::default(), &crossings, &payload).unwrap().result.unwrap();
+    let answer = validated(&registry, &crossings, &payload);
     assert!(answer.get("passed").is_none());
     let mut unknown = body;
     unknown["only"] = json!("everything");

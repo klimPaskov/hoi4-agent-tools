@@ -21,8 +21,12 @@ import type { MapValidationOptions, MapValidationResult } from './validation.js'
 
 /**
  * Map validation on the engine (`map.validate`, ADR 0089 step 6, packet P13a). The engine builds
- * its own map index from the scanned files sent with the request, so it reads nothing from disk:
- * the scan that chose the files stays the only way a file reaches the map. A missing engine, an
+ * its own map index from the scanned files of the request. A file scanned from disk goes as its
+ * metadata and absolute path (the scan has already checked the path against its roots): the
+ * engine reads it and refuses it (`MAP_SOURCE_STALE`) when its size or SHA-256 changed since the
+ * scan. A file held only in memory (a proposed edit, `virtual://`) goes as bytes in the payload.
+ * The answer comes back in the payload (`{format:'json'}`), so a large finding list never meets
+ * the header limit. A missing engine, an
  * engine without the op or an answer out of shape is `ENGINE_UNAVAILABLE`; nothing falls back to
  * TypeScript.
  *
@@ -32,11 +36,13 @@ import type { MapValidationOptions, MapValidationResult } from './validation.js'
  */
 
 export const MAP_VALIDATE_OP = 'map.validate';
-/** The engine's request payload ceiling; a larger map is refused, never cut. */
-export const MAP_ENGINE_PAYLOAD_LIMIT = 512 * 1024 * 1024;
+/** The engine's request payload ceiling for in-memory files; a larger request is refused, never cut. */
+export const MAP_ENGINE_PAYLOAD_LIMIT = 256 * 1024 * 1024;
 const MAP_VALIDATE_TIMEOUT_MS = 600_000;
 
 const location = z.looseObject({ path: z.string() });
+const answerHeaderSchema = z.object({ format: z.literal('json') }).strict();
+
 const diagnosticSchema = z
   .object({
     code: z.string(),
@@ -85,16 +91,18 @@ export function mapValidateRequest(
 ): MapValidateRequest {
   const chunks: Buffer[] = [];
   const files = index.sourceFiles.map((file) => {
-    chunks.push(file.bytes);
-    return {
+    const common = {
       displayPath: file.displayPath,
       relativePath: file.relativePath,
       rootKind: file.rootKind,
       loadOrder: file.loadOrder,
       size: file.size,
       sha256: file.sha256,
-      length: file.bytes.length,
     };
+    // A scanned file is read by the engine; one with no real path (a proposed edit) travels.
+    if (path.isAbsolute(file.absolutePath)) return { ...common, path: file.absolutePath };
+    chunks.push(file.bytes);
+    return { ...common, length: file.bytes.length };
   });
   const baselineBitmap = options.baseline?.provinceBitmap?.bytes;
   if (baselineBitmap !== undefined) chunks.push(baselineBitmap);
@@ -137,7 +145,7 @@ export function mapValidateRequest(
 function result(answer: MapValidateAnswer): MapValidationResult {
   return {
     passed: answer.passed,
-    diagnostics: answer.diagnostics as Diagnostic[],
+    diagnostics: answer.diagnostics as unknown as Diagnostic[],
     checks: answer.checks,
   };
 }
@@ -153,13 +161,29 @@ export async function engineValidateMapAsync(
     op: MAP_VALIDATE_OP,
     body,
     payload,
-    result: mapValidateAnswerSchema,
+    result: answerHeaderSchema,
     options: {
       timeoutMs: MAP_VALIDATE_TIMEOUT_MS,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     },
   });
-  return result(answer.result);
+  return result(parseAnswerPayload(answer.payload));
+}
+
+function parseAnswerPayload(payload: Buffer): MapValidateAnswer {
+  let json: unknown;
+  try {
+    json = JSON.parse(payload.toString('utf8'));
+  } catch {
+    json = undefined;
+  }
+  const parsed = mapValidateAnswerSchema.safeParse(json);
+  if (!parsed.success)
+    throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine map.validate answered out of shape', {
+      op: MAP_VALIDATE_OP,
+      reason: 'invalid_response',
+    });
+  return parsed.data;
 }
 
 const frameSchema = z.union([
@@ -184,16 +208,18 @@ export function engineValidateMapSync(
     engineMapOperationSync(
       MAP_VALIDATE_OP,
       mapValidateRequest(index, options),
-      mapValidateAnswerSchema,
+      answerHeaderSchema,
+      parseAnswerPayload,
     ),
   );
 }
 
 /** One registered engine operation on a one-shot `hoi4-engine serve`, over files. */
-export function engineMapOperationSync<T>(
+export function engineMapOperationSync<H, T>(
   op: string,
   request: MapValidateRequest,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<H>,
+  fromPayload: (payload: Buffer) => T,
 ): T {
   const located = locateEngineBinary();
   if (!('path' in located))
@@ -255,5 +281,9 @@ export function engineMapOperationSync<T>(
   const parsed = schema.safeParse(frame.data.result);
   if (!parsed.success)
     throw unavailable(`hoi4-engine ${op} answered out of shape`, 'invalid_response');
-  return parsed.data;
+  const announced = (parsedFrame as { payload?: unknown }).payload;
+  const length = typeof announced === 'number' && Number.isSafeInteger(announced) ? announced : 0;
+  if (length < 0 || answer.length < newline + 1 + length)
+    throw unavailable(`hoi4-engine ${op} answered a short payload`, 'invalid_output');
+  return fromPayload(answer.subarray(newline + 1, newline + 1 + length));
 }

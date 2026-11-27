@@ -13,9 +13,12 @@
 //! - `map.validate`: the full validation of those files, with the stated-baseline fingerprint.
 //!
 //! Both take the scanned files from the caller: `files` lists each file's display path, relative
-//! path, root kind, load order, size, SHA-256 and `length`, and the payload holds their bytes in
-//! that order. The engine reads nothing from disk, so the caller's scan and its root checks stay
-//! the only way a file reaches the map.
+//! path, root kind, load order, size and SHA-256. A file the caller scanned from disk carries its
+//! absolute `path`: the engine reads it and refuses it (`MAP_SOURCE_STALE`) when its size or
+//! SHA-256 differ from the scan, so the caller's scan and its root checks stay the only way a
+//! path reaches the map. A file held only in memory (a proposed edit) has a `length` and its
+//! bytes in the payload, in order. `map.validate` answers `{format:'json'}` and the answer in the
+//! payload.
 
 use hoi4_core::files::{RootKind, ScannedFile};
 use hoi4_core::ops::{OpContext, OpResponse, Registry};
@@ -43,7 +46,14 @@ struct FileEntry {
     #[serde(default)]
     size: Option<u64>,
     sha256: String,
+    /// Bytes of the file in the payload; 0 when `path` names the file.
+    #[serde(default)]
     length: usize,
+    /// Absolute path of a scanned file the engine reads itself. The caller has already checked
+    /// the path against its roots; the engine refuses the file when its size or SHA-256 differ
+    /// from the scan (stale source).
+    #[serde(default)]
+    path: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -97,6 +107,26 @@ fn files_of(request: &MapRequest, payload: &[u8]) -> Result<(Vec<ScannedFile>, u
     let mut files = Vec::with_capacity(request.files.len());
     let mut at = 0usize;
     for entry in &request.files {
+        if let Some(path) = &entry.path {
+            let bytes = std::fs::read(path).map_err(|e| MapError::plain("MAP_SOURCE_UNREADABLE", format!("cannot read {}: {e}", entry.display_path)))?;
+            let stale = entry.size.is_some_and(|size| size != bytes.len() as u64) || hoi4_core::canonical::sha256_hex(&bytes) != entry.sha256;
+            if stale {
+                return Err(MapError::plain("MAP_SOURCE_STALE", format!("{} changed since it was scanned", entry.display_path)));
+            }
+            files.push(ScannedFile {
+                absolute_path: String::new(),
+                display_path: entry.display_path.clone(),
+                relative_path: entry.relative_path.clone(),
+                root_kind: entry.root_kind,
+                load_order: entry.load_order,
+                size: bytes.len() as u64,
+                modified_ms: 0,
+                sha256: entry.sha256.clone(),
+                bytes,
+                shadowed_by: None,
+            });
+            continue;
+        }
         let end = at
             .checked_add(entry.length)
             .filter(|&end| end <= payload.len())
@@ -184,6 +214,15 @@ pub fn validate_op(request: &Value, payload: &[u8]) -> Result<Value, MapError> {
     Ok(answer)
 }
 
+/// `map.validate` over the wire: the answer rides in the payload (`{format:'json'}` in the
+/// header), so a large finding list never meets the header limit.
+fn validate_response(request: &Value, payload: &[u8]) -> OpResponse {
+    match validate_op(request, payload) {
+        Ok(answer) => OpResponse::ok_with_payload(json!({ "format": "json" }), serde_json::to_vec(&answer).unwrap_or_default()),
+        Err(error) => OpResponse { result: Err(error.to_json()), payload: Vec::new() },
+    }
+}
+
 fn respond(result: Result<Value, MapError>) -> OpResponse {
     match result {
         Ok(value) => OpResponse::ok(value),
@@ -194,5 +233,5 @@ fn respond(result: Result<Value, MapError>) -> OpResponse {
 /// Adds this crate's engine operations to the registry `hoi4-engine serve` dispatches through.
 pub fn register(registry: &mut Registry) {
     registry.add_fn("map.index", |_: &OpContext, request, payload| respond(index_op(request, payload)));
-    registry.add_fn("map.validate", |_: &OpContext, request, payload| respond(validate_op(request, payload)));
+    registry.add_fn("map.validate", |_: &OpContext, request, payload| validate_response(request, payload));
 }

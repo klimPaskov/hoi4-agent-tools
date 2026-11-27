@@ -61,7 +61,7 @@ pub fn check_registry(registry: &hoi4_core::ops::Registry) -> Result<(), String>
 }
 
 /// The largest request payload accepted (a texture file).
-const MAX_REQUEST_PAYLOAD: usize = 512 * 1024 * 1024;
+const MAX_REQUEST_PAYLOAD: usize = 256 * 1024 * 1024;
 
 pub struct Response {
     /// `Ok(result)` or `Err(error object)` with at least `code` and `message`.
