@@ -165,6 +165,7 @@ export class CoreEngine {
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
   #recovery: Promise<void> | undefined;
+  #startup: Promise<void> | undefined;
 
   public constructor(
     public readonly resolver: WorkspaceResolver,
@@ -228,9 +229,23 @@ export class CoreEngine {
     return recovery;
   }
 
-  /** Settles when the latest {@link initialize} has finished, at once when none was started. */
-  recovered(): Promise<void> {
-    return this.#recovery ?? Promise.resolve();
+  /**
+   * Run `work` in the background as part of startup, and hold {@link recovered} until it
+   * finishes. A stdio server uses this to load the workspaces after it has answered the client
+   * handshake. The work reports its own failure (for example through
+   * `resolver.failStartup`); a rejection here only ends the wait.
+   */
+  deferStartup(work: () => Promise<void>): void {
+    this.#startup = work().catch(() => undefined);
+  }
+
+  /**
+   * Settles when the deferred startup and the latest {@link initialize} have finished, at once
+   * when neither was started.
+   */
+  async recovered(): Promise<void> {
+    await this.#startup;
+    await this.#recovery;
   }
 
   async #recoverWorkspaces(): Promise<void> {

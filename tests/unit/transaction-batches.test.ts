@@ -107,6 +107,26 @@ describe('authenticated write-ahead replacement batches', () => {
     },
   );
 
+  it('recovers a large apply whose batches hold more than the smallest batch size', async () => {
+    // 1,100 files give batches of 18 (`transactionBatchSize`), so the intent records 18 pending
+    // files. A journal schema capped at the smallest batch (16) refused this journal.
+    const { mod, configPath, manager } = await setup();
+    const changes = Array.from({ length: 1_100 }, (_, index) => ({
+      relativePath: `large/file-${String(index).padStart(4, '0')}.txt`,
+      content: `file ${index}\n`,
+    }));
+    expect(await runCrash(configPath, { crash: 'intent', changes })).toBe(73);
+    const recovered = await manager.recover('batch');
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0]).toMatchObject({
+      state: 'rolled_back',
+      rollbackStatus: 'applied',
+      pendingFiles: [],
+    });
+    // Rollback removes every created file; the created folder may stay behind empty.
+    expect(await readdir(path.join(mod, 'large')).catch(() => [])).toEqual([]);
+  }, 120_000);
+
   it('keeps a matching external creation on an untouched pending path', async () => {
     const { mod, manager } = await setup();
     const plan = await manager.plan({

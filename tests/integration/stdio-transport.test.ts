@@ -620,10 +620,19 @@ describe('local stdio transport', () => {
     let stderr = '';
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString('utf8')));
     child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
-    const exitCode = await new Promise<number | null>((resolve) => child.once('exit', resolve));
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe('');
+    // Since ADR 0092 the server keeps running after a startup failure, so it can answer the
+    // handshake and report the error on the first workspace call. Until a request arrives it
+    // writes nothing to stdout.
+    const state = { exited: false };
+    child.once('exit', () => (state.exited = true));
+    const deadline = Date.now() + 50_000;
+    while (!stderr.includes('"event":"startup_failed"') && !state.exited && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 100));
     expect(stderr).toContain('"event":"startup_failed"');
+    expect(stderr).toContain('"code":"CONFIG_READ_FAILED"');
+    expect(state.exited).toBe(false);
+    expect(stdout).toBe('');
+    child.kill();
   }, 60_000);
 
   it('refuses a newline-terminated frame above the fixed byte ceiling', async () => {
