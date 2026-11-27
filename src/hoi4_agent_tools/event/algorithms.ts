@@ -405,7 +405,28 @@ export function shortestEventPath(
   const nodes = nodeMap(graph);
   const starts = sortedUnique(fromNodeIds).filter((id) => nodes.has(id));
   const targets = new Set(toNodeIds.filter((id) => nodes.has(id)));
-  const maps = edgeMaps(eventFlowEdges(graph, options.expandHelpers));
+  // Issue 278: a focused graph has helper nodes and no derived edge, so the collapsed projection
+  // is built lazily per node, exactly as the trace does. Reading only the flow edges would drop
+  // every route that passes through a helper, although the trace reports it.
+  const lazyCollapse =
+    !options.expandHelpers &&
+    !graph.edges.some(({ derived }) => derived) &&
+    graph.nodes.some(({ kind }) => kind === 'helper');
+  const structural = lazyCollapse
+    ? edgeMaps(graph.edges.filter(({ derived }) => !derived))
+    : undefined;
+  const maps = edgeMaps(lazyCollapse ? [] : eventFlowEdges(graph, options.expandHelpers));
+  const outgoingOf = (nodeId: string): EventGraphEdge[] =>
+    structural === undefined
+      ? (maps.outgoing.get(nodeId) ?? [])
+      : lazyCollapsedEdges(
+          nodes,
+          nodeId,
+          'downstream',
+          structural,
+          Math.max(256, options.maxNodes * 2),
+          signal,
+        );
   const queue = starts.map((nodeId) => ({ nodeId, depth: 0 }));
   const visited = new Set(starts);
   const predecessor = new Map<string, { nodeId: string; edge: EventGraphEdge }>();
@@ -415,7 +436,7 @@ export function shortestEventPath(
     if ((cursor & 255) === 0) signal?.throwIfAborted();
     const current = queue[cursor++]!;
     if (current.depth >= options.maxDepth) continue;
-    for (const edge of maps.outgoing.get(current.nodeId) ?? []) {
+    for (const edge of outgoingOf(current.nodeId)) {
       if (visited.has(edge.to)) continue;
       if (visited.size >= options.maxNodes) return undefined;
       visited.add(edge.to);
