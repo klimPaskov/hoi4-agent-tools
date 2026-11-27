@@ -23,6 +23,12 @@ const analyzeSchema = z
 
 const answerSchema = z.object({ format: z.literal('json') }).strict();
 
+/** The graph payload is parsed JSON from outside the process: only its shape is checked here, and the engine owns the content. */
+const graphPayloadSchema = z.looseObject({
+  schemaVersion: z.literal(2),
+  technologies: z.array(z.unknown()),
+});
+
 const querySchema = z.object({ report: z.unknown(), summary: z.unknown().optional() }).strict();
 
 export interface TechnologyEngineAnswer {
@@ -31,7 +37,7 @@ export interface TechnologyEngineAnswer {
   summary?: unknown;
 }
 
-export type TechnologyEngineQuery = {
+export interface TechnologyEngineQuery {
   mode: 'scan' | 'folders' | 'trace' | 'explain' | 'unlocks' | 'bonus_coverage' | 'lint' | 'impact';
   folderId?: string;
   technologyId?: string;
@@ -45,7 +51,7 @@ export type TechnologyEngineQuery = {
   classifications?: string[];
   codes?: string[];
   impact?: { kind: string; id: string; operation: string; replacementId?: string };
-};
+}
 
 function wireFile(file: ScannedFile): Record<string, unknown> {
   return {
@@ -136,13 +142,13 @@ export async function buildTechnologyGraphOnEngine(
     result: answerSchema,
   });
   const graphOf = (answer: { payload: Buffer }): TechnologyGraphSnapshot => {
-    const graph = JSON.parse(answer.payload.toString('utf8')) as TechnologyGraphSnapshot;
-    if (graph.schemaVersion !== 2 || !Array.isArray(graph.technologies))
+    const graph: unknown = JSON.parse(answer.payload.toString('utf8'));
+    if (!graphPayloadSchema.safeParse(graph).success)
       throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine tech.graph answered out of shape', {
         op: 'tech.graph',
         reason: 'invalid_response',
       });
-    return graph;
+    return graph as TechnologyGraphSnapshot;
   };
   let analysis = analyses.get(snapshot) ?? (await analyze(snapshot));
   try {
