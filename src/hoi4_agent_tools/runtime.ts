@@ -6,6 +6,7 @@ import {
   serverConfigurationSchema,
   type ServerConfiguration,
 } from './core/configuration.js';
+import { canonicalJson } from './core/canonical.js';
 import { CoreEngine } from './core/engine.js';
 import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
@@ -296,6 +297,17 @@ export interface CreateEngineOptions {
    */
   recovery?: 'wait' | 'background';
   /**
+   * `wait` (default) returns once every workspace is loaded, and throws the configuration or
+   * workspace error that stops the server. `background` returns as soon as the configuration is
+   * read, and loads the workspaces after it: discovering the mods under a mod root takes seconds
+   * to tens of seconds on a busy machine, and a stdio client gives up on a slow handshake. It
+   * implies background recovery. The caller must hold workspace requests until
+   * `engine.recovered()` settles. A configuration or workspace error does not throw: it is
+   * written to stderr as a `startup_failed` event, and every workspace lookup on the engine's
+   * resolver fails with it, so the first call that needs a workspace reports its code.
+   */
+  workspaces?: 'wait' | 'background';
+  /**
    * The tool profiles to list when neither the client (`HOI4_AGENT_TOOLS_PROFILES`) nor the
    * configuration chooses. The stdio entry passes `core`; without it every tool is listed, as the
    * HTTP server does.
@@ -303,13 +315,9 @@ export interface CreateEngineOptions {
   defaultProfiles?: readonly ProfileSelection[];
 }
 
-export async function createEngine(
-  configPath = configurationPath(),
-  options: CreateEngineOptions = {},
-): Promise<CoreEngine> {
-  let configuration: ServerConfiguration;
+async function loadStartupConfiguration(configPath: string): Promise<ServerConfiguration> {
   try {
-    configuration = await loadConfiguration(configPath);
+    return await loadConfiguration(configPath);
   } catch (error) {
     const useAutomaticConfiguration =
       configPath === defaultConfigurationPath() &&
@@ -319,18 +327,27 @@ export async function createEngine(
       !(await configurationExists(configPath));
     if (!useAutomaticConfiguration) throw error;
     // Outside a mod there is no workspace, and the documentation tools still answer.
-    configuration = await automaticConfiguration(process.cwd(), { allowNoMod: true });
+    return automaticConfiguration(process.cwd(), { allowNoMod: true });
   }
-  // The stdio server lists the core tools unless the client or the file asks for more.
-  const profiles =
-    parseProfilesEnv(process.env[PROFILES_ENV]) ??
-    configuration.profiles ??
-    options.defaultProfiles;
-  if (profiles !== undefined) configuration = { ...configuration, profiles: [...profiles] };
-  // The command-line servers read a fetched docs pack from the user's data folder by default.
-  if (configuration.docsRoot === undefined)
-    configuration = { ...configuration, docsRoot: defaultDocsRoot() };
-  const resolver = await WorkspaceResolver.create(configuration);
+}
+
+/** A startup failure on stderr, where the operator's log shows why the server cannot serve. */
+function reportStartupFailure(error: unknown): void {
+  process.stderr.write(
+    `${canonicalJson({
+      level: 'error',
+      event: 'startup_failed',
+      code:
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String(error.code)
+          : 'INTERNAL_ERROR',
+      message: error instanceof Error ? error.message : String(error),
+    })}
+`,
+  );
+}
+
+async function sweepTemporaryDirectoriesOf(resolver: WorkspaceResolver): Promise<void> {
   await sweepTemporaryDirectories(tmpdir(), {
     protectedRoots: [
       ...resolver
@@ -343,9 +360,69 @@ export async function createEngine(
       ...(resolver.serverState() === undefined ? [] : [resolver.serverState()!.root]),
     ],
   }).catch(() => undefined);
+}
+
+export async function createEngine(
+  configPath = configurationPath(),
+  options: CreateEngineOptions = {},
+): Promise<CoreEngine> {
+  const background = options.workspaces === 'background';
+  // The error that stops the server, which a background start reports instead of throwing.
+  let startupError: unknown;
+  let configuration: ServerConfiguration;
+  try {
+    configuration = await loadStartupConfiguration(configPath);
+  } catch (error) {
+    if (!background) throw error;
+    startupError = error;
+    // The tool list still comes from the profiles, and the documentation tools still answer.
+    configuration = serverConfigurationSchema.parse({ version: CONFIG_VERSION });
+  }
+  // The stdio server lists the core tools unless the client or the file asks for more.
+  const profiles =
+    parseProfilesEnv(process.env[PROFILES_ENV]) ??
+    configuration.profiles ??
+    options.defaultProfiles;
+  if (profiles !== undefined) configuration = { ...configuration, profiles: [...profiles] };
+  // The command-line servers read a fetched docs pack from the user's data folder by default.
+  if (configuration.docsRoot === undefined)
+    configuration = { ...configuration, docsRoot: defaultDocsRoot() };
+  if (!background) {
+    const resolver = await WorkspaceResolver.create(configuration);
+    await sweepTemporaryDirectoriesOf(resolver);
+    const engine = new CoreEngine(resolver);
+    // A failed background recovery is the caller's to report through `engine.recovered()`.
+    if (options.recovery === 'background') engine.initialize().catch(() => undefined);
+    else await engine.initialize();
+    return engine;
+  }
+  let resolver: WorkspaceResolver;
+  try {
+    resolver = await WorkspaceResolver.prepare(configuration);
+  } catch (error) {
+    startupError ??= error;
+    resolver = await WorkspaceResolver.prepare({
+      ...serverConfigurationSchema.parse({ version: CONFIG_VERSION }),
+      ...(configuration.profiles === undefined ? {} : { profiles: configuration.profiles }),
+      ...(configuration.docsRoot === undefined ? {} : { docsRoot: configuration.docsRoot }),
+    });
+  }
   const engine = new CoreEngine(resolver);
-  // A failed background recovery is the caller's to report through `engine.recovered()`.
-  if (options.recovery === 'background') engine.initialize().catch(() => undefined);
-  else await engine.initialize();
+  if (startupError !== undefined) {
+    resolver.failStartup(startupError);
+    reportStartupFailure(startupError);
+    return engine;
+  }
+  engine.deferStartup(async () => {
+    try {
+      await resolver.populate();
+    } catch (error) {
+      reportStartupFailure(error);
+      return;
+    }
+    await sweepTemporaryDirectoriesOf(resolver);
+    // A failed recovery is reported through `engine.recovered()`.
+    engine.initialize().catch(() => undefined);
+  });
   return engine;
 }
