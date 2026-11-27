@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.20.2 - 2026-11-27
+
+- Fixed `hoi4.gui_inspect` and `hoi4.gui_render` refusing with `GUI_LOCALISATION_BUDGET_BLOCKED` on a mod that has `localisation/replace/` files in many languages. Since 4.20.1 the scan read the replace files of every language. It now reads only those of the preview's languages (`replace/**/*_l_<language>.yml`), so replace files in other languages no longer count toward the 500,000-candidate ceiling.
+
 ## 4.20.1 - 2026-11-23
 
 - The canonical-path checks of workspace-relative paths run on the shared Rust engine (ADR 0089, step 2, first piece). `WorkspaceResolver.resolvePath` and `resolvePathInRoot`, which every tool uses to turn a `relativePath` into a file, now ask the resident engine's new `paths.resolve` operation. It refuses an empty, NUL, absolute, `..`, colon or non-portable path, and `.hoi4-agent`, artifact and cache storage as mod source, with the same codes and messages as before. It resolves the path in the highest-loading allowed root through its nearest existing ancestor, and answers only when the real path stays inside that root, so a link or junction out of a root is still never followed. A write still needs the existing parent inside the root. The workspace lookup and grants stay in TypeScript, and an unsafe path is still refused before an unknown workspace. A missing engine answers `ENGINE_UNAVAILABLE`, as the index does. An answer that is out of shape or names a root the workspace does not have is refused the same way. `scripts/workspace-paths-parity.ts` compares the old and the new resolution on the installed game and the benchmark mods: 1,107,695 resolutions in all, with 0 differences (vanilla 101,850, chaos_redux 195,719, one more mod 172,154, ito 116,108, atlantis 131,402, kaiserreich 200,616 and owb 189,846). The script refuses an engine binary without `paths.resolve` and reports the full number of differences. Workspace registration, discovery and the other core services follow.
