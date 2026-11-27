@@ -190,6 +190,7 @@ try {
     const resolver = await WorkspaceResolver.create(
       serverConfigurationSchema.parse({
         version: 1,
+        scanMaxBytes: 2 * 1024 * 1024 * 1024,
         serverStateRoot: path.join(temporary, 'state', corpus.id),
         workspaces: [
           {

@@ -33,7 +33,7 @@ import type { MapValidationOptions, MapValidationResult } from './validation.js'
 
 export const MAP_VALIDATE_OP = 'map.validate';
 /** The engine's request payload ceiling; a larger map is refused, never cut. */
-export const MAP_ENGINE_PAYLOAD_LIMIT = 256 * 1024 * 1024;
+export const MAP_ENGINE_PAYLOAD_LIMIT = 512 * 1024 * 1024;
 const MAP_VALIDATE_TIMEOUT_MS = 600_000;
 
 const location = z.looseObject({ path: z.string() });

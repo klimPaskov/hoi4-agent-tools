@@ -21,7 +21,8 @@ export const RESIDENT_ENGINE_PROTOCOL = 1;
 export const RESIDENT_ENGINE_TIMEOUT_MS = 120_000;
 export const RESIDENT_ENGINE_MAX_RESTARTS = 3;
 /** The largest response header line; payloads are bounded by `maxPayloadBytes`. */
-const RESIDENT_ENGINE_MAX_HEADER_BYTES = 1024 * 1024;
+/** A `map.validate` answer with the stated-baseline ceiling of 50,000 findings is tens of megabytes. */
+const RESIDENT_ENGINE_MAX_HEADER_BYTES = 128 * 1024 * 1024;
 const RESIDENT_ENGINE_MAX_PAYLOAD_BYTES = 512 * 1024 * 1024;
 const STDERR_TAIL_BYTES = 4096;
 
