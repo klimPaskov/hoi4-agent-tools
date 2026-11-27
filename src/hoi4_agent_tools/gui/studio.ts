@@ -319,9 +319,12 @@ function guiLocalisationPatterns(
     ...new Set([
       ...under(roots.localisation, [
         '*.{yml,yaml}',
-        // The game reads `localisation/replace/` (any language) over every other definition.
-        'replace/**/*.{yml,yaml}',
         ...languageDirectories.flatMap((directory) => [
+          // The game reads `localisation/replace/` over every other definition. Only the files
+          // of the preview's languages count: a mod with replace files in many languages would
+          // otherwise fill the candidate ceiling with text the preview never shows.
+          `replace/**/*_l_${directory}.yml`,
+          `replace/**/*_l_${directory}.yaml`,
           `${directory}/**/*.yml`,
           `${directory}/**/*.yaml`,
         ]),
