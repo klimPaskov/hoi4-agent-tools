@@ -406,6 +406,9 @@ impl<'a> Block<'a> {
 pub struct Document<'a> {
     pub root: Block<'a>,
     pub diagnostics: Diagnostics,
+    /// `document.tokens.length` of the TypeScript parser: every token the lexer produced, trivia
+    /// included; 0 when a size or line ceiling stopped the read before lexing.
+    pub token_count: usize,
 }
 
 fn starts_operator(bytes: &[u8], i: usize) -> bool {
@@ -424,7 +427,8 @@ fn char_at(text: &str, i: usize) -> char {
 /// `lexClausewitz`, keeping only significant tokens but counting trivia toward the token ceiling.
 /// It walks bytes: every character with a meaning to the lexer is ASCII, and other characters are
 /// decoded only to test them for white space.
-fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
+/// The significant tokens and the count of every token produced, trivia included.
+fn lex(text: &str, diagnostics: &mut Diagnostics) -> (Vec<Token>, usize) {
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut tokens = Vec::new();
@@ -588,7 +592,7 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
             tokens.push(token(TokenKind::Atom, i));
         }
     }
-    tokens
+    (tokens, count)
 }
 
 /// `scalarValue`: a quoted string loses its quotes and the `\"` and `\\` escapes.
@@ -783,11 +787,11 @@ fn parse_with<'a>(text: &'a str, byte_len: usize, mut diagnostics: Diagnostics, 
     let root_at_end = || Block { end: text.len() as u32, start_line: 1, ..Block::default() };
     if byte_len > SOURCE_MAX_BYTES {
         diagnostics.limit_with(Limit::FileSize, || file_size_diagnostic("Clausewitz source"));
-        return Document { root: root_at_end(), diagnostics };
+        return Document { root: root_at_end(), diagnostics, token_count: 0 };
     }
     if let Some(at) = line_limit_at(text) {
         diagnostics.limit_with(Limit::Line, || line_limit_diagnostic("Clausewitz source", text, at));
-        return Document { root: root_at_end(), diagnostics };
+        return Document { root: root_at_end(), diagnostics, token_count: 0 };
     }
     if let Some(loss) = loss {
         diagnostics.note_with(|| {
@@ -804,10 +808,10 @@ fn parse_with<'a>(text: &'a str, byte_len: usize, mut diagnostics: Diagnostics, 
             }))
         });
     }
-    let tokens = lex(text, &mut diagnostics);
+    let (tokens, token_count) = lex(text, &mut diagnostics);
     let mut parser = Parser { tokens: &tokens, text, index: 0, diagnostics: &mut diagnostics };
     let root = parser.block(false, 0, (0, 1));
-    Document { root, diagnostics }
+    Document { root, diagnostics, token_count }
 }
 
 /// One `key:0 "value"` line of a localisation file: its language, key and 1-based line.
@@ -1033,6 +1037,16 @@ mod tests {
 
     fn parse(text: &str) -> Document<'_> {
         parse_clausewitz(text, text.len(), false)
+    }
+
+    #[test]
+    fn counts_every_token_as_the_typescript_document_does() {
+        // Expected counts are `parseClausewitz(text).tokens.length` from the TypeScript parser.
+        assert_eq!(parse("a = { b = c } # x\n").token_count, 16);
+        assert_eq!(parse("key { 1 2 }\r\nz = \"q\"").token_count, 15);
+        assert_eq!(parse("").token_count, 0);
+        let oversized = "x";
+        assert_eq!(parse_clausewitz(oversized, SOURCE_MAX_BYTES + 1, false).token_count, 0);
     }
 
     fn keys<'a>(block: &'a Block<'_>) -> Vec<&'a str> {

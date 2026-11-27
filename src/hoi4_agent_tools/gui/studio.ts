@@ -319,6 +319,8 @@ function guiLocalisationPatterns(
     ...new Set([
       ...under(roots.localisation, [
         '*.{yml,yaml}',
+        // The game reads `localisation/replace/` (any language) over every other definition.
+        'replace/**/*.{yml,yaml}',
         ...languageDirectories.flatMap((directory) => [
           `${directory}/**/*.yml`,
           `${directory}/**/*.yaml`,
