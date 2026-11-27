@@ -511,6 +511,7 @@ export class WorkspaceResolver {
   #state: 'prepared' | 'populating' | 'ready' = 'prepared';
   #population?: Promise<void>;
   #startupError?: Error;
+  #useHook: ((workspaceId: string) => Promise<void>) | undefined;
 
   private constructor(private readonly configuration: ServerConfiguration) {}
 
@@ -652,6 +653,15 @@ export class WorkspaceResolver {
             error instanceof Error ? error.message : String(error),
           );
     return this.#startupError;
+  }
+
+  /**
+   * Run `hook` with the workspace's ID before each file access through this resolver
+   * (`refreshDescriptors`, `resolvePath`, `resolvePathInRoot`). The engine uses it to
+   * recover a workspace on its first use.
+   */
+  onWorkspaceUse(hook: (workspaceId: string) => Promise<void>): void {
+    this.#useHook = hook;
   }
 
   /** The reason the server could not start, when it could not. */
@@ -945,6 +955,7 @@ export class WorkspaceResolver {
    */
   async refreshDescriptors(workspaceId: string, principal?: string): Promise<void> {
     const workspace = this.get(workspaceId, principal);
+    await this.#useHook?.(workspace.id);
     if (workspace.registration.kind === 'game') return;
     const dependencies = workspace.registration.dependencies;
     for (const root of workspace.roots) {
@@ -1070,12 +1081,15 @@ export class WorkspaceResolver {
     relativePath: string,
     principal?: string,
   ): Promise<ResolvedWorkspace> {
+    let workspace: ResolvedWorkspace;
     try {
-      return this.get(workspaceId, principal);
+      workspace = this.get(workspaceId, principal);
     } catch (error) {
       await refuseUnsafeRelativePath(relativePath);
       throw error;
     }
+    await this.#useHook?.(workspace.id);
+    return workspace;
   }
 
   private allowedWorkspaceIds(principal: string): Set<string> {

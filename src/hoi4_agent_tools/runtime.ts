@@ -299,10 +299,12 @@ export interface CreateEngineOptions {
   /**
    * `wait` (default) returns once every workspace is loaded, and throws the configuration or
    * workspace error that stops the server. `background` returns as soon as the configuration is
-   * read, and loads the workspaces after it: discovering the mods under a mod root takes seconds
-   * to tens of seconds on a busy machine, and a stdio client gives up on a slow handshake. It
-   * implies background recovery. The caller must hold workspace requests until
-   * `engine.recovered()` settles. A configuration or workspace error does not throw: it is
+   * read, and loads nothing else: discovering the mods under a mod root takes seconds to tens of
+   * seconds on a busy machine, and a stdio client gives up on a slow handshake, while a server
+   * that is never called should hold no workspace. The workspaces load when the caller first
+   * asks `engine.recovered()`, which it does for the first request that needs a workspace and
+   * holds that request until it settles. Each workspace recovers on its first use
+   * (`engine.recoverOnDemand`). A configuration or workspace error does not throw: it is
    * written to stderr as a `startup_failed` event, and every workspace lookup on the engine's
    * resolver fails with it, so the first call that needs a workspace reports its code.
    */
@@ -413,6 +415,10 @@ export async function createEngine(
     reportStartupFailure(startupError);
     return engine;
   }
+  // Neither the loading nor the recovery of a workspace starts until a request needs one: the
+  // transport asks `engine.recovered()` for the first such request, and each workspace
+  // recovers on its first use.
+  engine.recoverOnDemand();
   engine.deferStartup(async () => {
     try {
       await resolver.populate();
@@ -421,8 +427,6 @@ export async function createEngine(
       return;
     }
     await sweepTemporaryDirectoriesOf(resolver);
-    // A failed recovery is reported through `engine.recovered()`.
-    engine.initialize().catch(() => undefined);
   });
   return engine;
 }

@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
+import { TransactionManager } from '../../src/hoi4_agent_tools/core/transactions.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createEngine } from '../../src/hoi4_agent_tools/runtime.js';
 import { serveNegotiatedStdio } from '../../src/hoi4_agent_tools/mcp/transports/negotiated-stdio.js';
@@ -187,14 +189,17 @@ describe('stdio startup does not wait for the workspaces', () => {
     input.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
     const tools = await request(2, 'tools/list');
     expect((tools.result as { tools: unknown[] }).tools).toHaveLength(45);
-    // Discovery started and is still held: the answers above did not need it.
-    await vi.waitFor(() => expect(hold.started()).toBe(true));
+    // The handshake and the list started no discovery.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(hold.started()).toBe(false);
 
     let answered = false;
     const call = request(3, 'tools/call', focusCall).then((response) => {
       answered = true;
       return response;
     });
+    // The first call that needs a workspace starts discovery, which is held.
+    await vi.waitFor(() => expect(hold.started()).toBe(true), { timeout: 30_000 });
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(answered).toBe(false);
 
@@ -220,12 +225,14 @@ describe('stdio startup does not wait for the workspaces', () => {
     });
     const tools = await request(2, 'tools/list', { _meta: modernMeta });
     expect((tools.result as { tools: unknown[] }).tools).toHaveLength(45);
-    await vi.waitFor(() => expect(hold.started()).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(hold.started()).toBe(false);
     let answered = false;
     const call = request(3, 'tools/call', { _meta: modernMeta, ...focusCall }).then((response) => {
       answered = true;
       return response;
     });
+    await vi.waitFor(() => expect(hold.started()).toBe(true), { timeout: 30_000 });
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(answered).toBe(false);
     hold.release();
@@ -249,7 +256,8 @@ describe('stdio startup does not wait for the workspaces', () => {
     const tools = (await request(2, 'tools/list')).result as { tools: Array<{ name: string }> };
     expect(tools.tools.length).toBeGreaterThan(0);
     expect(tools.tools.length).toBeLessThan(45);
-    await vi.waitFor(() => expect(hold.started()).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(hold.started()).toBe(false);
     hold.release();
     await engine.recovered();
   }, 60_000);
@@ -407,4 +415,94 @@ describe('a startup error is reported on the first call that needs a workspace',
       result: { isError: true, structuredContent: { code: 'CONFIG_READ_FAILED' } },
     });
   }, 60_000);
+});
+
+describe('an idle server loads and recovers nothing', () => {
+  /** Watch discovery and recovery without changing them. */
+  function watch() {
+    const prototype = WorkspaceResolver.prototype as unknown as {
+      discoverModWorkspaces: (this: unknown) => Promise<void>;
+    };
+    const discover = vi.spyOn(prototype, 'discoverModWorkspaces');
+    const recover = vi.spyOn(TransactionManager.prototype, 'recover');
+    return { discover, recover, recovered: () => recover.mock.calls.map(([id]) => id) };
+  }
+
+  async function startedServer() {
+    const root = await temporaryRoot();
+    const modRoot = await modRootWithMods(root);
+    const configPath = await writeConfiguration(root, {
+      modRoots: [modRoot],
+      workspaces: [fixtureWorkspace(modRoot)],
+    });
+    return createEngine(configPath, { workspaces: 'background' });
+  }
+
+  it('triggers no discovery or recovery on the handshake, and recovers only the workspace a call uses', async () => {
+    const watched = watch();
+    const engine = await startedServer();
+    const { input, request, errors, failures } = await serve(engine);
+
+    await request(1, 'initialize', legacyInitialize);
+    input.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    await request(2, 'tools/list');
+    await request(3, 'prompts/list');
+    await request(4, 'ping');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(watched.discover).not.toHaveBeenCalled();
+    expect(watched.recover).not.toHaveBeenCalled();
+
+    expect(await request(5, 'tools/call', focusCall)).toMatchObject({
+      result: { structuredContent: { status: 'ok' } },
+    });
+    expect(watched.discover).toHaveBeenCalledTimes(1);
+    // Four mods are loaded; only the one the call named recovered, and only once.
+    expect(engine.resolver.list()).toHaveLength(4);
+    expect(watched.recovered()).toEqual(['fixture']);
+    expect(await request(6, 'tools/call', focusCall)).toMatchObject({
+      result: { structuredContent: { status: 'ok' } },
+    });
+    expect(watched.recovered()).toEqual(['fixture']);
+    expect(errors).toEqual([]);
+    expect(failures).toEqual([]);
+  }, 120_000);
+
+  it('recovers a workspace before its first rewrite is planned', async () => {
+    const watched = watch();
+    const engine = await startedServer();
+    await engine.recovered();
+    expect(watched.recover).not.toHaveBeenCalled();
+    // The rewrite is refused for its own reasons; the point is that recovery ran first.
+    await engine.transactions
+      .plan({ workspaceId: 'fixture', changes: [], operations: [] } as never)
+      .catch(() => undefined);
+    expect(watched.recovered()).toEqual(['fixture']);
+  }, 120_000);
+
+  it('reports a failed recovery on the first rewrite with the code it had at startup', async () => {
+    const stderr = stderrEvents();
+    vi.spyOn(TransactionManager.prototype, 'recover').mockRejectedValue(
+      new ServiceError('TRANSACTION_ROOT_CHANGED', 'Workspace root configuration changed'),
+    );
+    const engine = await startedServer();
+    const { request, errors, failures } = await serve(engine);
+    await request(1, 'initialize', legacyInitialize);
+    // A read still answers: only rewrites of that workspace wait for the recovery.
+    expect(await request(2, 'tools/call', focusCall)).toMatchObject({
+      result: { structuredContent: { status: 'ok' } },
+    });
+    expect(stderr.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'transaction_recovery_blocked',
+        workspaceId: 'fixture',
+        code: 'TRANSACTION_ROOT_CHANGED',
+      }),
+    );
+    for (let attempt = 0; attempt < 2; attempt += 1)
+      await expect(
+        engine.transactions.plan({ workspaceId: 'fixture', changes: [], operations: [] } as never),
+      ).rejects.toMatchObject({ code: 'TRANSACTION_RECOVERY_REQUIRED' });
+    expect(errors).toEqual([]);
+    expect(failures).toEqual([]);
+  }, 120_000);
 });
