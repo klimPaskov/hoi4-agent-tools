@@ -14,9 +14,10 @@ import { FinalProtocolTransport } from './protocol-gate.js';
 const MAX_QUEUED_MESSAGES = 128;
 
 /**
- * Requests that only describe the server. They are answered while startup recovery still runs;
- * every other message waits for it, in arrival order, so no request reads or writes a workspace
- * whose interrupted rewrite is not yet recovered.
+ * Requests that only describe the server. They are answered at once and start nothing: an idle
+ * server loads no workspace. The first other message starts the engine's startup (`recovered()`)
+ * and waits for it, with every later one in arrival order, so no request reads or writes a
+ * workspace that is not loaded yet.
  */
 const ANSWERED_BEFORE_RECOVERY: ReadonlySet<string> = new Set([
   'initialize',
@@ -178,7 +179,7 @@ export async function serveNegotiatedStdio(
     }
     pinned.receive(message);
   };
-  // Startup recovery: `held` until it ends, then `open`; `closed` drops every later message.
+  // Startup: `held` until it ends, then `open`; `closed` drops every later message.
   let recovery: 'held' | 'open' | 'closed' = 'held';
   let heldBytes = 0;
   const held: JSONRPCMessage[] = [];
@@ -188,19 +189,24 @@ export async function serveNegotiatedStdio(
     heldBytes = 0;
     void physical.close();
   };
-  engine.recovered().then(
-    () => {
-      if (recovery === 'closed') return;
-      recovery = 'open';
-      heldBytes = 0;
-      for (const message of held.splice(0)) deliver(message);
-    },
-    (error: unknown) => {
-      if (recovery === 'closed') return;
-      options.onFailure(error);
-      closeHeld();
-    },
-  );
+  let started = false;
+  const start = (): void => {
+    if (started) return;
+    started = true;
+    engine.recovered().then(
+      () => {
+        if (recovery === 'closed') return;
+        recovery = 'open';
+        heldBytes = 0;
+        for (const message of held.splice(0)) deliver(message);
+      },
+      (error: unknown) => {
+        if (recovery === 'closed') return;
+        options.onFailure(error);
+        closeHeld();
+      },
+    );
+  };
   physical.onmessage = (message) => {
     observer?.received(message);
     if (recovery === 'closed') return;
@@ -212,6 +218,7 @@ export async function serveNegotiatedStdio(
       deliver(message);
       return;
     }
+    start();
     const bytes = Buffer.byteLength(JSON.stringify(message)) + 1;
     if (held.length >= MAX_QUEUED_MESSAGES || bytes > STDIO_MAX_FRAME_BYTES - heldBytes) {
       reportError(new Error('Requests held during startup recovery exceeded their bounded limit'));

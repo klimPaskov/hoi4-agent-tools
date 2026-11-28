@@ -507,10 +507,28 @@ export class WorkspaceResolver {
   #serverStateRoot?: string;
   #serverState?: ServerState;
   #defaultWorkspaceId?: string;
+  /** `prepared`: roots checked, no workspace loaded yet. `ready`: every workspace is loaded. */
+  #state: 'prepared' | 'populating' | 'ready' = 'prepared';
+  #population?: Promise<void>;
+  #startupError?: Error;
+  #useHook: ((workspaceId: string) => Promise<void>) | undefined;
 
   private constructor(private readonly configuration: ServerConfiguration) {}
 
+  /** Check the configured roots and load every workspace. */
   static async create(configuration: ServerConfiguration): Promise<WorkspaceResolver> {
+    const resolver = await WorkspaceResolver.prepare(configuration);
+    await resolver.populate();
+    return resolver;
+  }
+
+  /**
+   * The quick half of {@link create}: check the configured roots and open the server state. The
+   * resolver answers `config()` and `serverState()` at once, and no workspace is loaded until
+   * {@link populate} runs. A stdio server uses this to answer its handshake while the slow
+   * half, which reads every mod folder, is still running.
+   */
+  static async prepare(configuration: ServerConfiguration): Promise<WorkspaceResolver> {
     const resolver = new WorkspaceResolver(configuration);
     if (configuration.serverStateRoot !== undefined) {
       resolver.#serverStateRoot = await canonicalPath(configuration.serverStateRoot);
@@ -564,6 +582,105 @@ export class WorkspaceResolver {
         }
       }
     }
+    if (configuration.serverStateRoot !== undefined) {
+      // No key is written while a configured workspace overlaps the state root; the full
+      // check of each workspace runs later, in `populate`.
+      await resolver.#assertServerStateClearOfConfiguredWorkspaces();
+      resolver.#serverState = await ServerState.create(configuration.serverStateRoot);
+      resolver.#serverStateRoot = resolver.#serverState.root;
+    }
+    return resolver;
+  }
+
+  /** The cheap part of the registration checks: every configured root against the state root. */
+  async #assertServerStateClearOfConfiguredWorkspaces(): Promise<void> {
+    const stateRoot = this.#serverStateRoot;
+    if (stateRoot === undefined) return;
+    for (const configured of this.configuration.workspaces) {
+      const registration = this.withGlobalWorkspaceDefaults(configured);
+      const candidates = [
+        registration.root,
+        registration.gameRoot,
+        registration.artifactRoot,
+        registration.cacheRoot,
+        registration.fixtureRoot,
+        registration.wikiRoot,
+        registration.scriptDocsRoot,
+        ...registration.dependencyRoots,
+        ...registration.dependencies.map(({ root }) => root),
+      ].filter((candidate): candidate is string => candidate !== undefined);
+      for (const candidate of candidates) {
+        if (pathsOverlap(stateRoot, await canonicalPath(candidate))) {
+          throw new ServiceError(
+            'SERVER_STATE_ROOT_OVERLAP',
+            'Server state root must not overlap a workspace source or generated-storage root',
+            { workspaceId: registration.id },
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * The slow half of {@link create}: resolve every configured workspace and discover the mods
+   * under the mod roots. It runs once; later calls return the same promise, which rejects with
+   * the same error.
+   */
+  populate(): Promise<void> {
+    if (this.#startupError !== undefined) return Promise.reject(this.#startupError);
+    this.#population ??= this.#populate().then(
+      () => {
+        this.#state = 'ready';
+      },
+      (error: unknown) => {
+        throw this.failStartup(error);
+      },
+    );
+    return this.#population;
+  }
+
+  /**
+   * Make every workspace lookup fail with `error`, the reason the server could not start. A
+   * stdio server keeps answering its handshake and reports this on the first call that needs
+   * a workspace.
+   */
+  failStartup(error: unknown): Error {
+    this.#startupError ??=
+      error instanceof ServiceError
+        ? error
+        : new ServiceError(
+            'INTERNAL_ERROR',
+            error instanceof Error ? error.message : String(error),
+          );
+    return this.#startupError;
+  }
+
+  /**
+   * Run `hook` with the workspace's ID before each file access through this resolver
+   * (`refreshDescriptors`, `resolvePath`, `resolvePathInRoot`). The engine uses it to
+   * recover a workspace on its first use.
+   */
+  onWorkspaceUse(hook: (workspaceId: string) => Promise<void>): void {
+    this.#useHook = hook;
+  }
+
+  /** The reason the server could not start, when it could not. */
+  startupError(): Error | undefined {
+    return this.#startupError;
+  }
+
+  #assertUsable(): void {
+    if (this.#startupError !== undefined) throw this.#startupError;
+    if (this.#state !== 'ready')
+      throw new ServiceError(
+        'WORKSPACE_STARTUP_PENDING',
+        'The workspaces are still loading; retry in a moment',
+      );
+  }
+
+  async #populate(): Promise<void> {
+    const configuration = this.configuration;
+    this.#state = 'populating';
     for (const configured of configuration.workspaces) {
       if (configured.id === CURRENT_WORKSPACE_ID) {
         throw new ServiceError(
@@ -571,31 +688,26 @@ export class WorkspaceResolver {
           `Workspace ID is reserved for the current working mod: ${CURRENT_WORKSPACE_ID}`,
         );
       }
-      const registration = resolver.withGlobalWorkspaceDefaults(configured);
-      const workspace = await resolver.resolveRegistration(registration);
-      if (resolver.#byId.has(workspace.id)) {
+      const registration = this.withGlobalWorkspaceDefaults(configured);
+      const workspace = await this.resolveRegistration(registration);
+      if (this.#byId.has(workspace.id)) {
         throw new ServiceError('WORKSPACE_DUPLICATE', `Duplicate workspace ID: ${workspace.id}`);
       }
-      resolver.assertWorkspaceIsolation(workspace);
-      resolver.#byId.set(workspace.id, workspace);
+      this.assertWorkspaceIsolation(workspace);
+      this.#byId.set(workspace.id, workspace);
     }
-    await resolver.discoverModWorkspaces();
+    await this.discoverModWorkspaces();
     if (configuration.defaultWorkspace !== undefined) {
-      const id = resolver.resolveWorkspaceId(configuration.defaultWorkspace);
-      if (resolver.#byId.get(id)?.registration.kind !== 'mod') {
+      const id = this.#resolveWorkspaceId(configuration.defaultWorkspace);
+      if (this.#byId.get(id)?.registration.kind !== 'mod') {
         throw new ServiceError(
           'WORKSPACE_DEFAULT_UNKNOWN',
           `The configured default workspace is not a registered mod workspace: ${configuration.defaultWorkspace}`,
           { defaultWorkspace: configuration.defaultWorkspace },
         );
       }
-      resolver.#defaultWorkspaceId = id;
+      this.#defaultWorkspaceId = id;
     }
-    if (configuration.serverStateRoot !== undefined) {
-      resolver.#serverState = await ServerState.create(configuration.serverStateRoot);
-      resolver.#serverStateRoot = resolver.#serverState.root;
-    }
-    return resolver;
   }
 
   config(): ServerConfiguration {
@@ -604,7 +716,12 @@ export class WorkspaceResolver {
 
   /** Resolve the implicit workspace used by local coding-agent calls. */
   resolveCurrentWorkspaceId(principal?: string): string {
-    const workspaces = this.list(principal).filter(
+    this.#assertUsable();
+    return this.#resolveCurrentWorkspaceId(principal);
+  }
+
+  #resolveCurrentWorkspaceId(principal?: string): string {
+    const workspaces = this.#list(principal).filter(
       ({ registration }) => registration.kind === 'mod',
     );
     if (workspaces.length === 0) {
@@ -641,8 +758,9 @@ export class WorkspaceResolver {
     rootPaths: readonly string[],
     principal?: string,
   ): Promise<string> {
+    this.#assertUsable();
     const canonicalRoots = await Promise.all(rootPaths.map((rootPath) => canonicalPath(rootPath)));
-    const workspaces = this.list(principal).filter(
+    const workspaces = this.#list(principal).filter(
       ({ registration }) => registration.kind === 'mod',
     );
     const matches = workspaces.filter((workspace) =>
@@ -718,13 +836,18 @@ export class WorkspaceResolver {
   }
 
   resolveWorkspaceId(workspaceId: string, principal?: string): string {
-    if (workspaceId === CURRENT_WORKSPACE_ID) return this.resolveCurrentWorkspaceId(principal);
+    this.#assertUsable();
+    return this.#resolveWorkspaceId(workspaceId, principal);
+  }
+
+  #resolveWorkspaceId(workspaceId: string, principal?: string): string {
+    if (workspaceId === CURRENT_WORKSPACE_ID) return this.#resolveCurrentWorkspaceId(principal);
     if (this.#byId.has(workspaceId)) return workspaceId;
 
     const alias = requestedWorkspaceAlias(workspaceId);
     // A folder name as the file manager shows it ("My Mod") names the same mod as its slug.
     const slug = workspaceAliasSlug(alias);
-    const matches = this.list(principal).filter((workspace) => {
+    const matches = this.#list(principal).filter((workspace) => {
       if (workspace.registration.kind !== 'mod') return false;
       const aliases = workspaceAliases(workspace);
       return aliases.has(alias) || (slug !== '' && aliases.has(slug));
@@ -814,6 +937,11 @@ export class WorkspaceResolver {
   }
 
   list(principal?: string): ResolvedWorkspace[] {
+    this.#assertUsable();
+    return this.#list(principal);
+  }
+
+  #list(principal?: string): ResolvedWorkspace[] {
     const allowed = principal === undefined ? undefined : this.allowedWorkspaceIds(principal);
     return [...this.#byId.values()]
       .filter((workspace) => allowed === undefined || allowed.has(workspace.id))
@@ -827,6 +955,7 @@ export class WorkspaceResolver {
    */
   async refreshDescriptors(workspaceId: string, principal?: string): Promise<void> {
     const workspace = this.get(workspaceId, principal);
+    await this.#useHook?.(workspace.id);
     if (workspace.registration.kind === 'game') return;
     const dependencies = workspace.registration.dependencies;
     for (const root of workspace.roots) {
@@ -952,12 +1081,15 @@ export class WorkspaceResolver {
     relativePath: string,
     principal?: string,
   ): Promise<ResolvedWorkspace> {
+    let workspace: ResolvedWorkspace;
     try {
-      return this.get(workspaceId, principal);
+      workspace = this.get(workspaceId, principal);
     } catch (error) {
       await refuseUnsafeRelativePath(relativePath);
       throw error;
     }
+    await this.#useHook?.(workspace.id);
+    return workspace;
   }
 
   private allowedWorkspaceIds(principal: string): Set<string> {

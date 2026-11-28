@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { compareCodeUnits, hashCanonical } from './canonical.js';
 import type { Diagnostic } from './diagnostics.js';
 import { installedEffectCommands, type DocumentedCommands } from './game-documentation.js';
@@ -165,6 +166,13 @@ export class CoreEngine {
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
   #recovery: Promise<void> | undefined;
+  #startupWork: (() => Promise<void>) | undefined;
+  #startup: Promise<void> | undefined;
+  /** Set by {@link recoverOnDemand}: each workspace recovers on its first use. */
+  #recoverOnDemand = false;
+  readonly #recoveries = new Map<string, Promise<void>>();
+  /** Marks the work of a recovery, which reads its own workspace and must not wait for itself. */
+  readonly #inRecovery = new AsyncLocalStorage<true>();
 
   public constructor(
     public readonly resolver: WorkspaceResolver,
@@ -228,29 +236,82 @@ export class CoreEngine {
     return recovery;
   }
 
-  /** Settles when the latest {@link initialize} has finished, at once when none was started. */
-  recovered(): Promise<void> {
-    return this.#recovery ?? Promise.resolve();
+  /**
+   * Set the work that loads the workspaces, to run when {@link recovered} is first asked for. A
+   * stdio server answers its handshake and tool list without it; the transport asks for
+   * {@link recovered} when the first request that needs a workspace arrives, so an idle server
+   * never loads one. The work reports its own failure (for example through
+   * `resolver.failStartup`); a rejection here only ends the wait.
+   */
+  deferStartup(work: () => Promise<void>): void {
+    this.#startupWork = work;
+  }
+
+  /**
+   * Recover each workspace on its first use instead of every workspace at once: before its
+   * first file access through the resolver, before its first job is submitted and before its
+   * first rewrite is planned or applied. A failed recovery is recorded as with
+   * {@link initialize}: reads go on and rewrites are refused with
+   * `TRANSACTION_RECOVERY_REQUIRED`.
+   */
+  recoverOnDemand(): void {
+    this.#recoverOnDemand = true;
+    this.resolver.onWorkspaceUse((workspaceId) => this.ensureRecovered(workspaceId));
+    this.transactions.setRecoveryGate((workspaceId) => {
+      try {
+        return this.ensureRecovered(this.resolver.get(workspaceId).id);
+      } catch {
+        // An unknown workspace is refused by the caller's own lookup.
+        return Promise.resolve();
+      }
+    });
+  }
+
+  /**
+   * Recover `workspaceId` once when {@link recoverOnDemand} is on; otherwise, and for the
+   * recovery's own file access, it returns at once. It never rejects.
+   */
+  ensureRecovered(workspaceId: string): Promise<void> {
+    if (!this.#recoverOnDemand || this.#inRecovery.getStore() === true) return Promise.resolve();
+    let recovery = this.#recoveries.get(workspaceId);
+    if (recovery === undefined) {
+      recovery = this.#inRecovery.run(true, () => this.#recoverWorkspace(workspaceId));
+      this.#recoveries.set(workspaceId, recovery);
+    }
+    return recovery;
+  }
+
+  /**
+   * Settles when the deferred startup and the latest {@link initialize} have finished, at once
+   * when neither was set. The first call starts the deferred startup.
+   */
+  async recovered(): Promise<void> {
+    if (this.#startupWork !== undefined)
+      this.#startup ??= this.#startupWork().catch(() => undefined);
+    await this.#startup;
+    await this.#recovery;
   }
 
   async #recoverWorkspaces(): Promise<void> {
-    for (const workspace of this.resolver.list()) {
-      // Recovery repairs an interrupted internal rewrite before the workspace is exposed. A
-      // journal that cannot be recovered blocks rewrites of its own workspace, not the server.
-      try {
-        await this.transactions.recover(workspace.id);
-      } catch (error) {
-        this.transactions.recordRecoveryFailure(workspace.id, error);
-        process.stderr.write(
-          `${JSON.stringify({
-            level: 'error',
-            event: 'transaction_recovery_blocked',
-            workspaceId: workspace.id,
-            code: error instanceof ServiceError ? error.code : 'TRANSACTION_RECOVERY_FAILED',
-            message: error instanceof Error ? error.message : String(error),
-          })}\n`,
-        );
-      }
+    for (const workspace of this.resolver.list()) await this.#recoverWorkspace(workspace.id);
+  }
+
+  async #recoverWorkspace(workspaceId: string): Promise<void> {
+    // Recovery repairs an interrupted internal rewrite before the workspace is exposed. A
+    // journal that cannot be recovered blocks rewrites of its own workspace, not the server.
+    try {
+      await this.transactions.recover(workspaceId);
+    } catch (error) {
+      this.transactions.recordRecoveryFailure(workspaceId, error);
+      process.stderr.write(
+        `${JSON.stringify({
+          level: 'error',
+          event: 'transaction_recovery_blocked',
+          workspaceId,
+          code: error instanceof ServiceError ? error.code : 'TRANSACTION_RECOVERY_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+        })}\n`,
+      );
     }
   }
 

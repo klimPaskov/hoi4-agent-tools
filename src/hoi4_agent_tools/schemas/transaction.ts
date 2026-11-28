@@ -2,10 +2,10 @@ import { z } from 'zod/v4';
 import {
   TRANSACTION_MAX_APPLIED_FILES,
   TRANSACTION_MAX_ARTIFACTS,
+  TRANSACTION_MAX_BATCH_FILES,
   TRANSACTION_MAX_DIAGNOSTICS,
   TRANSACTION_MAX_FILES,
   TRANSACTION_MAX_OPERATIONS,
-  TRANSACTION_MAX_PENDING_FILES,
   TRANSACTION_MAX_READ_DEPENDENCIES,
   TRANSACTION_MAX_VALIDATION_CHECKS,
 } from '../core/transaction-limits.js';
@@ -134,7 +134,8 @@ export const transactionManifestSchema = z
           })
           .strict(),
       )
-      .max(TRANSACTION_MAX_PENDING_FILES)
+      // A batch records one pending entry per file, and large applies use batches up to this size.
+      .max(TRANSACTION_MAX_BATCH_FILES)
       .optional(),
     rollbackStatus: z.enum(['available', 'applied', 'failed']),
     failure: z.object({ code: identifierSchema, message: summarySchema }).strict().optional(),

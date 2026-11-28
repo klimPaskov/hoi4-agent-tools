@@ -454,7 +454,15 @@ export class TransactionManager {
     );
   }
 
+  #recoveryGate: ((workspaceId: string) => Promise<void>) | undefined;
+
+  /** Run `gate` before a rewrite of a workspace is planned or applied; the engine recovers on demand. */
+  setRecoveryGate(gate: (workspaceId: string) => Promise<void>): void {
+    this.#recoveryGate = gate;
+  }
+
   private async assertRecovered(workspaceId: string, signal?: AbortSignal): Promise<void> {
+    await this.#recoveryGate?.(workspaceId);
     if (!this.#recoveryFailures.has(workspaceId)) return;
     try {
       await this.recover(workspaceId, undefined, signal);

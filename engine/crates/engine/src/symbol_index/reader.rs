@@ -352,6 +352,8 @@ pub enum Entry<'a> {
 pub struct Assignment<'a> {
     pub key: Scalar<'a>,
     pub value: Value<'a>,
+    /// Byte span of the operator token in the decoded text (`=`, `<`, `>`, `?=`, `<=` and so on).
+    pub operator: (u32, u32),
 }
 
 #[derive(Debug)]
@@ -542,7 +544,7 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> (Vec<Token>, usize) {
                         SourceDiagnostic::syntax(
                             "SOURCE_STRING_TOO_LONG",
                             "warning",
-                            "Clausewitz quoted strings longer than 255 characters are not portable",
+                            "Quoted string longer than 255 characters. Vanilla has none, but no game limit is recorded: check it in game before shortening it",
                             span,
                         )
                     });
@@ -757,7 +759,7 @@ impl<'a> Parser<'_, 'a> {
                 Value::Scalar(Scalar { value: Cow::Borrowed(text), line: value_token.line, start: value_token.start, end: value_token.end, quoted: false })
             }
         };
-        Some(Entry::Assignment(Assignment { key, value }))
+        Some(Entry::Assignment(Assignment { key, value, operator: (operator.start, operator.end) }))
     }
 }
 
@@ -1037,6 +1039,18 @@ mod tests {
 
     fn parse(text: &str) -> Document<'_> {
         parse_clausewitz(text, text.len(), false)
+    }
+
+    #[test]
+    fn assignments_carry_the_byte_span_of_their_operator() {
+        let text = "a = 1 b<=2 c ?= { d > 3 } # x
+e = 4";
+        let document = parse(text);
+        let operators: Vec<&str> = document.root.assignments().map(|a| &text[a.operator.0 as usize..a.operator.1 as usize]).collect();
+        assert_eq!(operators, ["=", "<=", "?=", "="]);
+        let inner: Vec<&str> =
+            document.root.child_blocks("c").flat_map(|b| b.assignments()).map(|a| &text[a.operator.0 as usize..a.operator.1 as usize]).collect();
+        assert_eq!(inner, [">"]);
     }
 
     #[test]
