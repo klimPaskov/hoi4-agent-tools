@@ -13,6 +13,8 @@ import {
   type CommonWriteRequest,
 } from '../schemas/common-write.js';
 import { documentedLists } from './documented-lists.js';
+import { capFindings, capList, cutText, MAX_DIFF_UNITS, MAX_NAMES } from './limits.js';
+import { isPlainRelativePath } from './paths.js';
 import {
   planCommonWrite,
   planNewCommonFile,
@@ -28,7 +30,6 @@ export interface CommonWriteOperationContext {
   progress?(completed: number, total: number, message: string): Promise<void>;
 }
 
-const DIFF_BUDGET_BYTES = 8_000;
 const MAX_INLINE_PATHS = 8;
 const MAX_INLINE_ARTIFACTS = 2;
 
@@ -68,23 +69,29 @@ type CommonWriteTarget = { file: ScannedFile } | { newPath: string };
  * The mod files that define the id, found by asking the engine to plan a removal of it from each:
  * a file without the id answers "not found", a file that cannot be read answers nothing about it.
  */
-async function holders(files: ScannedFile[], input: CommonWriteRequest): Promise<ScannedFile[]> {
-  const found: ScannedFile[] = [];
+async function holders(
+  files: ScannedFile[],
+  input: CommonWriteRequest,
+): Promise<{ holding: ScannedFile[]; unreadable: string[] }> {
+  const holding: ScannedFile[] = [];
+  const unreadable: string[] = [];
   for (const file of files) {
     try {
       await planCommonWrite(
         { bytes: file.bytes, path: file.relativePath },
         { kind: input.kind, operation: 'remove', id: input.id },
       );
-      found.push(file);
+      holding.push(file);
     } catch (error) {
       if (!(error instanceof ServiceError)) throw error;
-      if (error.code === 'COMMON_WRITE_NOT_FOUND' || error.code === 'COMMON_WRITE_SOURCE_INVALID')
-        continue;
-      found.push(file);
+      if (error.code === 'COMMON_WRITE_NOT_FOUND') continue;
+      // Only a file that really has the id holds it; one the engine cannot read or place an edit
+      // in is reported apart, so a refusal can name what it could not search.
+      if (error.code === 'COMMON_WRITE_DUPLICATE_ID') holding.push(file);
+      else unreadable.push(file.relativePath);
     }
   }
-  return found;
+  return { holding, unreadable };
 }
 
 async function targetFile(
@@ -116,9 +123,20 @@ async function targetFile(
         `${input.file} is not a ${folder} file of the mod${input.operation === 'add' ? '; pass createFile: true to create it' : ''}`,
         { file: input.file, files: listed },
       );
-    return { newPath: input.file.replaceAll('\\', '/').replace(/^\.\//u, '') };
+    const newPath = input.file.replaceAll('\\', '/').replace(/^\.\//u, '');
+    if (
+      !normalized(newPath).startsWith(folder) ||
+      !newPath.toLowerCase().endsWith('.txt') ||
+      !isPlainRelativePath(newPath)
+    )
+      fail(
+        'COMMON_WRITE_FILE_INVALID',
+        `${input.file} is not a plain .txt path under ${folder}, so a new file cannot go there`,
+        { file: input.file },
+      );
+    return { newPath };
   }
-  const holding = await holders(files, input);
+  const { holding, unreadable } = await holders(files, input);
   if (input.operation === 'add') {
     if (input.createFile === true)
       fail('COMMON_WRITE_FILE_REQUIRED', 'createFile needs file, the path of the new file', {
@@ -140,10 +158,11 @@ async function targetFile(
     );
   }
   if (holding.length === 0)
-    fail('COMMON_WRITE_NOT_FOUND', `${input.id} is not defined in a ${folder} file of the mod`, {
-      id: input.id,
-      files: listed,
-    });
+    fail(
+      'COMMON_WRITE_NOT_FOUND',
+      `${input.id} is not defined in a ${folder} file of the mod${unreadable.length === 0 ? '' : `; ${unreadable.length} file(s) could not be searched`}`,
+      { id: input.id, files: listed, ...(unreadable.length === 0 ? {} : { unreadable }) },
+    );
   if (holding.length > 1)
     fail(
       'COMMON_WRITE_FILE_REQUIRED',
@@ -250,19 +269,40 @@ export async function computeCommonWrite(
           details: { name },
         });
   }
-  const budget = plan.diff.length > DIFF_BUDGET_BYTES;
+  const budget = plan.diff.length > MAX_DIFF_UNITS;
+  const findings = capFindings(plan.findings);
+  const capped = {
+    localisation: capList(missing.localisation, MAX_NAMES.localisation),
+    sprites: capList(missing.sprites, MAX_NAMES.sprites),
+    categories: capList(missing.categories, MAX_NAMES.categories),
+    focuses: capList(missing.focuses, MAX_NAMES.focuses),
+  };
   const data = commonWriteDataSchema.parse({
     operation: plan.operation,
     kind: plan.kind,
     id: plan.id,
-    path: plan.path,
+    path: cutText(plan.path, 1024),
     applied,
-    diff: budget ? `${plan.diff.slice(0, DIFF_BUDGET_BYTES)}\n` : plan.diff,
+    diff: budget ? `${cutText(plan.diff, MAX_DIFF_UNITS)}\n` : plan.diff,
     diffTruncated: budget,
     untouchedDefinitions: plan.untouchedDefinitions,
-    findings: plan.findings,
-    missing,
+    findings: findings.kept.map(({ severity, code, message }) => ({ severity, code, message })),
+    missing: {
+      localisation: capped.localisation.kept,
+      sprites: capped.sprites.kept,
+      categories: capped.categories.kept,
+      focuses: capped.focuses.kept,
+    },
+    omitted: {
+      findings: findings.omitted,
+      localisation: capped.localisation.omitted,
+      sprites: capped.sprites.omitted,
+      categories: capped.categories.omitted,
+      focuses: capped.focuses.omitted,
+    },
   });
+  // The envelope carries few diagnostics; the full counts are in data.omitted.
+  diagnostics.splice(20);
   return { plan, file, data, diagnostics };
 }
 

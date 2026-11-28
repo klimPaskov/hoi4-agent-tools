@@ -57,6 +57,16 @@ export const commonWriteDataSchema = z
           .strict(),
       )
       .max(50),
+    /** How many findings and undefined references were left out of the lists above to keep the answer short. */
+    omitted: z
+      .object({
+        findings: z.number().int().min(0),
+        localisation: z.number().int().min(0),
+        sprites: z.number().int().min(0),
+        categories: z.number().int().min(0),
+        focuses: z.number().int().min(0),
+      })
+      .strict(),
     /** What the definition refers to and the mod does not define. The write still happens. */
     missing: z
       .object({

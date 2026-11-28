@@ -307,7 +307,7 @@ describe('hoi4.common_write through an MCP client', () => {
   });
 
   it('refuses what it must not touch: a game definition, a file outside the folder, an escape, a bad body', async () => {
-    const { call, read, mod, root } = await fixture();
+    const { call, read } = await fixture();
     const game = await call({
       kind: 'ai_strategy',
       operation: 'remove',
@@ -324,10 +324,13 @@ describe('hoi4.common_write through an MCP client', () => {
       apply: true,
     });
     expect(outside.status).toBe('error');
+    expect(JSON.stringify(outside)).toContain('COMMON_WRITE_FILE_NOT_FOUND');
     for (const bad of [
       'common/ai_strategy/../../escape.txt',
       'common/ai_strategy/x.yml',
-      '../outside/common/ai_strategy/x.txt',
+      'common/ai_strategy/x.txt:stream.txt',
+      'common/ai_strategy/CON.txt',
+      'common/ai_strategy/nul.txt',
     ]) {
       const refused = await call({
         kind: 'ai_strategy',
@@ -339,7 +342,18 @@ describe('hoi4.common_write through an MCP client', () => {
         apply: true,
       });
       expect(refused.status).toBe('error');
+      expect(JSON.stringify(refused)).toContain('COMMON_WRITE_FILE_INVALID');
     }
+    const escaped = await call({
+      kind: 'ai_strategy',
+      operation: 'add',
+      id: 'tst_x',
+      body: 'abort = { always = yes }',
+      file: '../outside/common/ai_strategy/x.txt',
+      createFile: true,
+      apply: true,
+    });
+    expect(escaped.status).toBe('error');
     const body = await call({
       kind: 'ai_strategy',
       operation: 'add',
@@ -352,17 +366,18 @@ describe('hoi4.common_write through an MCP client', () => {
     expect(JSON.stringify(nothing)).toContain('COMMON_WRITE_NOT_FOUND');
     expect(await read('common/ai_strategy/tst.txt')).toBe(STRATEGIES);
     expect(await read('common/on_actions/tst.txt')).toBe(ON_ACTIONS);
-    // A symlink inside the folder that leaves the mod is never written through.
+  });
+
+  it('never writes through a link that leaves the mod', async (context) => {
+    const { call, root, mod } = await fixture();
     const outsideDir = path.join(root, 'outside');
     await mkdir(outsideDir, { recursive: true });
-    await writeFile(
-      path.join(outsideDir, 'x.txt'),
-      'tst_link = {\n\tabort = { always = yes }\n}\n',
-    );
+    const original = 'tst_link = {\n\tabort = { always = yes }\n}\n';
+    await writeFile(path.join(outsideDir, 'x.txt'), original);
     try {
       await symlink(outsideDir, path.join(mod, 'common', 'ai_strategy', 'link'), 'junction');
     } catch {
-      return;
+      context.skip('this host cannot create a junction or symlink');
     }
     const linked = await call({
       kind: 'ai_strategy',
@@ -372,9 +387,7 @@ describe('hoi4.common_write through an MCP client', () => {
       apply: true,
     });
     expect(linked.status).toBe('error');
-    expect(await readFile(path.join(outsideDir, 'x.txt'), 'utf8')).toBe(
-      'tst_link = {\n\tabort = { always = yes }\n}\n',
-    );
+    expect(await readFile(path.join(outsideDir, 'x.txt'), 'utf8')).toBe(original);
   });
 
   it('plans from the file as it is now, keeping a hand edit made after a preview', async () => {

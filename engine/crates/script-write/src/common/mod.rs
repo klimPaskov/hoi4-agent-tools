@@ -20,7 +20,7 @@ use self::checks::{CheckContext, Finding, References};
 use self::descriptor::{KindDescriptor, Merge, NameRule, descriptor, kinds};
 use crate::idea::{Operation, assert_body_is_one_block, id_is_valid, remove_edit};
 use crate::source::{
-    Block, Decoded, Entry, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
+    Block, Decoded, Entry, Item, Replacement, Source, WriteResult, apply_replacements, assignments, blank, block_of, fail, indented_body, key_of, line_indent,
     line_start, probe_one_block,
 };
 
@@ -84,9 +84,24 @@ fn lookup(kind: &str) -> WriteResult<&'static KindDescriptor> {
     }
 }
 
+/// A path segment the mod may hold on every platform: no empty or dot segment, no NTFS stream or
+/// drive (`:`), no control or wildcard character, no trailing dot or space, no reserved device name.
+fn is_plain_segment(part: &str) -> bool {
+    if part.is_empty() || part == "." || part == ".." || part.ends_with(['.', ' ']) {
+        return false;
+    }
+    if part.chars().any(|c| c.is_control() || matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+        return false;
+    }
+    let stem = part.split('.').next().unwrap_or_default().to_ascii_uppercase();
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT")) && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit());
+    !reserved
+}
+
 fn check_path(desc: &KindDescriptor, path: &str) -> WriteResult<()> {
     let inside = path.strip_prefix(desc.folder).is_some_and(|rest| rest.starts_with('/'));
-    let clean = !path.split('/').any(|part| part.is_empty() || part == "." || part == "..") && !path.contains('\\');
+    let clean = path.split('/').all(is_plain_segment) && !path.contains('\\');
     if !inside || !clean || !path.ends_with(".txt") {
         return fail(
             "COMMON_WRITE_PATH_OUTSIDE_FOLDER",
@@ -236,10 +251,11 @@ pub fn plan_common_write(bytes: &[u8], path: &str, input: &CommonWriteInput, new
     {
         let mut known: Vec<&str> = input.known_names.as_deref().unwrap_or_default().iter().map(String::as_str).collect();
         known.sort_unstable();
+        let why = if known.is_empty() { ", and the game documentation of the on_action names was not found, so no other name can be checked" } else { "" };
         return fail(
             "COMMON_WRITE_NAME_UNKNOWN",
-            format!("{id} is not a documented {} name or an on_daily_TAG, on_weekly_TAG or on_monthly_TAG name", desc.noun),
-            json!({ "id": id, "known": known }),
+            format!("{id} is not a documented {} name, an on_daily_TAG, on_weekly_TAG or on_monthly_TAG name, or a name already in this file{why}", desc.noun),
+            json!({ "id": id, "known": known, "documentationFound": !known.is_empty() }),
         );
     }
     if existing.len() > 1 {
@@ -315,11 +331,9 @@ pub fn plan_common_write(bytes: &[u8], path: &str, input: &CommonWriteInput, new
                 let part_range = source.entry_range(part);
                 let part_indent = line_indent(text, part_range.start);
                 edit = if input.operation == Operation::Replace {
-                    match probe_one_block(id, body, |b| b.entries.len()) {
-                        Ok(1) => {}
-                        Ok(_) | Err(_) => {
-                            return fail("COMMON_WRITE_BODY_INVALID", "A block replacement takes exactly one entry as its body", json!({}));
-                        }
+                    let one_block = |b: &Block<'_>| matches!(b.entries.as_slice(), [Item::Assignment(entry)] if block_of(entry).is_some());
+                    if !matches!(probe_one_block(id, body, one_block), Ok(true)) {
+                        return fail("COMMON_WRITE_BODY_INVALID", "A block replacement takes exactly one block entry (key = { ... }) as its body", json!({}));
                     }
                     Replacement {
                         start: part_range.start,

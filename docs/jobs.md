@@ -15,7 +15,7 @@ A modern native task handoff ends that request's heartbeat without declaring the
 
 ## Supported tools
 
-Optional tasks are available for all 20 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
+Optional tasks are available for all 27 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
 
 - `hoi4.event_inspect` and `hoi4.event_render`
 - `hoi4.impact_inspect`, `hoi4.decision_inspect`, `hoi4.mechanic_test`, `hoi4.package_check`, and `hoi4.scenario_test`

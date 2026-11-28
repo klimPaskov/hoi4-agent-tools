@@ -127,7 +127,7 @@ pub fn bop(context: &CheckContext<'_>, block: &Block<'_>) -> Outcome {
     }
     if let Some(initial) = scalar(block, "initial_value") {
         match initial.parse::<f64>() {
-            Ok(value) if (-1.0..=1.0).contains(&value) => {}
+            Ok(value) if value.is_finite() && (-1.0..=1.0).contains(&value) => {}
             _ => out.findings.push(Finding::warning("BOP_INITIAL_VALUE_RANGE", format!("initial_value {initial} is not a number from -1 to 1"))),
         }
     }
@@ -137,8 +137,9 @@ pub fn bop(context: &CheckContext<'_>, block: &Block<'_>) -> Outcome {
     for range in range_blocks {
         count += 1;
         let id = scalar(range, "id");
-        let min = scalar(range, "min").and_then(|v| v.parse::<f64>().ok());
-        let max = scalar(range, "max").and_then(|v| v.parse::<f64>().ok());
+        // `nan` and `inf` parse as numbers and would make every comparison below false.
+        let min = scalar(range, "min").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite());
+        let max = scalar(range, "max").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite());
         let (Some(id), Some(min), Some(max)) = (id, min, max) else {
             out.findings.push(Finding::error("BOP_RANGE_INCOMPLETE", "A range needs an id and numeric min and max"));
             continue;

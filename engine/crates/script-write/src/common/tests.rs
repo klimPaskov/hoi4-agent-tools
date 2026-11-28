@@ -320,3 +320,67 @@ fn a_failed_check_names_every_error() {
     assert_eq!(body["code"], "COMMON_WRITE_CHECK_FAILED");
     assert_eq!(body["errors"][0]["code"], "BOP_RANGES_MISSING");
 }
+
+#[test]
+fn bop_refuses_ranges_that_are_not_finite_numbers() {
+    for bad in ["nan", "inf", "-inf", "infinity"] {
+        let body = BOP_BODY.replace("min = -0.2 max = 0.2", &format!("min = {bad} max = 0.2"));
+        let e = plan(&input("bop", Operation::Add, "t_bop", Some(&body)), "common/bop/t.txt", BOP_FILE).err().unwrap();
+        assert_eq!(e.code, "COMMON_WRITE_CHECK_FAILED", "{bad}");
+        assert_eq!(e.to_json()["errors"][0]["code"], "BOP_RANGE_INCOMPLETE", "{bad}");
+    }
+}
+
+#[test]
+fn refuses_paths_that_name_streams_devices_or_odd_segments() {
+    let b = Some("abort = { always = yes }");
+    for path in [
+        "common/ai_strategy/a.txt:x.txt",
+        "common/ai_strategy/CON.txt",
+        "common/ai_strategy/nul.txt",
+        "common/ai_strategy/Com1.txt",
+        "common/ai_strategy/lpt9.log.txt",
+        "common/ai_strategy/a.txt.",
+        "common/ai_strategy/a?.txt",
+        "common/ai_strategy/sub /b.txt",
+    ] {
+        assert_eq!(code(plan(&input("ai_strategy", Operation::Add, "x_one", b), path, "")), "COMMON_WRITE_PATH_OUTSIDE_FOLDER", "{path}");
+    }
+    assert_eq!(code(plan(&input("ai_strategy", Operation::Add, "x_one", b), "common/ai_strategy/sub/com10.txt", "")), "NO_ERROR");
+}
+
+#[test]
+fn an_unknown_on_action_says_when_the_documentation_was_not_found() {
+    let go = |names: Option<Vec<String>>| {
+        let mut i = input("on_action", Operation::Add, "on_made_up", Some("effect = { }"));
+        i.known_names = names;
+        plan(&i, "common/on_actions/t.txt", ON_ACTION_FILE).err().unwrap().to_json()
+    };
+    let none = go(None);
+    assert_eq!(none["documentationFound"], false);
+    assert!(none["message"].as_str().unwrap().contains("documentation of the on_action names was not found"));
+    let some = go(Some(vec!["on_startup".into()]));
+    assert_eq!(some["documentationFound"], true);
+    assert!(!some["message"].as_str().unwrap().contains("was not found"));
+}
+
+#[test]
+fn a_block_replacement_takes_a_block_not_a_scalar() {
+    let mut i = input("on_action", Operation::Replace, "on_daily", Some("effect = 1"));
+    i.block_index = Some(0);
+    assert_eq!(code(plan(&i, "common/on_actions/t.txt", ON_ACTION_FILE)), "COMMON_WRITE_BODY_INVALID");
+    i.body = Some("just_a_word".into());
+    assert_eq!(code(plan(&i, "common/on_actions/t.txt", ON_ACTION_FILE)), "COMMON_WRITE_BODY_INVALID");
+}
+
+#[test]
+fn the_body_is_written_as_given_except_for_the_documented_re_indent() {
+    // What the writer changes in a body, and nothing else: the common leading indent is replaced by
+    // the file's own, trailing spaces and tabs are dropped, blank edge lines are dropped, and line
+    // breaks become the file's own style. Comments, quoting and the text of each line stay.
+    let body = "\n    # keep this comment   \n    log = \"two  spaces  inside\"   \n        nested = { a = b }\t\n";
+    let made = plan(&input("ai_strategy", Operation::Add, "t_body", Some(body)), "common/ai_strategy/t.txt", "").unwrap();
+    assert_eq!(text(&made), "t_body = {\n\t# keep this comment\n\tlog = \"two  spaces  inside\"\n\t    nested = { a = b }\n}\n");
+    let crlf = plan(&input("ai_strategy", Operation::Add, "t_body", Some(body)), "common/ai_strategy/t.txt", "# x\r\n").unwrap();
+    assert!(text(&crlf).ends_with("t_body = {\r\n\t# keep this comment\r\n\tlog = \"two  spaces  inside\"\r\n\t    nested = { a = b }\r\n}\r\n"));
+}
