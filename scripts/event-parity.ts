@@ -339,10 +339,7 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
         { mode: 'lint', selector: { kind: 'manifest', manifest: { eventIds: [first.eventId] } } },
       ],
       ['near miss', { mode: 'roots', selector: eventSelector(`${first.eventId}x`) }],
-      [
-        'lint of a node',
-        { mode: 'lint', selector: { kind: 'node', nodeId: first.id } },
-      ],
+      ['lint of a node', { mode: 'lint', selector: { kind: 'node', nodeId: first.id } }],
       [
         'trace cut at the edge limit',
         { mode: 'trace', selector, maxEdges: 3, maxNodes: 4, maxDepth: 6 },
@@ -435,7 +432,10 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
     cases.push(
       [
         'lint of a source column',
-        { mode: 'lint', selector: { kind: 'source', sourcePath, line: start.line, column: start.column } },
+        {
+          mode: 'lint',
+          selector: { kind: 'source', sourcePath, line: start.line, column: start.column },
+        },
       ],
       [
         'lint past the column',
