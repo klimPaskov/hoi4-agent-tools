@@ -10,7 +10,12 @@
 
 use hoi4_core::ops::{OpResponse, Registry};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use std::borrow::Cow;
+use std::time::Instant;
+
+use hoi4_core::canonical::sha256_hex;
+use rayon::prelude::*;
+use serde_json::{Map, Value, json};
 
 use crate::algorithms::{self, Boundary, Direction, PathOptions};
 use crate::graph::Graph;
@@ -110,8 +115,10 @@ pub fn register(registry: &mut Registry) {
     });
 }
 
-/// One file of an `event.fragments` request; its bytes sit at `payload` (`[offset, length]`) of
-/// the frame's raw payload.
+/// One file of an `event.fragments` request. The engine reads the file itself from `path` (an
+/// absolute path the caller has checked against its roots) and refuses it when its size or SHA-256
+/// differ from the scan. Without a `path`, the bytes sit at `payload` (`[offset, length]`) of the
+/// frame's raw payload.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FragmentFile {
@@ -119,7 +126,12 @@ struct FragmentFile {
     display_path: String,
     sha256: String,
     cache_key: String,
-    payload: (usize, usize),
+    #[serde(default)]
+    payload: Option<(usize, usize)>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 /// `EventSourceAnalysisContext` on the wire: sets as arrays, maps as objects.
@@ -177,17 +189,63 @@ impl From<ContextWire> for source_analysis::Context {
     }
 }
 
-/// A result too large for the response header: the JSON goes in the payload and the header names it.
-fn payload_response(name: &str, value: &Value, count: usize) -> OpResponse {
+/// A result too large for the response header: the JSON goes in the payload and the header names it,
+/// with the wall time of each phase in milliseconds.
+fn payload_response(name: &str, value: &Value, count: usize, timings: Value) -> OpResponse {
     match serde_json::to_vec(value) {
-        Ok(bytes) => OpResponse::ok_with_payload(json!({ "payload": name, "count": count }), bytes),
+        Ok(bytes) => OpResponse::ok_with_payload(json!({ "payload": name, "count": count, "timingsMs": timings }), bytes),
         Err(error) => OpResponse::error("internal", error.to_string()),
     }
 }
 
-/// `event.fragments`: `{ files, context }` plus the files' bytes as the payload → `{ fragments }`,
-/// one `EventSourceFragment` per file, in order, as a JSON array in the response payload. The files share
-/// one work budget.
+fn file_bytes<'a>(file: &FragmentFile, payload: &'a [u8]) -> Result<Cow<'a, [u8]>, OpResponse> {
+    if let Some(path) = &file.path {
+        let bytes = std::fs::read(path).map_err(|error| OpResponse::error("EVENT_SOURCE_UNREADABLE", format!("cannot read {}: {error}", file.display_path)))?;
+        let stale = file.size.is_some_and(|size| size != bytes.len() as u64) || sha256_hex(&bytes) != file.sha256;
+        if stale {
+            return Err(OpResponse::error("EVENT_SOURCE_STALE", format!("{} changed since it was scanned", file.display_path)));
+        }
+        return Ok(Cow::Owned(bytes));
+    }
+    let Some((offset, length)) = file.payload else {
+        return Err(OpResponse::error("invalid_request", format!("{} names neither a path nor payload bytes", file.display_path)));
+    };
+    payload
+        .get(offset..offset.saturating_add(length))
+        .map(Cow::Borrowed)
+        .ok_or_else(|| OpResponse::error("invalid_request", format!("{} names bytes past the end of the payload", file.display_path)))
+}
+
+/// One fragment per file, in order. The files are analyzed in parallel, each against its own work
+/// budget, and the total must stay under the same fixed ceiling as one shared budget. Each file's
+/// bytes are dropped as soon as it is analyzed.
+fn analyze_files(files: &[FragmentFile], context: &source_analysis::Context, payload: &[u8]) -> Result<Vec<Value>, OpResponse> {
+    let analyzed: Vec<Result<(Value, u64), OpResponse>> = files
+        .par_iter()
+        .map(|file| {
+            let bytes = file_bytes(file, payload)?;
+            let source =
+                source_analysis::SourceFile { relative_path: &file.relative_path, display_path: &file.display_path, sha256: &file.sha256, bytes: &bytes };
+            let mut budget = source_analysis::Budget::default();
+            let fragment = source_analysis::analyze_event_source(&source, context, &file.cache_key, &mut budget).map_err(blocked)?;
+            Ok((fragment, budget.spent()))
+        })
+        .collect();
+    let mut fragments = Vec::with_capacity(analyzed.len());
+    let mut spent = 0u64;
+    for result in analyzed {
+        let (fragment, used) = result?;
+        spent += used;
+        fragments.push(fragment);
+    }
+    if spent > algorithms::WORK_LIMIT {
+        return Err(blocked(algorithms::WorkBlocked { label: "source_fragment", spent }));
+    }
+    Ok(fragments)
+}
+
+/// `event.fragments`: `{ files, context }` -> one `EventSourceFragment` per file, in order, as a JSON
+/// array in the response payload.
 pub fn register_fragments(registry: &mut Registry) {
     registry.add_fn("event.fragments", |_, request, payload| {
         let request = match parse::<FragmentsRequest>(request) {
@@ -195,20 +253,15 @@ pub fn register_fragments(registry: &mut Registry) {
             Err(error) => return error,
         };
         let context: source_analysis::Context = request.context.into();
-        let mut budget = source_analysis::Budget::default();
-        let mut fragments = Vec::with_capacity(request.files.len());
-        for file in &request.files {
-            let (offset, length) = file.payload;
-            let Some(bytes) = payload.get(offset..offset.saturating_add(length)) else {
-                return OpResponse::error("invalid_request", format!("{} names bytes past the end of the payload", file.display_path));
-            };
-            let source = source_analysis::SourceFile { relative_path: &file.relative_path, display_path: &file.display_path, sha256: &file.sha256, bytes };
-            match source_analysis::analyze_event_source(&source, &context, &file.cache_key, &mut budget) {
-                Ok(fragment) => fragments.push(fragment),
-                Err(error) => return blocked(error),
+        let started = Instant::now();
+        match analyze_files(&request.files, &context, payload) {
+            Ok(fragments) => {
+                let analysis = started.elapsed().as_millis() as u64;
+                let count = fragments.len();
+                payload_response("fragments", &Value::Array(fragments), count, json!({ "analysis": analysis }))
             }
+            Err(error) => error,
         }
-        payload_response("fragments", &json!(fragments), fragments.len())
     });
 }
 
@@ -223,7 +276,12 @@ struct GraphFile {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GraphRequest {
+    /// The fragments, when the caller has them. Otherwise `analyze` names the files to analyze here,
+    /// which keeps the fragments out of the pipe.
+    #[serde(default)]
     fragments: Vec<Value>,
+    #[serde(default)]
+    analyze: Option<FragmentsRequest>,
     files: Vec<GraphFile>,
     workspace_id: String,
     #[serde(default)]
@@ -246,15 +304,30 @@ fn yes() -> bool {
     true
 }
 
-/// `event.graph`: `GraphRequest` → the `EventGraphSnapshot` as JSON in the response payload.
+/// `event.graph`: `GraphRequest` -> the `EventGraphSnapshot` as JSON in the response payload.
 pub fn register_graph(registry: &mut Registry) {
-    registry.add_fn("event.graph", |_, request, _| {
+    registry.add_fn("event.graph", |_, request, payload| {
         let request = match parse::<GraphRequest>(request) {
             Ok(request) => request,
             Err(error) => return error,
         };
+        let mut timings = Map::new();
+        let fragments = match request.analyze {
+            Some(analyze) => {
+                let started = Instant::now();
+                let context: source_analysis::Context = analyze.context.into();
+                match analyze_files(&analyze.files, &context, payload) {
+                    Ok(fragments) => {
+                        timings.insert("analysis".into(), json!(started.elapsed().as_millis() as u64));
+                        fragments
+                    }
+                    Err(error) => return error,
+                }
+            }
+            None => request.fragments,
+        };
         let input = graph_build::Input {
-            fragments: request.fragments,
+            fragments,
             files: request.files.into_iter().map(|file| (file.display_path, file.sha256)).collect(),
             workspace_id: request.workspace_id,
             workspace_identity: request.workspace_identity,
@@ -266,8 +339,22 @@ pub fn register_graph(registry: &mut Registry) {
             project_helpers: request.project_helpers,
             focused: request.analysis_mode.as_deref() == Some("focused"),
         };
-        match graph_build::build_graph(&input) {
-            Ok(graph) => payload_response("graph", &graph, 1),
+        match graph_build::build_owned(input) {
+            Ok(built) => {
+                for (phase, milliseconds) in &built.timings {
+                    timings.insert((*phase).into(), json!(milliseconds));
+                }
+                let graph = built.graph;
+                let started = Instant::now();
+                let mut response = payload_response("graph", &graph, 1, Value::Object(timings.clone()));
+                // Freeing the value tree takes seconds on a large graph; do it off the response path.
+                std::thread::spawn(move || drop(graph));
+                timings.insert("serialize".into(), json!(started.elapsed().as_millis() as u64));
+                if let Ok(header) = response.result.as_mut() {
+                    header["timingsMs"] = Value::Object(timings);
+                }
+                response
+            }
             Err(graph_build::BuildError::Work(error)) => blocked(error),
             Err(graph_build::BuildError::Limit { code, label, count, maximum }) => {
                 OpResponse::error(code, format!("Event-chain {label} exceeds the fixed result ceiling ({count} over {maximum})"))
