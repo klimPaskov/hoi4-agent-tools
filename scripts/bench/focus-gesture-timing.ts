@@ -7,6 +7,10 @@ import { launchSmokeServer, writeSmokeConfig } from '../../tests/helpers/mcp-std
 import { findUserRoot, locateCorpus } from './corpus.js';
 import { corpusFileSchema } from './schema.js';
 import { BENCH_ROOT } from './runner.js';
+import { capEngineMemory } from './engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'bench/focus-gesture-timing' });
 
 /**
  * Editor gesture timings (issue #137, decision D-98), not a packaged command.

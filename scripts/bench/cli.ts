@@ -9,6 +9,10 @@ import { findGameRoot } from './corpus.js';
 import { gameUpdateMarkdown, watchGame, type GameUpdate } from './game-watch.js';
 import { BENCH_ROOT, loadCorpora, runSuite } from './runner.js';
 import { baselineSchema, type Baseline } from './schema.js';
+import { capEngineMemory } from './engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'bench/cli' });
 
 /**
  * Project benchmark, not a packaged command.

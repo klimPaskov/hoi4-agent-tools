@@ -16,6 +16,10 @@ import {
 } from '../src/hoi4_agent_tools/reference/mod-index.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'mod-index-parity' });
 
 /**
  * Parity check for `hoi4.mod_index` on the shared Rust engine (M-8, ADR 0080). On each workspace

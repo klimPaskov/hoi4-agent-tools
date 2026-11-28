@@ -17,6 +17,10 @@ import {
 } from '../src/hoi4_agent_tools/core/workspace.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'workspace-paths-parity' });
 
 /**
  * Parity check for the canonical-path checks on the shared Rust engine (ADR 0089, step 2, first

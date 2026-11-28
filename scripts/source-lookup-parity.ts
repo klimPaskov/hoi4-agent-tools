@@ -20,6 +20,10 @@ import { nearestNames } from '../src/hoi4_agent_tools/reference/suggestions.js';
 import { sourceLookupEngineResponseSchema } from '../src/hoi4_agent_tools/schemas/mod-tools.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'source-lookup-parity' });
 
 /**
  * Parity check for `hoi4.source_lookup` on the shared Rust engine (M-8, ADR 0082). On each

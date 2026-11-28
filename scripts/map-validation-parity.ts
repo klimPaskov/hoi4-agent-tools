@@ -21,6 +21,10 @@ import {
 } from '../src/hoi4_agent_tools/map/validation.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'map-validation-parity' });
 
 /**
  * Parity check for map validation on the engine (`map.validate`, ADR 0089 step 6, packet P13a).

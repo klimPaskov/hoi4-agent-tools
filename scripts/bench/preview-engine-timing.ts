@@ -6,6 +6,10 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { ResidentEngine } from '../../src/hoi4_agent_tools/core/resident-engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { gameLayers } from '../../src/hoi4_agent_tools/focus/game-render.js';
+import { capEngineMemory } from './engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'bench/preview-engine-timing' });
 
 /**
  * The resident engine's own render time, without the MCP call around it (issue #74), not a
