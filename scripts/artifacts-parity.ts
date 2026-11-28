@@ -23,10 +23,16 @@ import { canonicalJson, sha256Bytes } from '../src/hoi4_agent_tools/core/canonic
 import { summarizeChangedFiles } from '../src/hoi4_agent_tools/core/changed-summary.js';
 import { binaryDiff, unifiedTextDiff } from '../src/hoi4_agent_tools/core/diff.js';
 import { comparePngImages } from '../src/hoi4_agent_tools/core/image-diff.js';
-import { planManagedOutputs, refreshManagedOutputs } from '../src/hoi4_agent_tools/core/managed-outputs.js';
+import {
+  planManagedOutputs,
+  refreshManagedOutputs,
+} from '../src/hoi4_agent_tools/core/managed-outputs.js';
 import { sharedResidentEngine } from '../src/hoi4_agent_tools/core/resident-engine.js';
 import type { ResolvedWorkspace } from '../src/hoi4_agent_tools/core/workspace.js';
-import { worldOutputPermits, isWorldCountryOutput } from '../src/hoi4_agent_tools/map/world-outputs.js';
+import {
+  worldOutputPermits,
+  isWorldCountryOutput,
+} from '../src/hoi4_agent_tools/map/world-outputs.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
 
@@ -53,7 +59,11 @@ import { corpusFileSchema } from './bench/schema.js';
  */
 
 const { values } = parseArgs({
-  options: { corpus: { type: 'string' }, files: { type: 'string', default: '150' }, out: { type: 'string' } },
+  options: {
+    corpus: { type: 'string' },
+    files: { type: 'string', default: '150' },
+    out: { type: 'string' },
+  },
 });
 const filesPerCorpus = Number(values.files);
 
@@ -77,7 +87,9 @@ if (!hello.ok) {
 const listed = new Set((hello.response.result.ops as string[] | undefined) ?? []);
 const missing = REQUIRED_OPS.filter((op) => !listed.has(op));
 if (missing.length > 0) {
-  process.stderr.write(`the engine does not list the operations ${missing.join(', ')}; build it from this branch\n`);
+  process.stderr.write(
+    `the engine does not list the operations ${missing.join(', ')}; build it from this branch\n`,
+  );
   process.exit(2);
 }
 
@@ -108,7 +120,9 @@ function check(kind: string, label: string, expected: unknown, actual: unknown):
   if (same(expected) === same(actual)) return;
   entry.differences += 1;
   if (entry.samples.length < 8)
-    entry.samples.push(`${label}: ${JSON.stringify(expected).slice(0, 200)} != ${JSON.stringify(actual).slice(0, 200)}`);
+    entry.samples.push(
+      `${label}: ${JSON.stringify(expected).slice(0, 200)} != ${JSON.stringify(actual).slice(0, 200)}`,
+    );
 }
 
 const TEXT_EXTENSIONS = new Set(['.txt', '.gui', '.gfx', '.yml', '.csv', '.mod']);
@@ -124,7 +138,8 @@ async function walk(root: string, relative: string, depth: number, found: string
     const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
     if (entry.isDirectory()) {
       if (!entry.name.startsWith('.')) await walk(root, child, depth + 1, found);
-    } else if (entry.isFile() && TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) found.push(child);
+    } else if (entry.isFile() && TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+      found.push(child);
   }
 }
 
@@ -137,9 +152,19 @@ function sample<T>(items: T[], count: number): T[] {
 function edits(text: string, rnd: () => number): Array<[string, string]> {
   const lines = text.split('\n');
   const middle = Math.floor(lines.length / 2);
-  const inserted = [...lines.slice(0, middle), 'inserted_a = 1', 'inserted_b = 2', 'inserted_c = 3', ...lines.slice(middle)].join('\n');
-  const deleted = [...lines.slice(0, Math.max(0, middle - 2)), ...lines.slice(middle + 3)].join('\n');
-  const replaced = lines.map((line, index) => (index % 7 === 3 ? `${line} # edited` : line)).join('\n');
+  const inserted = [
+    ...lines.slice(0, middle),
+    'inserted_a = 1',
+    'inserted_b = 2',
+    'inserted_c = 3',
+    ...lines.slice(middle),
+  ].join('\n');
+  const deleted = [...lines.slice(0, Math.max(0, middle - 2)), ...lines.slice(middle + 3)].join(
+    '\n',
+  );
+  const replaced = lines
+    .map((line, index) => (index % 7 === 3 ? `${line} # edited` : line))
+    .join('\n');
   const shuffled = lines.slice();
   for (let swaps = 0; swaps < Math.min(6, lines.length); swaps += 1) {
     const a = Math.floor(rnd() * lines.length);
@@ -186,7 +211,11 @@ try {
     await walk(root, '', 0, all);
     const chosen = sample(all, filesPerCorpus);
     const rnd = random(sweepSeed + id.length);
-    const worldRules = worldOutputPermits({ mapRoot: 'map', stateRoots: ['history/states'], localisationRoots: ['localisation'] });
+    const worldRules = worldOutputPermits({
+      mapRoot: 'map',
+      stateRoots: ['history/states'],
+      localisationRoots: ['localisation'],
+    });
     const pathsForManaged = sample(all, PATH_SAMPLE_LIMIT);
 
     // diff, binary
@@ -211,22 +240,34 @@ try {
         }
         const beforeBytes = Buffer.from(before, 'utf8');
         const afterBytes = Buffer.from(after, 'utf8');
-        check('binary', `${id}:${relative}:${name}`, binaryDiff(beforeBytes, afterBytes), await binaryDiffOnEngine(beforeBytes, afterBytes));
+        check(
+          'binary',
+          `${id}:${relative}:${name}`,
+          binaryDiff(beforeBytes, afterBytes),
+          await binaryDiffOnEngine(beforeBytes, afterBytes),
+        );
       }
     }
 
     // changed-file summary
     for (let round = 0; round < 20; round += 1) {
-      const subset = pathsForManaged.filter(() => rnd() < 0.3).map((relativePath) => {
-        const kind = rnd();
-        return {
-          relativePath: round % 2 === 0 ? relativePath : relativePath.replaceAll('/', '\\'),
-          beforeSha256: kind < 0.3 ? null : 'a'.repeat(64),
-          afterSha256: kind > 0.8 ? null : 'b'.repeat(64),
-        };
-      });
+      const subset = pathsForManaged
+        .filter(() => rnd() < 0.3)
+        .map((relativePath) => {
+          const kind = rnd();
+          return {
+            relativePath: round % 2 === 0 ? relativePath : relativePath.replaceAll('/', '\\'),
+            beforeSha256: kind < 0.3 ? null : 'a'.repeat(64),
+            afterSha256: kind > 0.8 ? null : 'b'.repeat(64),
+          };
+        });
       const limit = [1, 5, 40][round % 3]!;
-      check('changed', `${id}:${round}`, summarizeChangedFiles(subset, limit), await summarizeChangedFilesOnEngine(subset, limit));
+      check(
+        'changed',
+        `${id}:${round}`,
+        summarizeChangedFiles(subset, limit),
+        await summarizeChangedFilesOnEngine(subset, limit),
+      );
     }
 
     // artifact store
@@ -235,9 +276,20 @@ try {
     storeSerial += 1;
     await mkdir(tsRoot, { recursive: true });
     await mkdir(rustRoot, { recursive: true });
-    const identity = { workspaceIdentity: sha256Bytes(`ws-${id}`), ownerIdentity: sha256Bytes(`owner-${id}`) };
-    const tsWorkspace = { id: 'parity', artifactRoot: tsRoot, ...identity } as unknown as ResolvedWorkspace;
-    const rustWorkspace: EngineStoreWorkspace = { id: 'parity', artifactRoot: rustRoot, ...identity };
+    const identity = {
+      workspaceIdentity: sha256Bytes(`ws-${id}`),
+      ownerIdentity: sha256Bytes(`owner-${id}`),
+    };
+    const tsWorkspace = {
+      id: 'parity',
+      artifactRoot: tsRoot,
+      ...identity,
+    } as unknown as ResolvedWorkspace;
+    const rustWorkspace: EngineStoreWorkspace = {
+      id: 'parity',
+      artifactRoot: rustRoot,
+      ...identity,
+    };
     const tsStore = new ArtifactStore(50_000_000_000, 100_000, 8_000_000);
     const limits = { maxBytes: 50_000_000_000, maxEntries: 100_000, maxSingleBytes: 8_000_000 };
     const stored = sample(chosen, 40);
@@ -247,14 +299,39 @@ try {
       const full = path.join(root, relative);
       if ((await stat(full)).size > 1_000_000) continue;
       const content = await readFile(full);
-      const name = `${String(serial).padStart(4, '0')}-${path.basename(relative).replace(/[^A-Za-z0-9._-]/gu, '_')}`.slice(0, 120);
+      const name =
+        `${String(serial).padStart(4, '0')}-${path.basename(relative).replace(/[^A-Za-z0-9._-]/gu, '_')}`.slice(
+          0,
+          120,
+        );
       serial += 1;
-      const provenance = { kind: 'parity', toolVersion: '1', schemaVersion: '1', sourceHashes: { [relative]: sha256Bytes(content) } };
-      const expected = await tsStore.put(tsWorkspace, name, 'text/plain', content, provenance, `File ${serial}`);
+      const provenance = {
+        kind: 'parity',
+        toolVersion: '1',
+        schemaVersion: '1',
+        sourceHashes: { [relative]: sha256Bytes(content) },
+      };
+      const expected = await tsStore.put(
+        tsWorkspace,
+        name,
+        'text/plain',
+        content,
+        provenance,
+        `File ${serial}`,
+      );
       const actual = (
-        await putArtifacts(rustWorkspace, [{ name, mimeType: 'text/plain', content, provenance, description: `File ${serial}` }], { limits })
+        await putArtifacts(
+          rustWorkspace,
+          [{ name, mimeType: 'text/plain', content, provenance, description: `File ${serial}` }],
+          { limits },
+        )
       ).artifacts[0]!;
-      check('store', `${id}:${name}:address`, [expected.uri, expected.sha256, expected.provenanceHash, expected.size], [actual.uri, actual.sha256, actual.provenanceHash, actual.size]);
+      check(
+        'store',
+        `${id}:${name}:address`,
+        [expected.uri, expected.sha256, expected.provenanceHash, expected.size],
+        [actual.uri, actual.sha256, actual.provenanceHash, actual.size],
+      );
       const manifestName = `${name}.${expected.provenanceHash}.manifest.json`;
       const dir = (file: string, base: string) => path.join(base, file.slice(0, 2), file);
       check(
@@ -264,15 +341,32 @@ try {
         (await readFile(path.join(dir(actual.sha256, rustRoot), manifestName))).toString('utf8'),
       );
       const range = { offset: 3, length: 50 };
-      check('store', `${id}:${name}:range`, (await tsStore.read(tsWorkspace, expected.uri, range)).bytes.toString('base64'), (await readArtifact(rustWorkspace, actual.uri, range, limits)).bytes.toString('base64'));
+      check(
+        'store',
+        `${id}:${name}:range`,
+        (await tsStore.read(tsWorkspace, expected.uri, range)).bytes.toString('base64'),
+        (await readArtifact(rustWorkspace, actual.uri, range, limits)).bytes.toString('base64'),
+      );
       links.push(expected.uri);
     }
-    check('store', `${id}:list`, await tsStore.list(tsWorkspace), await listArtifacts(rustWorkspace, limits));
+    check(
+      'store',
+      `${id}:list`,
+      await tsStore.list(tsWorkspace),
+      await listArtifacts(rustWorkspace, limits),
+    );
     for (const limit of [1, 7, 100]) {
       let after: string | undefined;
       for (let page = 0; page < 3; page += 1) {
-        const expected = await tsStore.listPage(tsWorkspace, { limit, ...(after === undefined ? {} : { afterUri: after }) });
-        const actual = await listArtifactPage(rustWorkspace, { limit, ...(after === undefined ? {} : { afterUri: after }) }, limits);
+        const expected = await tsStore.listPage(tsWorkspace, {
+          limit,
+          ...(after === undefined ? {} : { afterUri: after }),
+        });
+        const actual = await listArtifactPage(
+          rustWorkspace,
+          { limit, ...(after === undefined ? {} : { afterUri: after }) },
+          limits,
+        );
         check('store', `${id}:page-${limit}-${page}`, expected, actual);
         after = expected.artifacts.at(-1)?.uri;
         if (after === undefined) break;
@@ -281,18 +375,58 @@ try {
     // Each store reads what the other wrote: the Rust store over the TypeScript root and back.
     const swapped = { ...rustWorkspace, artifactRoot: tsRoot };
     for (const uri of links.slice(0, 10))
-      check('store', `${id}:cross-read`, (await tsStore.read(tsWorkspace, uri)).bytes.toString('base64'), (await readArtifact(swapped, uri, undefined, limits)).bytes.toString('base64'));
+      check(
+        'store',
+        `${id}:cross-read`,
+        (await tsStore.read(tsWorkspace, uri)).bytes.toString('base64'),
+        (await readArtifact(swapped, uri, undefined, limits)).bytes.toString('base64'),
+      );
 
     // managed outputs
     const permits: EnginePathRule = {
       any: [
-        { dir: { dirs: ['map'], files: ['provinces.bmp', 'definition.csv', 'default.map', 'continent.txt', 'adjacencies.csv', 'adjacency_rules.txt', 'positions.txt', 'ambient_object.txt', 'heightmap.bmp', 'terrain.bmp', 'rivers.bmp', 'trees.bmp', 'cities.bmp', 'world_normal.bmp', 'buildings.txt', 'unitstacks.txt', 'weatherpositions.txt', 'supply_nodes.txt', 'railways.txt'] } },
+        {
+          dir: {
+            dirs: ['map'],
+            files: [
+              'provinces.bmp',
+              'definition.csv',
+              'default.map',
+              'continent.txt',
+              'adjacencies.csv',
+              'adjacency_rules.txt',
+              'positions.txt',
+              'ambient_object.txt',
+              'heightmap.bmp',
+              'terrain.bmp',
+              'rivers.bmp',
+              'trees.bmp',
+              'cities.bmp',
+              'world_normal.bmp',
+              'buildings.txt',
+              'unitstacks.txt',
+              'weatherpositions.txt',
+              'supply_nodes.txt',
+              'railways.txt',
+            ],
+          },
+        },
         { dir: { dirs: ['map/terrain'], pattern: '^colormap_[a-z0-9_]+\\.dds$' } },
         { dir: { dirs: ['map/strategicregions'], pattern: '^\\d+.*\\.txt$' } },
         { dir: { dirs: ['history/states'], pattern: '^\\d+.*\\.txt$' } },
-        { dir: { dirs: ['common/countries', 'history/countries'], pattern: '^[A-Z][A-Z0-9]{2} - [^/]+\\.txt$' } },
+        {
+          dir: {
+            dirs: ['common/countries', 'history/countries'],
+            pattern: '^[A-Z][A-Z0-9]{2} - [^/]+\\.txt$',
+          },
+        },
         { dir: { dirs: ['history/units'], pattern: '^[A-Z][A-Z0-9]{2}_world\\.txt$' } },
-        { dir: { dirs: ['gfx/flags', 'gfx/flags/medium', 'gfx/flags/small'], pattern: '^[A-Z][A-Z0-9]{2}\\.tga$' } },
+        {
+          dir: {
+            dirs: ['gfx/flags', 'gfx/flags/medium', 'gfx/flags/small'],
+            pattern: '^[A-Z][A-Z0-9]{2}\\.tga$',
+          },
+        },
         { path: 'common/countries/colors.txt' },
         { path: 'common/country_tags/zz_world_countries.txt' },
         { path: 'common/bookmarks/world.txt' },
@@ -305,9 +439,19 @@ try {
     };
     const countryRule: EnginePathRule = {
       any: [
-        { dir: { dirs: ['common/countries', 'history/countries'], pattern: '^[A-Z][A-Z0-9]{2} - [^/]+\\.txt$' } },
+        {
+          dir: {
+            dirs: ['common/countries', 'history/countries'],
+            pattern: '^[A-Z][A-Z0-9]{2} - [^/]+\\.txt$',
+          },
+        },
         { dir: { dirs: ['history/units'], pattern: '^[A-Z][A-Z0-9]{2}_world\\.txt$' } },
-        { dir: { dirs: ['gfx/flags', 'gfx/flags/medium', 'gfx/flags/small'], pattern: '^[A-Z][A-Z0-9]{2}\\.tga$' } },
+        {
+          dir: {
+            dirs: ['gfx/flags', 'gfx/flags/medium', 'gfx/flags/small'],
+            pattern: '^[A-Z][A-Z0-9]{2}\\.tga$',
+          },
+        },
         { path: 'common/countries/colors.txt' },
         { path: 'common/country_tags/zz_world_countries.txt' },
         { path: 'common/bookmarks/world.txt' },
@@ -320,48 +464,110 @@ try {
     const tsDecision = planManagedOutputs({
       manifestPath,
       sources: [],
-      proposed: decisions.map((relativePath) => ({ relativePath, content: Buffer.from(relativePath), operationIds: ['op'] })),
+      proposed: decisions.map((relativePath) => ({
+        relativePath,
+        content: Buffer.from(relativePath),
+        operationIds: ['op'],
+      })),
       operationId: 'op',
       permitsPath: worldRules,
     });
     const rustDecision = await planManagedOutputsOnEngine({
       manifestPath,
       sources: [],
-      proposed: decisions.map((relativePath) => ({ relativePath, sha256: sha256Bytes(Buffer.from(relativePath)), operationIds: ['op'] })),
+      proposed: decisions.map((relativePath) => ({
+        relativePath,
+        sha256: sha256Bytes(Buffer.from(relativePath)),
+        operationIds: ['op'],
+      })),
       operationId: 'op',
       permits,
     });
     check('managed', `${id}:rule-decisions`, tsDecision.written, rustDecision.written);
     for (let scenario = 0; scenario < 60; scenario += 1) {
-      const pool = pathsForManaged.concat(['map/definition.csv', 'history/states/1-Test.txt', 'common/countries/ABC - Test.txt', 'gfx/flags/ABC.tga', 'other/tool.txt']).filter(() => rnd() < 0.05);
-      const recorded = pool.map((relativePath) => ({ relativePath, content: Buffer.from(`recorded ${relativePath}`) }));
-      const manifestFiles = recorded.filter(({ relativePath }) => worldRules(relativePath) || rnd() < 0.2);
+      const pool = pathsForManaged
+        .concat([
+          'map/definition.csv',
+          'history/states/1-Test.txt',
+          'common/countries/ABC - Test.txt',
+          'gfx/flags/ABC.tga',
+          'other/tool.txt',
+        ])
+        .filter(() => rnd() < 0.05);
+      const recorded = pool.map((relativePath) => ({
+        relativePath,
+        content: Buffer.from(`recorded ${relativePath}`),
+      }));
+      const manifestFiles = recorded.filter(
+        ({ relativePath }) => worldRules(relativePath) || rnd() < 0.2,
+      );
       const manifestText = `${JSON.stringify({ version: 1, files: manifestFiles.map((file) => ({ relativePath: file.relativePath, sha256: sha256Bytes(file.content) })) })}\n`;
       const sourceFiles = [
         { relativePath: manifestPath, content: Buffer.from(manifestText) },
-        ...recorded.filter(() => rnd() < 0.85).map((file) => ({ relativePath: file.relativePath, content: rnd() < 0.15 ? Buffer.from(`edited ${file.relativePath}`) : file.content })),
+        ...recorded
+          .filter(() => rnd() < 0.85)
+          .map((file) => ({
+            relativePath: file.relativePath,
+            content: rnd() < 0.15 ? Buffer.from(`edited ${file.relativePath}`) : file.content,
+          })),
       ];
-      const proposed = pool.filter(() => rnd() < 0.5).map((relativePath) => ({ relativePath, content: rnd() < 0.15 ? null : Buffer.from(`new ${relativePath}`), operationIds: [`op${Math.floor(rnd() * 3)}`] }));
+      const proposed = pool
+        .filter(() => rnd() < 0.5)
+        .map((relativePath) => ({
+          relativePath,
+          content: rnd() < 0.15 ? null : Buffer.from(`new ${relativePath}`),
+          operationIds: [`op${Math.floor(rnd() * 3)}`],
+        }));
       const release = rnd() < 0.5;
       const adoptAll = rnd() < 0.3;
       const adoptUnrecorded = rnd() < 0.3;
-      const scanned = (name: string) => name.startsWith('history/states/') || name.startsWith('map/strategicregions/');
-      const scannedRule: EnginePathRule = { dir: { dirs: ['history/states', 'map/strategicregions'], pattern: '.*' } };
-      const tsSources = sourceFiles.map((file) => ({ relativePath: file.relativePath, bytes: file.content, rootKind: 'mod' as const })) as never;
-      const engineSources = sourceFiles.map((file) => ({ relativePath: file.relativePath, rootKind: 'mod', sha256: sha256Bytes(file.content) }));
-      const engineProposed = proposed.map((change) => ({ relativePath: change.relativePath, sha256: change.content === null ? null : sha256Bytes(change.content), operationIds: change.operationIds }));
+      const scanned = (name: string) =>
+        name.startsWith('history/states/') || name.startsWith('map/strategicregions/');
+      const scannedRule: EnginePathRule = {
+        dir: { dirs: ['history/states', 'map/strategicregions'], pattern: '.*' },
+      };
+      const tsSources = sourceFiles.map((file) => ({
+        relativePath: file.relativePath,
+        bytes: file.content,
+        rootKind: 'mod' as const,
+      })) as never;
+      const engineSources = sourceFiles.map((file) => ({
+        relativePath: file.relativePath,
+        rootKind: 'mod',
+        sha256: sha256Bytes(file.content),
+      }));
+      const engineProposed = proposed.map((change) => ({
+        relativePath: change.relativePath,
+        sha256: change.content === null ? null : sha256Bytes(change.content),
+        operationIds: change.operationIds,
+      }));
       const label = `${id}:scenario-${scenario}`;
       const settle = async <T>(action: () => Promise<T> | T): Promise<unknown> => {
         try {
           return await action();
         } catch (error) {
-          return { code: (error as { code?: string }).code, details: (error as { details?: unknown }).details };
+          return {
+            code: (error as { code?: string }).code,
+            details: (error as { details?: unknown }).details,
+          };
         }
       };
       const expectedPlan = await settle(() => {
-        const plan = planManagedOutputs({ manifestPath, sources: tsSources, proposed: proposed as never, operationId: 'plan', permitsPath: worldRules, ...(release ? { releasable: isWorldCountryOutput } : {}) });
+        const plan = planManagedOutputs({
+          manifestPath,
+          sources: tsSources,
+          proposed: proposed as never,
+          operationId: 'plan',
+          permitsPath: worldRules,
+          ...(release ? { releasable: isWorldCountryOutput } : {}),
+        });
         return {
-          deletions: plan.changes.filter((change) => change.content === null).map((change) => ({ relativePath: change.relativePath, operationIds: change.operationIds })),
+          deletions: plan.changes
+            .filter((change) => change.content === null)
+            .map((change) => ({
+              relativePath: change.relativePath,
+              operationIds: change.operationIds,
+            })),
           manifest: Buffer.from(plan.changes.at(-1)!.content!).toString('utf8'),
           written: plan.written,
           retired: plan.retired,
@@ -369,14 +575,46 @@ try {
           ignored: plan.ignored,
         };
       });
-      const actualPlan = await settle(() => planManagedOutputsOnEngine({ manifestPath, sources: engineSources, manifestText, proposed: engineProposed, operationId: 'plan', permits, ...(release ? { releasable: countryRule } : {}) }));
+      const actualPlan = await settle(() =>
+        planManagedOutputsOnEngine({
+          manifestPath,
+          sources: engineSources,
+          manifestText,
+          proposed: engineProposed,
+          operationId: 'plan',
+          permits,
+          ...(release ? { releasable: countryRule } : {}),
+        }),
+      );
       check('managed', `${label}:plan`, expectedPlan, actualPlan);
       const expectedRefresh = await settle(() => {
-        const refresh = refreshManagedOutputs({ manifestPath, sources: tsSources, proposed: proposed as never, adoptAll, adoptUnrecorded, addable: (name) => worldRules(name) && !isWorldCountryOutput(name), alwaysScanned: scanned });
-        return refresh === undefined ? null : { ...refresh, content: refresh.content === undefined ? null : refresh.content.toString('utf8') };
+        const refresh = refreshManagedOutputs({
+          manifestPath,
+          sources: tsSources,
+          proposed: proposed as never,
+          adoptAll,
+          adoptUnrecorded,
+          addable: (name) => worldRules(name) && !isWorldCountryOutput(name),
+          alwaysScanned: scanned,
+        });
+        return refresh === undefined
+          ? null
+          : {
+              ...refresh,
+              content: refresh.content === undefined ? null : refresh.content.toString('utf8'),
+            };
       });
       const actualRefresh = await settle(async () => {
-        const refresh = await refreshManagedOutputsOnEngine({ manifestPath, sources: engineSources, manifestText, proposed: engineProposed, adoptAll, adoptUnrecorded, addable, alwaysScanned: scannedRule });
+        const refresh = await refreshManagedOutputsOnEngine({
+          manifestPath,
+          sources: engineSources,
+          manifestText,
+          proposed: engineProposed,
+          adoptAll,
+          adoptUnrecorded,
+          addable,
+          alwaysScanned: scannedRule,
+        });
         return refresh === null ? null : { ...refresh, content: refresh.content ?? null };
       });
       check('managed', `${label}:refresh`, expectedRefresh, actualRefresh);
@@ -389,16 +627,40 @@ try {
     const size = (side: number) => 1 + Math.floor(rnd() * side);
     const make = async (width: number, height: number, mode: number): Promise<Buffer> => {
       const data = Buffer.alloc(width * height * 4);
-      for (let index = 0; index < data.length; index += 1) data[index] = mode === 0 ? Math.floor(rnd() * 256) : mode === 1 ? (index % 4 === 3 ? 255 : 100) : 0;
-      return sharp(data, { raw: { width, height, channels: 4 } }).png().toBuffer();
+      for (let index = 0; index < data.length; index += 1)
+        data[index] =
+          mode === 0 ? Math.floor(rnd() * 256) : mode === 1 ? (index % 4 === 3 ? 255 : 100) : 0;
+      return sharp(data, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
     };
     const left = await make(size(40), size(40), round % 3);
     const right = await make(size(40), size(40), (round + 1) % 3);
     const threshold = [0, 8, 64][round % 3]!;
     const expected = await comparePngImages(left, right, threshold);
     const actual = await comparePngImagesOnEngine(left, right, { threshold });
-    const pixels = async (png: Buffer) => (await sharp(png).ensureAlpha().raw().toBuffer()).toString('base64');
-    check('image', `round-${round}`, [expected.width, expected.height, expected.changedPixels, expected.changedRatio, expected.json, await pixels(expected.png)], [actual.width, actual.height, actual.changedPixels, actual.changedRatio, actual.json, await pixels(actual.png)]);
+    const pixels = async (png: Buffer) =>
+      (await sharp(png).ensureAlpha().raw().toBuffer()).toString('base64');
+    check(
+      'image',
+      `round-${round}`,
+      [
+        expected.width,
+        expected.height,
+        expected.changedPixels,
+        expected.changedRatio,
+        expected.json,
+        await pixels(expected.png),
+      ],
+      [
+        actual.width,
+        actual.height,
+        actual.changedPixels,
+        actual.changedRatio,
+        actual.json,
+        await pixels(actual.png),
+      ],
+    );
   }
 } finally {
   await rm(scratch, { recursive: true, force: true });

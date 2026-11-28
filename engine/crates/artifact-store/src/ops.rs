@@ -86,7 +86,13 @@ fn writes_of(request: &Value, payload: &[u8]) -> Result<Vec<ArtifactWrite>, OpRe
     let mut writes = Vec::with_capacity(wire.len());
     for item in wire {
         let end = offset.checked_add(item.length).filter(|end| *end <= payload.len()).ok_or_else(|| invalid("the payload is shorter than the writes say"))?;
-        writes.push(ArtifactWrite { name: item.name, mime_type: item.mime_type, content: payload[offset..end].to_vec(), provenance: item.provenance, description: item.description });
+        writes.push(ArtifactWrite {
+            name: item.name,
+            mime_type: item.mime_type,
+            content: payload[offset..end].to_vec(),
+            provenance: item.provenance,
+            description: item.description,
+        });
         offset = end;
     }
     if offset != payload.len() {
@@ -102,9 +108,13 @@ fn put(request: &Value, payload: &[u8], chunked: bool) -> OpResponse {
         let writes = writes_of(request, payload)?;
         let retained = retention_of(request)?;
         Ok(if chunked {
-            store.put_chunked(&workspace, &writes, retained.as_deref()).map(|(logical, physical, created)| json!({ "artifacts": logical, "physical": physical, "created": created }))
+            store
+                .put_chunked(&workspace, &writes, retained.as_deref())
+                .map(|(logical, physical, created)| json!({ "artifacts": logical, "physical": physical, "created": created }))
         } else {
-            store.put_batch(&workspace, &writes, retained.as_deref()).map(|(artifacts, created)| json!({ "artifacts": artifacts, "physical": artifacts, "created": created }))
+            store
+                .put_batch(&workspace, &writes, retained.as_deref())
+                .map(|(artifacts, created)| json!({ "artifacts": artifacts, "physical": artifacts, "created": created }))
         })
     };
     match run() {
@@ -177,7 +187,9 @@ fn diff_text(request: &Value) -> OpResponse {
     run().map_or_else(|response| response, OpResponse::ok)
 }
 
-fn managed_sources(request: &Value) -> Result<(Vec<SourceFile>, Option<String>, Vec<ProposedChange>), OpResponse> {
+type ManagedSources = (Vec<SourceFile>, Option<String>, Vec<ProposedChange>);
+
+fn managed_sources(request: &Value) -> Result<ManagedSources, OpResponse> {
     Ok((parse(request, "sources")?, optional(request, "manifestText")?, parse(request, "proposed")?))
 }
 
@@ -196,7 +208,16 @@ fn managed_plan(request: &Value) -> OpResponse {
         let operation_id: String = parse(request, "operationId")?;
         let permits = rule_of(request, "permits")?.ok_or_else(|| invalid("the request needs permits"))?;
         let releasable = rule_of(request, "releasable")?;
-        Ok(plan_managed_outputs(&PlanInput { manifest_path: &manifest_path, sources: &sources, manifest_text: text.as_deref(), proposed: &proposed, operation_id: &operation_id, permits: &permits, releasable: releasable.as_ref() }).map(|plan| json!(plan)))
+        Ok(plan_managed_outputs(&PlanInput {
+            manifest_path: &manifest_path,
+            sources: &sources,
+            manifest_text: text.as_deref(),
+            proposed: &proposed,
+            operation_id: &operation_id,
+            permits: &permits,
+            releasable: releasable.as_ref(),
+        })
+        .map(|plan| json!(plan)))
     };
     match run() {
         Ok(outcome) => answer(outcome),
@@ -243,7 +264,8 @@ fn sweep(request: &Value) -> OpResponse {
             protected_roots: optional(request, "protectedRoots")?.unwrap_or_default(),
             current_uid: optional(request, "currentUid")?,
         };
-        Ok(sweep_temporary_directories(std::path::Path::new(&parent), &options, &process_alive).map(|outcome| json!({ "removed": outcome.removed, "retainedBytes": outcome.retained_bytes })))
+        Ok(sweep_temporary_directories(std::path::Path::new(&parent), &options, &process_alive)
+            .map(|outcome| json!({ "removed": outcome.removed, "retainedBytes": outcome.retained_bytes })))
     };
     match run() {
         Ok(outcome) => answer(outcome),
@@ -282,7 +304,9 @@ pub fn register(registry: &mut Registry) {
         };
         with_store(request, |store, workspace| store.available(workspace, &uris).map(|available| json!({ "available": available })))
     });
-    registry.add_fn("artifacts.list", |_: &OpContext, request, _| with_store(request, |store, workspace| store.list(workspace).map(|artifacts| json!({ "artifacts": artifacts }))));
+    registry.add_fn("artifacts.list", |_: &OpContext, request, _| {
+        with_store(request, |store, workspace| store.list(workspace).map(|artifacts| json!({ "artifacts": artifacts })))
+    });
     registry.add_fn("artifacts.list_page", |_: &OpContext, request, _| {
         let limit: usize = match parse(request, "limit") {
             Ok(limit) => limit,
@@ -365,7 +389,16 @@ mod tests {
     fn registers_every_operation_once() {
         let registry = registry();
         assert_eq!(registry.check(), Ok(()));
-        for name in ["artifacts.put", "artifacts.read", "artifacts.list_page", "artifacts.managed_plan", "artifacts.changed_summary", "diff.text", "diff.binary", "diff.image"] {
+        for name in [
+            "artifacts.put",
+            "artifacts.read",
+            "artifacts.list_page",
+            "artifacts.managed_plan",
+            "artifacts.changed_summary",
+            "diff.text",
+            "diff.binary",
+            "diff.image",
+        ] {
             assert!(registry.contains(name), "{name}");
         }
     }
@@ -385,9 +418,15 @@ mod tests {
     fn store_round_trip_and_errors_keep_their_codes() {
         let registry = registry();
         let dir = tempfile::tempdir().unwrap();
-        let workspace = json!({ "id": "w", "artifactRoot": dir.path().to_string_lossy(), "workspaceIdentity": "a".repeat(64), "ownerIdentity": "b".repeat(64) });
+        let workspace =
+            json!({ "id": "w", "artifactRoot": dir.path().to_string_lossy(), "workspaceIdentity": "a".repeat(64), "ownerIdentity": "b".repeat(64) });
         let provenance = json!({ "kind": "k", "toolVersion": "1", "schemaVersion": "1", "sourceHashes": {} });
-        let put = call(&registry, "artifacts.put", json!({ "workspace": workspace, "writes": [{ "name": "a.txt", "mimeType": "text/plain", "length": 3, "provenance": provenance }] }), b"abc");
+        let put = call(
+            &registry,
+            "artifacts.put",
+            json!({ "workspace": workspace, "writes": [{ "name": "a.txt", "mimeType": "text/plain", "length": 3, "provenance": provenance }] }),
+            b"abc",
+        );
         let result = put.result.unwrap();
         let uri = result["artifacts"][0]["uri"].as_str().unwrap().to_owned();
         let read = call(&registry, "artifacts.read", json!({ "workspace": workspace, "uri": uri, "range": { "offset": 1, "length": 5 } }), &[]);
@@ -395,7 +434,12 @@ mod tests {
         assert_eq!(read.result.unwrap()["totalSize"], 3);
         let missing = call(&registry, "artifacts.read", json!({ "workspace": workspace, "uri": uri.replace('a', "b") }), &[]);
         assert!(missing.result.unwrap_err()["code"].as_str().unwrap().starts_with("ARTIFACT_"));
-        let short = call(&registry, "artifacts.put", json!({ "workspace": workspace, "writes": [{ "name": "a.txt", "mimeType": "text/plain", "length": 9, "provenance": provenance }] }), b"abc");
+        let short = call(
+            &registry,
+            "artifacts.put",
+            json!({ "workspace": workspace, "writes": [{ "name": "a.txt", "mimeType": "text/plain", "length": 9, "provenance": provenance }] }),
+            b"abc",
+        );
         assert_eq!(short.result.unwrap_err()["code"], "invalid_request");
         let created = result["created"].clone();
         let released = call(&registry, "artifacts.release", json!({ "workspace": workspace, "created": created }), &[]);
@@ -406,7 +450,8 @@ mod tests {
     fn retention_is_requested_only_when_eviction_is_needed() {
         let registry = registry();
         let dir = tempfile::tempdir().unwrap();
-        let workspace = json!({ "id": "w", "artifactRoot": dir.path().to_string_lossy(), "workspaceIdentity": "a".repeat(64), "ownerIdentity": "b".repeat(64) });
+        let workspace =
+            json!({ "id": "w", "artifactRoot": dir.path().to_string_lossy(), "workspaceIdentity": "a".repeat(64), "ownerIdentity": "b".repeat(64) });
         let provenance = json!({ "kind": "k", "toolVersion": "1", "schemaVersion": "1", "sourceHashes": {} });
         let limits = json!({ "maxEntries": 1, "maxBytes": 100000, "maxSingleBytes": 1000 });
         let one = |name: &str, extra: Value| {
@@ -434,9 +479,15 @@ mod tests {
         );
         let result = plan.result.unwrap();
         assert_eq!(result["written"], json!(["map/a.txt"]));
-        let bad = call(&registry, "artifacts.managed_plan", json!({ "manifestPath": "m", "operationId": "o", "sources": [], "proposed": [], "permits": { "dir": { "dirs": [], "pattern": "(" } } }), &[]);
+        let bad = call(
+            &registry,
+            "artifacts.managed_plan",
+            json!({ "manifestPath": "m", "operationId": "o", "sources": [], "proposed": [], "permits": { "dir": { "dirs": [], "pattern": "(" } } }),
+            &[],
+        );
         assert_eq!(bad.result.unwrap_err()["code"], "MANAGED_OUTPUT_RULE_INVALID");
-        let summary = call(&registry, "artifacts.changed_summary", json!({ "files": [{ "relativePath": "a/b.txt", "beforeSha256": null, "afterSha256": "x" }] }), &[]);
+        let summary =
+            call(&registry, "artifacts.changed_summary", json!({ "files": [{ "relativePath": "a/b.txt", "beforeSha256": null, "afterSha256": "x" }] }), &[]);
         assert_eq!(summary.result.unwrap()["created"], 1);
     }
 }

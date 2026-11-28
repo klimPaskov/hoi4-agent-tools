@@ -82,7 +82,10 @@ pub fn hostname() -> String {
 pub fn process_alive(pid: u32) -> bool {
     #[cfg(windows)]
     {
-        Command::new("tasklist").args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"]).output().is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
+        Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+            .output()
+            .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
     }
     #[cfg(not(windows))]
     {
@@ -216,7 +219,12 @@ pub fn sweep_temporary_directories(parent: &Path, options: &SweepOptions, is_ali
             scratch_name(name)
         }
     };
-    let mut names: Vec<String> = fs::read_dir(&root).map_err(|_| StoreError::new("TEMPORARY_ROOT_UNAVAILABLE", "The temporary storage root is unavailable"))?.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).filter(|name| name_ok(name)).collect();
+    let mut names: Vec<String> = fs::read_dir(&root)
+        .map_err(|_| StoreError::new("TEMPORARY_ROOT_UNAVAILABLE", "The temporary storage root is unavailable"))?
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name_ok(name))
+        .collect();
     names.sort();
     struct Candidate {
         directory: PathBuf,
@@ -247,13 +255,20 @@ pub fn sweep_temporary_directories(parent: &Path, options: &SweepOptions, is_ali
             continue;
         }
         let Some(previous_sweep) = owner(&directory, SWEEP_LOCK) else { continue };
-        let dead_sweep = previous_sweep.as_ref().is_some_and(|sweep| sweep.host == hostname() && !is_alive(sweep.pid) && owner(&directory, SWEEP_LOCK).flatten().is_some_and(|again| again.token == sweep.token));
+        let dead_sweep = previous_sweep.as_ref().is_some_and(|sweep| {
+            sweep.host == hostname() && !is_alive(sweep.pid) && owner(&directory, SWEEP_LOCK).flatten().is_some_and(|again| again.token == sweep.token)
+        });
         if dead_sweep && fs::remove_file(directory.join(SWEEP_LOCK)).is_err() {
             continue;
         }
         let Some(data) = inventory(&directory) else { continue };
         let dead = record.as_ref().is_some_and(|record| record.host == hostname() && !is_alive(record.pid));
-        candidates.push(Candidate { eligible: !data.locked && (dead || dead_sweep || (record.is_none() && now - data.modified > stale_ms)), directory, bytes: data.bytes, modified: data.modified });
+        candidates.push(Candidate {
+            eligible: !data.locked && (dead || dead_sweep || (record.is_none() && now - data.modified > stale_ms)),
+            directory,
+            bytes: data.bytes,
+            modified: data.modified,
+        });
     }
     let mut retained: u64 = candidates.iter().map(|candidate| candidate.bytes).sum();
     let mut removed = 0u64;
@@ -265,7 +280,9 @@ pub fn sweep_temporary_directories(parent: &Path, options: &SweepOptions, is_ali
         let lock_path = candidate.directory.join(SWEEP_LOCK);
         let token = new_token();
         let Ok(mut lock) = fs::OpenOptions::new().write(true).create_new(true).open(&lock_path) else { continue };
-        let claimed = std::io::Write::write_all(&mut lock, json!({ "version": 1, "pid": std::process::id(), "host": hostname(), "token": token }).to_string().as_bytes()).is_ok();
+        let claimed =
+            std::io::Write::write_all(&mut lock, json!({ "version": 1, "pid": std::process::id(), "host": hostname(), "token": token }).to_string().as_bytes())
+                .is_ok();
         drop(lock);
         let guarded = || -> bool {
             if !claimed {
@@ -276,7 +293,9 @@ pub fn sweep_temporary_directories(parent: &Path, options: &SweepOptions, is_ali
                 Some(Some(record)) if record.host != hostname() || is_alive(record.pid) => return false,
                 _ => {}
             }
-            if fs::symlink_metadata(&candidate.directory).map_or(true, |m| m.file_type().is_symlink()) || fs::canonicalize(&candidate.directory).ok().as_deref() != Some(candidate.directory.as_path()) {
+            if fs::symlink_metadata(&candidate.directory).map_or(true, |m| m.file_type().is_symlink())
+                || fs::canonicalize(&candidate.directory).ok().as_deref() != Some(candidate.directory.as_path())
+            {
                 return false;
             }
             if owner(&candidate.directory, SWEEP_LOCK).flatten().is_none_or(|lock| lock.token != token) {

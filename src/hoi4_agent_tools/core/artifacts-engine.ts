@@ -243,7 +243,12 @@ const changedSummarySchema = z.object({
   removed: z.number(),
   modified: z.number(),
   folders: z.array(
-    z.object({ folder: z.string(), created: z.number(), removed: z.number(), modified: z.number() }),
+    z.object({
+      folder: z.string(),
+      created: z.number(),
+      removed: z.number(),
+      modified: z.number(),
+    }),
   ),
   omittedFolders: z.number(),
 });

@@ -78,7 +78,11 @@ struct Decoded {
 }
 
 fn pixel_blocked(label: &str) -> StoreError {
-    StoreError::with_details("RENDER_PIXELS_BLOCKED", format!("{label} exceeds the fixed per-artifact pixel ceiling"), json!({ "label": label, "maximumPixels": RENDER_MAX_PIXELS }))
+    StoreError::with_details(
+        "RENDER_PIXELS_BLOCKED",
+        format!("{label} exceeds the fixed per-artifact pixel ceiling"),
+        json!({ "label": label, "maximumPixels": RENDER_MAX_PIXELS }),
+    )
 }
 
 fn dimensions_of(png: &[u8], label: &str) -> StoreResult<(u64, u64)> {
@@ -185,7 +189,10 @@ pub fn compare_png_images(left_png: &[u8], right_png: &[u8], threshold: f64, bud
     assert_render_dimensions(width, height, "comparison diff raster")?;
     let png = encode(width, height, &output)?;
     let ratio = changed as f64 / (width * height) as f64;
-    let json = format!("{}\n", canonical_json(&json!({ "offline": true, "width": width, "height": height, "changedPixels": changed, "changedRatio": ratio, "threshold": threshold })));
+    let json = format!(
+        "{}\n",
+        canonical_json(&json!({ "offline": true, "width": width, "height": height, "changedPixels": changed, "changedRatio": ratio, "threshold": threshold }))
+    );
     Ok(PngComparison { width, height, changed_pixels: changed, changed_ratio: ratio, json, png })
 }
 

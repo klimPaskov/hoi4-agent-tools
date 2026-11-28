@@ -636,6 +636,7 @@ pub struct ReadResult {
     pub total_size: u64,
 }
 
+#[derive(Default)]
 pub struct ArtifactStore {
     pub limits: StoreLimits,
 }
@@ -656,7 +657,12 @@ struct PublishLock {
 impl PublishLock {
     fn take(root: &str) -> StoreResult<Self> {
         let path = contained_path(root, &[LOCK_FILE])?;
-        let file = OpenOptions::new().create(true).truncate(false).write(true).open(path).map_err(|_| StoreError::new("ARTIFACT_STORAGE_UNSAFE", "Artifact publication lock is unavailable"))?;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+            .map_err(|_| StoreError::new("ARTIFACT_STORAGE_UNSAFE", "Artifact publication lock is unavailable"))?;
         file.lock().map_err(|_| StoreError::new("ARTIFACT_STORAGE_UNSAFE", "Artifact publication lock is unavailable"))?;
         Ok(Self { file })
     }
@@ -665,12 +671,6 @@ impl PublishLock {
 impl Drop for PublishLock {
     fn drop(&mut self) {
         let _ = self.file.unlock();
-    }
-}
-
-impl Default for ArtifactStore {
-    fn default() -> Self {
-        Self { limits: StoreLimits::default() }
     }
 }
 
@@ -723,18 +723,21 @@ impl ArtifactStore {
         let mut results = Vec::new();
         fn walk(store: &ArtifactStore, workspace: &StoreWorkspace, directory: &Path, results: &mut Vec<ArtifactLink>) -> StoreResult<()> {
             let Ok(children) = fs::read_dir(directory) else { return Ok(()) };
-            let mut entries: Vec<(String, PathBuf, fs::FileType)> =
-                children.flatten().filter_map(|child| child.file_type().ok().map(|kind| (child.file_name().to_string_lossy().into_owned(), child.path(), kind))).collect();
+            let mut entries: Vec<(String, PathBuf, fs::FileType)> = children
+                .flatten()
+                .filter_map(|child| child.file_type().ok().map(|kind| (child.file_name().to_string_lossy().into_owned(), child.path(), kind)))
+                .collect();
             entries.sort_by(|left, right| compare_code_units(&left.0, &right.0));
             for (name, path, kind) in entries {
                 if kind.is_dir() {
                     let relative = path.strip_prefix(directory).unwrap_or(&path).to_owned();
                     let contained = contained_path(&path_text(&strip_verbatim(directory.to_owned())), &[&path_text(&relative)])?;
                     walk(store, workspace, &contained, results)?;
-                } else if kind.is_file() && name.ends_with(MANIFEST_SUFFIX) {
-                    if let Some(manifest) = store.enumerable_manifest(workspace, directory, &name)? {
-                        results.push(store.link_of(workspace, &manifest));
-                    }
+                } else if kind.is_file()
+                    && name.ends_with(MANIFEST_SUFFIX)
+                    && let Some(manifest) = store.enumerable_manifest(workspace, directory, &name)?
+                {
+                    results.push(store.link_of(workspace, &manifest));
                 }
             }
             Ok(())
@@ -745,21 +748,34 @@ impl ArtifactStore {
     }
 
     pub fn list_page(&self, workspace: &StoreWorkspace, limit: usize, after_uri: Option<&str>) -> StoreResult<ArtifactPage> {
-        if limit < 1 || limit > PAGE_MAX_ENTRIES {
+        if !(1..=PAGE_MAX_ENTRIES).contains(&limit) {
             return Err(StoreError::new("ARTIFACT_PAGE_INVALID", format!("Artifact page limit must be between 1 and {PAGE_MAX_ENTRIES}")));
         }
         self.check_budget(workspace)?;
         let root = contained_path(&workspace.artifact_root, &[])?;
         let mut page = ArtifactPage { artifacts: Vec::new(), total: 0, revision: String::new(), after_found: after_uri.is_none(), has_more: false };
         let mut revision = Sha256::new();
-        fn walk(store: &ArtifactStore, workspace: &StoreWorkspace, directory: &Path, limit: usize, after: Option<&str>, page: &mut ArtifactPage, revision: &mut Sha256) -> StoreResult<()> {
+        fn walk(
+            store: &ArtifactStore,
+            workspace: &StoreWorkspace,
+            directory: &Path,
+            limit: usize,
+            after: Option<&str>,
+            page: &mut ArtifactPage,
+            revision: &mut Sha256,
+        ) -> StoreResult<()> {
             let Ok(children) = fs::read_dir(directory) else { return Ok(()) };
-            let entries: Vec<(String, PathBuf, fs::FileType)> =
-                children.flatten().filter_map(|child| child.file_type().ok().map(|kind| (child.file_name().to_string_lossy().into_owned(), child.path(), kind))).collect();
+            let entries: Vec<(String, PathBuf, fs::FileType)> = children
+                .flatten()
+                .filter_map(|child| child.file_type().ok().map(|kind| (child.file_name().to_string_lossy().into_owned(), child.path(), kind)))
+                .collect();
             let mut directories: Vec<_> = entries.iter().filter(|entry| entry.2.is_dir()).collect();
             directories.sort_by(|left, right| compare_code_units(&left.0, &right.0));
             for (_, path, _) in directories {
-                let contained = contained_path(&path_text(&strip_verbatim(directory.to_owned())), &[&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()])?;
+                let contained = contained_path(
+                    &path_text(&strip_verbatim(directory.to_owned())),
+                    &[&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()],
+                )?;
                 walk(store, workspace, &contained, limit, after, page, revision)?;
             }
             let mut manifests: Vec<_> = entries.iter().filter(|entry| entry.2.is_file() && entry.0.ends_with(MANIFEST_SUFFIX)).collect();
@@ -799,7 +815,14 @@ impl ArtifactStore {
         }
         let path = contained_path(&workspace.artifact_root, &[&parsed.sha256[..2], &parsed.sha256, &parsed.name])?;
         Ok(StoredArtifact {
-            link: ArtifactLink { uri: uri.to_owned(), name: manifest.name.clone(), mime_type: manifest.mime_type.clone(), size: manifest.size, sha256: manifest.sha256.clone(), description: manifest.description.clone() },
+            link: ArtifactLink {
+                uri: uri.to_owned(),
+                name: manifest.name.clone(),
+                mime_type: manifest.mime_type.clone(),
+                size: manifest.size,
+                sha256: manifest.sha256.clone(),
+                description: manifest.description.clone(),
+            },
             provenance_hash: manifest.provenance_hash.clone(),
             path: path_text(&path),
             provenance: manifest.provenance,
@@ -855,7 +878,12 @@ impl ArtifactStore {
         let chunks = index.get("chunks").and_then(Value::as_array).ok_or_else(malformed)?;
         let size = original.get("size").and_then(Value::as_u64).ok_or_else(malformed)?;
         let original_sha = original.get("sha256").and_then(Value::as_str).filter(|hash| is_sha256(hash)).ok_or_else(malformed)?;
-        if index.get("schemaVersion") != Some(&json!(1)) || chunks.is_empty() || chunks.len() > max_chunks || original.get("mimeType").and_then(Value::as_str) != Some(mime_type) || size > max_bytes {
+        if index.get("schemaVersion") != Some(&json!(1))
+            || chunks.is_empty()
+            || chunks.len() > max_chunks
+            || original.get("mimeType").and_then(Value::as_str) != Some(mime_type)
+            || size > max_bytes
+        {
             return Err(malformed());
         }
         let entry_bad = || StoreError::new("ARTIFACT_LOGICAL_INVALID", "Chunked logical artifact entry is malformed");
@@ -877,7 +905,11 @@ impl ArtifactStore {
                 return Err(entry_bad());
             }
             let chunk = self.read(workspace, chunk_uri, None)?;
-            if chunk.mime_type != "application/octet-stream" || chunk.total_size != length || chunk.bytes.len() as u64 != length || sha256_hex(&chunk.bytes) != chunk_sha {
+            if chunk.mime_type != "application/octet-stream"
+                || chunk.total_size != length
+                || chunk.bytes.len() as u64 != length
+                || sha256_hex(&chunk.bytes) != chunk_sha
+            {
                 return Err(StoreError::new("ARTIFACT_LOGICAL_INVALID", "Chunked logical artifact content does not match its authenticated index"));
             }
             offset += length;
@@ -886,7 +918,12 @@ impl ArtifactStore {
         if offset != size || bytes.len() as u64 != size || sha256_hex(&bytes) != original_sha {
             return Err(StoreError::new("ARTIFACT_LOGICAL_INVALID", "Chunked logical artifact does not reconstruct its declared content"));
         }
-        Ok(ReadResult { bytes, mime_type: mime_type.to_owned(), name: original.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(), total_size: size })
+        Ok(ReadResult {
+            bytes,
+            mime_type: mime_type.to_owned(),
+            name: original.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
+            total_size: size,
+        })
     }
 
     fn preflight(&self, writes: &[ArtifactWrite], chunked: bool) -> StoreResult<(Vec<u64>, u64)> {
@@ -922,7 +959,11 @@ impl ArtifactStore {
             largest.truncate(3);
             let mib = |bytes: u64| format!("{:.1} MiB", bytes as f64 / 1_048_576.0);
             let listing = largest.iter().map(|(name, size)| format!("{name} {}", mib(*size))).collect::<Vec<_>>().join(", ");
-            let lead = if fixed { "Logical artifact batch exceeds the fixed in-memory preparation ceiling" } else { "Logical artifact batch exceeds the configured aggregate artifact-byte limit" };
+            let lead = if fixed {
+                "Logical artifact batch exceeds the fixed in-memory preparation ceiling"
+            } else {
+                "Logical artifact batch exceeds the configured aggregate artifact-byte limit"
+            };
             return Err(StoreError::with_details(
                 if fixed { "ARTIFACT_LOGICAL_BATCH_LIMIT" } else { "ARTIFACT_STORAGE_LIMIT" },
                 format!("{lead} ({} in {} artifacts, limit {}; largest: {listing})", mib(total), writes.len(), mib(ceiling)),
@@ -958,7 +999,12 @@ impl ArtifactStore {
     /// Stores logical artifacts; content over the single-object limit becomes numbered chunks plus
     /// an index. The returned list is in the caller's order (the index stands for a chunked write),
     /// with every physical artifact beside it.
-    pub fn put_chunked(&self, workspace: &StoreWorkspace, writes: &[ArtifactWrite], retained: Option<&[String]>) -> StoreResult<(Vec<StoredArtifact>, Vec<StoredArtifact>, Created)> {
+    pub fn put_chunked(
+        &self,
+        workspace: &StoreWorkspace,
+        writes: &[ArtifactWrite],
+        retained: Option<&[String]>,
+    ) -> StoreResult<(Vec<StoredArtifact>, Vec<StoredArtifact>, Created)> {
         let (_, projected) = self.preflight(writes, true)?;
         let max_single = self.limits.max_single_bytes as usize;
         let mut physical: Vec<ArtifactWrite> = Vec::new();
@@ -977,8 +1023,19 @@ impl ArtifactStore {
                 let offset = index * max_single;
                 let content = write.content[offset..(offset + max_single).min(write.content.len())].to_vec();
                 let name = chunk_artifact_name(&original_sha, index);
-                let provenance = chunked_provenance(&write.provenance, "chunk", &original, json!({ "chunkIndex": index, "chunkCount": chunk_count, "offset": offset, "length": content.len() }));
-                let chunk_write = ArtifactWrite { name, mime_type: "application/octet-stream".into(), provenance, description: Some(format!("Byte-exact chunk {} of {chunk_count} for {}", index + 1, write.name)), content };
+                let provenance = chunked_provenance(
+                    &write.provenance,
+                    "chunk",
+                    &original,
+                    json!({ "chunkIndex": index, "chunkCount": chunk_count, "offset": offset, "length": content.len() }),
+                );
+                let chunk_write = ArtifactWrite {
+                    name,
+                    mime_type: "application/octet-stream".into(),
+                    provenance,
+                    description: Some(format!("Byte-exact chunk {} of {chunk_count} for {}", index + 1, write.name)),
+                    content,
+                };
                 let chunk_sha = sha256_hex(&chunk_write.content);
                 let manifest = self.planned(workspace, &chunk_write, &chunk_sha);
                 chunks.push(json!({
@@ -1027,7 +1084,11 @@ impl ArtifactStore {
         let mut prepared: Vec<Prepared> = Vec::new();
         for (write, expected) in writes.iter().zip(&lengths) {
             if write.content.len() as u64 != *expected {
-                return Err(StoreError::with_details("ARTIFACT_CONTENT_CHANGED", "Artifact content length changed after batch admission", json!({ "name": write.name })));
+                return Err(StoreError::with_details(
+                    "ARTIFACT_CONTENT_CHANGED",
+                    "Artifact content length changed after batch admission",
+                    json!({ "name": write.name }),
+                ));
             }
             let sha256 = sha256_hex(&write.content);
             let manifest = self.planned(workspace, write, &sha256);
@@ -1038,9 +1099,17 @@ impl ArtifactStore {
             let prefix = &sha256[..2];
             let directory = contained_path(&workspace.artifact_root, &[prefix, &sha256])?;
             let target = contained_path(&workspace.artifact_root, &[prefix, &sha256, &write.name])?;
-            let manifest_path = contained_path(&workspace.artifact_root, &[prefix, &sha256, &format!("{}.{}{MANIFEST_SUFFIX}", write.name, manifest.provenance_hash)])?;
+            let manifest_path =
+                contained_path(&workspace.artifact_root, &[prefix, &sha256, &format!("{}.{}{MANIFEST_SUFFIX}", write.name, manifest.provenance_hash)])?;
             let artifact = StoredArtifact {
-                link: ArtifactLink { uri: artifact_uri(&workspace.id, &sha256, &manifest.provenance_hash, &write.name), name: write.name.clone(), mime_type: write.mime_type.clone(), size: write.content.len() as u64, sha256: sha256.clone(), description: write.description.clone() },
+                link: ArtifactLink {
+                    uri: artifact_uri(&workspace.id, &sha256, &manifest.provenance_hash, &write.name),
+                    name: write.name.clone(),
+                    mime_type: write.mime_type.clone(),
+                    size: write.content.len() as u64,
+                    sha256: sha256.clone(),
+                    description: write.description.clone(),
+                },
                 provenance_hash: manifest.provenance_hash.clone(),
                 path: path_text(&target),
                 provenance: write.provenance.clone(),
@@ -1065,7 +1134,10 @@ impl ArtifactStore {
             }
             if let Some((seen, _)) = manifests.iter().find(|(seen, _)| seen.manifest_path == item.manifest_path) {
                 if seen.manifest_bytes != item.manifest_bytes {
-                    return Err(StoreError::new("ARTIFACT_MANIFEST_INTEGRITY_FAILED", "Artifact batch maps different provenance to the same immutable manifest"));
+                    return Err(StoreError::new(
+                        "ARTIFACT_MANIFEST_INTEGRITY_FAILED",
+                        "Artifact batch maps different provenance to the same immutable manifest",
+                    ));
                 }
             } else {
                 manifests.push((item, existing_manifest_matches(&item.manifest_path, &item.manifest_bytes)?));
@@ -1133,10 +1205,11 @@ impl ArtifactStore {
         for target in created.targets.iter().rev() {
             let target = Path::new(target);
             let prefix = format!("{}.", target.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default());
-            let has_manifest = target
-                .parent()
-                .and_then(|parent| fs::read_dir(parent).ok())
-                .is_some_and(|entries| entries.flatten().any(|entry| entry.file_name().to_string_lossy().starts_with(&prefix) && entry.file_name().to_string_lossy().ends_with(MANIFEST_SUFFIX)));
+            let has_manifest = target.parent().and_then(|parent| fs::read_dir(parent).ok()).is_some_and(|entries| {
+                entries
+                    .flatten()
+                    .any(|entry| entry.file_name().to_string_lossy().starts_with(&prefix) && entry.file_name().to_string_lossy().ends_with(MANIFEST_SUFFIX))
+            });
             if !has_manifest {
                 failed |= unlink_quiet(target).is_err();
             }
@@ -1170,7 +1243,10 @@ impl ArtifactStore {
         for uri in retained_uris {
             let parsed = parse_uri(workspace, uri)?;
             protected_targets.insert(contained_path(&workspace.artifact_root, &[&parsed.sha256[..2], &parsed.sha256, &parsed.name])?);
-            protected_manifests.insert(contained_path(&workspace.artifact_root, &[&parsed.sha256[..2], &parsed.sha256, &format!("{}.{}{MANIFEST_SUFFIX}", parsed.name, parsed.provenance_hash)])?);
+            protected_manifests.insert(contained_path(
+                &workspace.artifact_root,
+                &[&parsed.sha256[..2], &parsed.sha256, &format!("{}.{}{MANIFEST_SUFFIX}", parsed.name, parsed.provenance_hash)],
+            )?);
         }
         let target_bytes = max_bytes.saturating_sub(additional_bytes).min(max_bytes * 3 / 4);
         let target_entries = max_entries.saturating_sub(additional_entries).min(max_entries * 3 / 4);
@@ -1217,7 +1293,8 @@ impl ArtifactStore {
                     Err(error) => return Err(error),
                 };
                 let directory_name = directory.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let sound = name == format!("{}.{}{MANIFEST_SUFFIX}", manifest.name, manifest.provenance_hash) && assert_address_integrity(&manifest, &directory_name, &manifest.provenance_hash, &manifest.name).is_ok();
+                let sound = name == format!("{}.{}{MANIFEST_SUFFIX}", manifest.name, manifest.provenance_hash)
+                    && assert_address_integrity(&manifest, &directory_name, &manifest.provenance_hash, &manifest.name).is_ok();
                 if !sound {
                     drop_entry(usage_bytes, usage_entries);
                     continue;
@@ -1311,11 +1388,11 @@ impl ArtifactStore {
                 continue;
             }
             let prefix = format!("{}.", candidate.manifest.name);
-            let has_manifest = candidate
-                .target_path
-                .parent()
-                .and_then(|parent| fs::read_dir(parent).ok())
-                .is_some_and(|entries| entries.flatten().any(|entry| entry.file_name().to_string_lossy().starts_with(&prefix) && entry.file_name().to_string_lossy().ends_with(MANIFEST_SUFFIX)));
+            let has_manifest = candidate.target_path.parent().and_then(|parent| fs::read_dir(parent).ok()).is_some_and(|entries| {
+                entries
+                    .flatten()
+                    .any(|entry| entry.file_name().to_string_lossy().starts_with(&prefix) && entry.file_name().to_string_lossy().ends_with(MANIFEST_SUFFIX))
+            });
             if has_manifest {
                 continue;
             }
@@ -1332,7 +1409,10 @@ impl ArtifactStore {
 
 fn relative_to_root(workspace: &StoreWorkspace, path: &str) -> StoreResult<String> {
     let root = contained_path(&workspace.artifact_root, &[])?;
-    Path::new(path).strip_prefix(&root).map(|relative| relative.to_string_lossy().into_owned()).map_err(|_| StoreError::new("PATH_GENERATED_ROOT_ESCAPE", "Generated storage path escapes its configured root"))
+    Path::new(path)
+        .strip_prefix(&root)
+        .map(|relative| relative.to_string_lossy().into_owned())
+        .map_err(|_| StoreError::new("PATH_GENERATED_ROOT_ESCAPE", "Generated storage path escapes its configured root"))
 }
 
 fn existing_manifest_matches(path: &Path, expected: &str) -> StoreResult<bool> {
@@ -1443,7 +1523,9 @@ mod tests {
         let store = ArtifactStore::new(StoreLimits { max_bytes: 10_000, max_entries: 50, max_single_bytes: 2000 });
         assert_eq!(store.put_batch(&ws, &[write("big.txt", &[b'x'; 2001])], Some(&[])).unwrap_err().code, "ARTIFACT_SINGLE_LIMIT");
         let content: Vec<u8> = (0..5000u32).map(|n| (n % 251) as u8).collect();
-        let (logical, physical, _) = store.put_chunked(&ws, &[write("big.bin", &content)], Some(&[])).unwrap();
+        let mut big = write("big.bin", &content);
+        big.mime_type = "application/json".into();
+        let (logical, physical, _) = store.put_chunked(&ws, &[big], Some(&[])).unwrap();
         assert_eq!(physical.len(), 4);
         assert_eq!(logical.len(), 1);
         assert_eq!(logical[0].link.mime_type, "application/json");

@@ -59,7 +59,9 @@ impl PathRule {
             PathRule::Not(rule) => rule.validate(),
             PathRule::Path(_) => Ok(()),
             PathRule::Dir(rule) => match &rule.pattern {
-                Some(pattern) => Regex::new(pattern).map(|_| ()).map_err(|_| StoreError::new("MANAGED_OUTPUT_RULE_INVALID", "A managed-output path rule has an invalid pattern")),
+                Some(pattern) => Regex::new(pattern)
+                    .map(|_| ())
+                    .map_err(|_| StoreError::new("MANAGED_OUTPUT_RULE_INVALID", "A managed-output path rule has an invalid pattern")),
                 None => Ok(()),
             },
         }
@@ -152,7 +154,11 @@ fn parse_manifest(text: &str) -> StoreResult<Vec<Entry>> {
     for file in files {
         let item = file.as_object().filter(|item| item.len() == 2).ok_or_else(bad)?;
         let relative_path = item.get("relativePath").and_then(Value::as_str).filter(|path| !path.is_empty() && path.chars().count() <= 512).ok_or_else(bad)?;
-        let sha256 = item.get("sha256").and_then(Value::as_str).filter(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))).ok_or_else(bad)?;
+        let sha256 = item
+            .get("sha256")
+            .and_then(Value::as_str)
+            .filter(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+            .ok_or_else(bad)?;
         entries.push(Entry { relative_path: relative_path.to_owned(), sha256: sha256.to_owned() });
     }
     let mut seen = BTreeSet::new();
@@ -193,12 +199,14 @@ pub struct PlanInput<'a> {
 
 /// Plans the managed-output reconciliation and reports what it writes, retires and releases.
 pub fn plan_managed_outputs(input: &PlanInput<'_>) -> StoreResult<ManagedOutputPlan> {
-    let sources: BTreeMap<String, &SourceFile> = input.sources.iter().filter(|file| file.root_kind == "mod").map(|file| (key(&file.relative_path), file)).collect();
+    let sources: BTreeMap<String, &SourceFile> =
+        input.sources.iter().filter(|file| file.root_kind == "mod").map(|file| (key(&file.relative_path), file)).collect();
     let previous = match input.manifest_text {
         Some(text) if sources.contains_key(&input.manifest_path.to_lowercase()) => parse_manifest(text)?,
         _ => Vec::new(),
     };
-    let outputs: Vec<&ProposedChange> = input.proposed.iter().filter(|change| change.sha256.is_some() && input.permits.matches(&change.relative_path)).collect();
+    let outputs: Vec<&ProposedChange> =
+        input.proposed.iter().filter(|change| change.sha256.is_some() && input.permits.matches(&change.relative_path)).collect();
     let next: BTreeSet<String> = outputs.iter().map(|change| change.relative_path.to_lowercase()).collect();
     let mut released = BTreeSet::new();
     let mut ignored = BTreeSet::new();
@@ -217,7 +225,11 @@ pub fn plan_managed_outputs(input: &PlanInput<'_>) -> StoreResult<ManagedOutputP
             released.insert(file_key);
             continue;
         }
-        return Err(StoreError::with_details("MANAGED_OUTPUT_EDITED", "A generated file has been edited; regeneration would discard those changes", json!({ "relativePath": file.relative_path })));
+        return Err(StoreError::with_details(
+            "MANAGED_OUTPUT_EDITED",
+            "A generated file has been edited; regeneration would discard those changes",
+            json!({ "relativePath": file.relative_path }),
+        ));
     }
     let ignored_keys: BTreeSet<String> = ignored.iter().map(|path| path.to_lowercase()).collect();
     let deletions: Vec<PlannedDeletion> = previous
@@ -228,7 +240,8 @@ pub fn plan_managed_outputs(input: &PlanInput<'_>) -> StoreResult<ManagedOutputP
         })
         .map(|file| PlannedDeletion { relative_path: file.relative_path.clone(), operation_ids: vec![input.operation_id.to_owned()] })
         .collect();
-    let entries: Vec<Entry> = outputs.iter().map(|change| Entry { relative_path: change.relative_path.clone(), sha256: change.sha256.clone().unwrap_or_default() }).collect();
+    let entries: Vec<Entry> =
+        outputs.iter().map(|change| Entry { relative_path: change.relative_path.clone(), sha256: change.sha256.clone().unwrap_or_default() }).collect();
     Ok(ManagedOutputPlan {
         manifest: manifest_text(&entries),
         written: sorted(outputs.iter().map(|change| change.relative_path.clone())),
@@ -274,7 +287,8 @@ pub struct ManagedOutputRefresh {
 /// Returns `None` when the workspace has no inventory or this request deletes it.
 pub fn refresh_managed_outputs(input: &RefreshInput<'_>) -> StoreResult<Option<ManagedOutputRefresh>> {
     let proposed: BTreeMap<String, &ProposedChange> = input.proposed.iter().map(|change| (key(&change.relative_path), change)).collect();
-    let sources: BTreeMap<String, &SourceFile> = input.sources.iter().filter(|file| file.root_kind == "mod").map(|file| (key(&file.relative_path), file)).collect();
+    let sources: BTreeMap<String, &SourceFile> =
+        input.sources.iter().filter(|file| file.root_kind == "mod").map(|file| (key(&file.relative_path), file)).collect();
     let manifest_key = key(input.manifest_path);
     if input.manifest_deleted {
         return Ok(None);
@@ -337,7 +351,8 @@ pub fn refresh_managed_outputs(input: &RefreshInput<'_>) -> StoreResult<Option<M
         let mut candidates: BTreeMap<String, Candidate> = BTreeMap::new();
         if input.adopt_unrecorded {
             for (name, file) in &sources {
-                candidates.insert(name.clone(), Candidate { relative_path: file.relative_path.replace('\\', "/"), sha256: file.sha256.clone(), ids: Vec::new() });
+                candidates
+                    .insert(name.clone(), Candidate { relative_path: file.relative_path.replace('\\', "/"), sha256: file.sha256.clone(), ids: Vec::new() });
             }
         }
         for (name, change) in &proposed {
@@ -347,7 +362,10 @@ pub fn refresh_managed_outputs(input: &RefreshInput<'_>) -> StoreResult<Option<M
             };
             // A change to an existing unrecorded file is not a creation unless adoption was asked for.
             if !sources.contains_key(name) || input.adopt_unrecorded {
-                candidates.insert(name.clone(), Candidate { relative_path: change.relative_path.replace('\\', "/"), sha256: sha256.clone(), ids: change.operation_ids.clone() });
+                candidates.insert(
+                    name.clone(),
+                    Candidate { relative_path: change.relative_path.replace('\\', "/"), sha256: sha256.clone(), ids: change.operation_ids.clone() },
+                );
             }
         }
         let mut ordered: Vec<(&String, &Candidate)> = candidates.iter().collect();
@@ -454,14 +472,19 @@ mod tests {
             format!(r#"{{"version":1,"files":[{{"relativePath":"C:x","sha256":"{}"}}]}}"#, hash('a')),
             format!(r#"{{"version":1,"files":[{{"relativePath":"a","sha256":"{}"}},{{"relativePath":"A","sha256":"{}"}}]}}"#, hash('a'), hash('a')),
             format!(r#"{{"version":1,"files":[{{"relativePath":"a","sha256":"{}","x":1}}]}}"#, hash('a')),
-            format!(r#"{{"version":1,"files":[{{"relativePath":"a","sha256":"ABC"}}]}}"#),
+            r#"{"version":1,"files":[{"relativePath":"a","sha256":"ABC"}]}"#.to_string(),
             " ".repeat(2_000_001),
         ] {
             assert_eq!(plan(&sources, Some(&bad), &[], None).unwrap_err().code, "MANAGED_OUTPUT_MANIFEST_INVALID", "{}", &bad[..bad.len().min(60)]);
         }
     }
 
-    fn refresh<'a>(sources: &'a [SourceFile], text: Option<&'a str>, proposed: &'a [ProposedChange], tune: impl FnOnce(&mut RefreshInput<'a>)) -> Option<ManagedOutputRefresh> {
+    fn refresh<'a>(
+        sources: &'a [SourceFile],
+        text: Option<&'a str>,
+        proposed: &'a [ProposedChange],
+        tune: impl FnOnce(&mut RefreshInput<'a>),
+    ) -> Option<ManagedOutputRefresh> {
         let mut input = RefreshInput {
             manifest_path: MANIFEST,
             sources,
@@ -484,7 +507,10 @@ mod tests {
         let sources = [source(MANIFEST, 'f'), source("map/definition.csv", 'e'), source("history/states/1-A.txt", 'b')];
         let proposed = [change("map/definition.csv", Some('c')), change("history/states/1-A.txt", Some('d'))];
         let result = refresh(&sources, Some(&text), &proposed, |_| {}).unwrap();
-        assert_eq!((result.kept_edited.as_slice(), result.refreshed.as_slice()), (&["map/definition.csv".to_string()][..], &["history/states/1-A.txt".to_string()][..]));
+        assert_eq!(
+            (result.kept_edited.as_slice(), result.refreshed.as_slice()),
+            (&["map/definition.csv".to_string()][..], &["history/states/1-A.txt".to_string()][..])
+        );
         let adopted = refresh(&sources, Some(&text), &proposed, |input| input.adopt_all = true).unwrap();
         assert_eq!(adopted.refreshed.len(), 2);
         assert!(adopted.kept_edited.is_empty());
