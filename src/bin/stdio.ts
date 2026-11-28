@@ -29,9 +29,12 @@ function idleExitMinutes(configured: number): number {
 }
 
 async function main(): Promise<void> {
-  // The handshake must not wait for journal recovery; the transport holds workspace requests.
+  // The handshake and the tool list must not wait for the workspaces to load or for journal
+  // recovery: the transport holds every request that needs a workspace until both are done. A
+  // configuration or workspace error is reported on stderr and by the first call that needs a
+  // workspace.
   const engine = await createEngine(undefined, {
-    recovery: 'background',
+    workspaces: 'background',
     defaultProfiles: DEFAULT_PROFILES,
   });
   // Plugins load only from the paths the server configuration lists (M-14).
