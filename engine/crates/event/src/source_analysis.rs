@@ -423,6 +423,11 @@ impl Default for Budget {
 }
 
 impl Budget {
+    /// The work spent so far.
+    pub fn spent(&self) -> u64 {
+        self.spent
+    }
+
     pub fn spend(&mut self, label: &'static str) -> Result<(), WorkBlocked> {
         self.spent += 1;
         if self.spent > self.maximum { Err(WorkBlocked { label, spent: self.spent }) } else { Ok(()) }

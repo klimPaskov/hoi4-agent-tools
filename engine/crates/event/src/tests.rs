@@ -184,3 +184,87 @@ fn operations_are_registered_and_refuse_a_malformed_request() {
     let answer = registry.dispatch("event.path", &OpContext::default(), &request, &[]).unwrap().result.unwrap();
     assert_eq!(answer["path"]["nodeIds"], json!(["event:unit.1", "option:unit.1:a", "event:unit.2"]));
 }
+
+fn analysis_registry() -> Registry {
+    let mut registry = Registry::new();
+    crate::register(&mut registry);
+    registry
+}
+
+fn fixture_file(name: &str, text: &str) -> (std::path::PathBuf, String, u64) {
+    let directory = std::env::temp_dir().join(format!("hoi4-event-tests-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("a temporary directory");
+    let path = directory.join(name);
+    std::fs::write(&path, text).expect("a fixture file");
+    (path, hoi4_core::canonical::sha256_hex(text.as_bytes()), text.len() as u64)
+}
+
+fn path_entry(path: &std::path::Path, sha256: &str, size: u64) -> Value {
+    json!({
+        "relativePath": "events/a.txt", "displayPath": "fixture:events/a.txt", "sha256": sha256, "cacheKey": "key",
+        "path": path.to_string_lossy(), "size": size
+    })
+}
+
+const ONE_EVENT: &str = "country_event = { id = p.1 title = p.1.t desc = p.1.d option = { name = p.1.a } }\n";
+
+#[test]
+fn fragments_are_read_by_path_and_a_changed_file_is_refused() {
+    let registry = analysis_registry();
+    let (path, sha, size) = fixture_file("fresh.txt", ONE_EVENT);
+    let fresh = json!({ "files": [path_entry(&path, &sha, size)], "context": {} });
+    let answer = registry.dispatch("event.fragments", &OpContext::default(), &fresh, &[]).unwrap();
+    let fragments: Vec<Value> = serde_json::from_slice(&answer.payload).expect("fragments in the payload");
+    assert_eq!(fragments.len(), 1);
+    assert!(fragments[0]["nodes"].as_array().unwrap().iter().any(|node| node["kind"] == "event" && node["eventId"] == "p.1"));
+
+    let changed_hash = json!({ "files": [path_entry(&path, &"0".repeat(64), size)], "context": {} });
+    let refused = registry.dispatch("event.fragments", &OpContext::default(), &changed_hash, &[]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "EVENT_SOURCE_STALE");
+    let changed_size = json!({ "files": [path_entry(&path, &sha, size + 1)], "context": {} });
+    let refused = registry.dispatch("event.fragments", &OpContext::default(), &changed_size, &[]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "EVENT_SOURCE_STALE");
+}
+
+#[test]
+fn unreadable_and_incomplete_file_entries_are_refused() {
+    let registry = analysis_registry();
+    let missing = std::env::temp_dir().join("hoi4-event-tests-missing").join("nothing.txt");
+    let unreadable = json!({ "files": [path_entry(&missing, &"0".repeat(64), 1)], "context": {} });
+    let refused = registry.dispatch("event.fragments", &OpContext::default(), &unreadable, &[]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "EVENT_SOURCE_UNREADABLE");
+    let neither = json!({
+        "files": [{ "relativePath": "events/a.txt", "displayPath": "fixture:events/a.txt", "sha256": "x", "cacheKey": "key" }],
+        "context": {}
+    });
+    let refused = registry.dispatch("event.fragments", &OpContext::default(), &neither, &[]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "invalid_request");
+    let past_the_end = json!({
+        "files": [{ "relativePath": "events/a.txt", "displayPath": "fixture:events/a.txt", "sha256": "x", "cacheKey": "key", "payload": [0, 99] }],
+        "context": {}
+    });
+    let refused = registry.dispatch("event.fragments", &OpContext::default(), &past_the_end, &[1, 2, 3]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "invalid_request");
+}
+
+#[test]
+fn the_graph_is_built_from_files_read_by_path() {
+    let registry = analysis_registry();
+    let (path, sha, size) = fixture_file("graph.txt", ONE_EVENT);
+    let request = json!({
+        "analyze": { "files": [path_entry(&path, &sha, size)], "context": {} },
+        "files": [{ "displayPath": "fixture:events/a.txt", "sha256": sha }],
+        "workspaceId": "synthetic", "revision": "r1", "complete": true
+    });
+    let answer = registry.dispatch("event.graph", &OpContext::default(), &request, &[]).unwrap();
+    let header = answer.result.unwrap();
+    assert!(header["timingsMs"]["analysis"].is_u64());
+    let graph: Value = serde_json::from_slice(&answer.payload).expect("the graph in the payload");
+    assert_eq!(graph["statistics"]["eventCount"], 1);
+    let stale = json!({
+        "analyze": { "files": [path_entry(&path, &"0".repeat(64), size)], "context": {} },
+        "files": [], "workspaceId": "synthetic", "revision": "r1", "complete": true
+    });
+    let refused = registry.dispatch("event.graph", &OpContext::default(), &stale, &[]).unwrap();
+    assert_eq!(refused.result.unwrap_err()["code"], "EVENT_SOURCE_STALE");
+}
