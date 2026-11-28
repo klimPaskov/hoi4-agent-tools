@@ -1457,6 +1457,9 @@ function linkGraph(
       )
         continue;
       const entry = localisationByKey.get(value);
+      // The game shows a text that matches no key as it is written, so a text that is not in key
+      // form ("Title text here!", "--") is plain text, not a missing localisation key.
+      if (entry === undefined && !guiTextLooksLikeLocalisationKey(value)) continue;
       addEdge(
         edges,
         'uses_localisation',
@@ -1620,6 +1623,21 @@ function localisationAttributeValue(attributes: Record<string, unknown>, name: s
   for (const [key, value] of Object.entries(attributes))
     if (key.toLowerCase() === lowered) return value;
   return undefined;
+}
+
+/**
+ * Whether a GUI text that matches no localisation entry still reads as a key. The game looks a
+ * static text up as a key and draws the text itself when nothing matches, without an error.
+ * Only a text in the form of a key (the characters a localisation file allows in a key, at least
+ * one letter, and an underscore or all capitals, as `MY_WINDOW_TITLE` or `OK`) is reported as a
+ * missing key; anything else (`Title text here!`, `--`, `close`) is drawn literally.
+ */
+export function guiTextLooksLikeLocalisationKey(value: string): boolean {
+  return (
+    /^[A-Za-z0-9_.-]+$/u.test(value) &&
+    /[A-Za-z]/u.test(value) &&
+    (value.includes('_') || value === value.toUpperCase())
+  );
 }
 
 function isStaticGuiLocalisationReference(value: string): boolean {
