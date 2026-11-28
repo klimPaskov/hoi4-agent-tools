@@ -547,17 +547,14 @@ describe('Agent Nudger map model and operations', () => {
     expect(snapshot.index.provinceBitmapFile).toBeUndefined();
   });
 
-  it('cancels cooperatively from inside province-component geometry validation', async () => {
+  it('refuses to validate on the engine once the signal is aborted', async () => {
     const { snapshot } = await setup();
-    // The engine's raster carries its components (ADR 0084); without them validation counts
-    // them in TypeScript, as for a raster built there.
-    const raster = snapshot.index.raster as { topology?: unknown } | undefined;
-    expect(raster?.topology).toBeDefined();
-    delete raster?.topology;
-    const probe = abortSignalInside('provinceComponents');
+    const controller = new AbortController();
+    controller.abort();
 
-    expect(() => validateMap(snapshot.index, { signal: probe.signal })).toThrow(/abort/i);
-    expect(probe.matched()).toBe(true);
+    await expect(validateMapAsync(snapshot.index, { signal: controller.signal })).rejects.toThrow(
+      /abort/i,
+    );
   });
 
   it('cancels cooperatively from inside merge-province raster planning', async () => {

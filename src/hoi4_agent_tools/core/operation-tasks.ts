@@ -199,7 +199,11 @@ export class OperationTaskService {
             requestedWorkspaceId,
             requestSignal,
           );
-      this.engine.resolver.get(workspaceId, context.principal);
+      // A server that recovers on demand repairs this workspace's interrupted rewrite before
+      // the call reads or rewrites it; a failure is recorded and refuses rewrites only.
+      await this.engine.ensureRecovered(
+        this.engine.resolver.get(workspaceId, context.principal).id,
+      );
       requestSignal?.throwIfAborted();
     } catch (error) {
       if (error instanceof ServiceError) {

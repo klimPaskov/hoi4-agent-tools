@@ -278,6 +278,12 @@ const MAP_TEXT_FIELD_LIMIT = 10_000;
 const MAP_MODEL_MAX_SCRIPT_FILES = 5_000;
 const MAP_MODEL_MAX_SOURCE_TOKENS = 1_000_000;
 const MAP_MODEL_MAX_RECORDS = 500_000;
+/**
+ * Building, unit and weather positions have their own ceiling (issue 172): they are fixed-size
+ * rows, and a mod with large position tables (Old World Blues, 533,984 records) exceeded the
+ * domain-record ceiling with them. The engine model (`hoi4-map`) uses the same ceilings.
+ */
+export const MAP_MODEL_MAX_POSITION_RECORDS = 2_000_000;
 const MAP_MODEL_MAX_LOCALISATION_RECORDS = 2_000_000;
 const MAP_MODEL_MAX_MEMBERSHIP_EDGES = 1_000_000;
 
@@ -285,6 +291,7 @@ class MapModelBudget {
   readonly #documents = new Set<string>();
   #tokens = 0;
   #records = 0;
+  #positionRecords = 0;
   #localisationRecords = 0;
   #membershipEdges = 0;
 
@@ -307,6 +314,16 @@ class MapModelBudget {
     this.#records += count;
     if (!Number.isSafeInteger(this.#records) || this.#records > MAP_MODEL_MAX_RECORDS) {
       this.block('domain records', this.#records, MAP_MODEL_MAX_RECORDS);
+    }
+  }
+
+  addPositionRecords(count: number): void {
+    this.#positionRecords += count;
+    if (
+      !Number.isSafeInteger(this.#positionRecords) ||
+      this.#positionRecords > MAP_MODEL_MAX_POSITION_RECORDS
+    ) {
+      this.block('position records', this.#positionRecords, MAP_MODEL_MAX_POSITION_RECORDS);
     }
   }
 
@@ -1879,7 +1896,7 @@ export class MapWorkspaceIndex {
     const buildingsFile = mapFile(this.activeFiles, 'buildings.txt', this.sourceRoots.map);
     this.buildingPositions =
       buildingsFile === undefined ? [] : parseBuildingPositions(buildingsFile, this.diagnostics);
-    modelBudget.addRecords(this.buildingPositions.length);
+    modelBudget.addPositionRecords(this.buildingPositions.length);
     const unitstacksFile = mapFile(this.activeFiles, 'unitstacks.txt', this.sourceRoots.map);
     const positionsFile = mapFile(
       this.activeFiles,
@@ -1889,11 +1906,11 @@ export class MapWorkspaceIndex {
     this.unitPositions = [unitstacksFile, positionsFile]
       .filter((file): file is ScannedFile => file !== undefined && file.size > 0)
       .flatMap((file) => parseUnitPositions(file, this.diagnostics));
-    modelBudget.addRecords(this.unitPositions.length);
+    modelBudget.addPositionRecords(this.unitPositions.length);
     const weatherFile = mapFile(this.activeFiles, 'weatherpositions.txt', this.sourceRoots.map);
     this.weatherPositions =
       weatherFile === undefined ? [] : parseWeatherPositions(weatherFile, this.diagnostics);
-    modelBudget.addRecords(this.weatherPositions.length);
+    modelBudget.addPositionRecords(this.weatherPositions.length);
     this.entityLocators = this.activeFiles.all
       .filter(
         (file) =>

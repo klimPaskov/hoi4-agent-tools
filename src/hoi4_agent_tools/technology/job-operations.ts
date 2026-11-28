@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../core/engine.js';
-import { IdleCacheLifetime } from '../core/idle-cache-lifetime.js';
+import { idleCacheLifetime } from '../core/idle-cache-lifetime.js';
 import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
@@ -21,7 +21,7 @@ const wireResult = z.record(z.string(), z.json());
 /** Registers typed technology operations without invoking transport handlers. */
 export function registerTechnologyJobs(operations: JobOperations, engine: CoreEngine): void {
   const viewer = new TechnologyTreeViewer(engine);
-  const lifetime = new IdleCacheLifetime(() => viewer.clearCaches());
+  const lifetime = idleCacheLifetime(engine, () => viewer.clearCaches());
   function register<Input extends { workspaceId: string }, Request extends { workspaceId: string }>(
     name: string,
     schema: z.ZodType<Input>,

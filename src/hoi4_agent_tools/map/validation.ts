@@ -1,4 +1,3 @@
-import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { assertRenderDimensions } from '../core/render-budget.js';
@@ -18,6 +17,7 @@ import type {
   TextFileDocument,
 } from './model.js';
 import type { MapWorkspaceIndex } from './model.js';
+import { engineValidateMapAsync, engineValidateMapSync } from './engine-validation.js';
 
 export interface MapValidationOptions {
   operationId?: string;
@@ -57,22 +57,6 @@ function completeSynchronously<T>(steps: MapValidationSteps<T>): T {
   for (;;) {
     const step = steps.next();
     if (step.done) return step.value;
-  }
-}
-
-async function completeCooperatively<T>(
-  steps: MapValidationSteps<T>,
-  signal?: AbortSignal,
-): Promise<T> {
-  let yieldDeadline = performance.now() + 8;
-  for (;;) {
-    const step = steps.next();
-    if (step.done) return step.value;
-    signal?.throwIfAborted();
-    if (performance.now() < yieldDeadline) continue;
-    await yieldToEventLoop();
-    signal?.throwIfAborted();
-    yieldDeadline = performance.now() + 8;
   }
 }
 
@@ -1545,17 +1529,29 @@ export function mapValidationChecks(
   ];
 }
 
+/**
+ * Validates the map on the engine (`map.validate`, ADR 0089 step 6). Synchronous callers get a
+ * one-shot engine; a missing engine is `ENGINE_UNAVAILABLE`.
+ */
 export function validateMap(
   index: MapWorkspaceIndex,
   options: MapValidationOptions = {},
 ): MapValidationResult {
-  return completeSynchronously(validateMapSteps(index, options));
+  return engineValidateMapSync(index, options);
 }
 
-/** Validates map geometry and records while yielding so protocol cancellation can be delivered. */
+/** Validates the map on the resident engine; `signal` cancels the call. */
 export async function validateMapAsync(
   index: MapWorkspaceIndex,
   options: MapValidationOptions = {},
 ): Promise<MapValidationResult> {
-  return completeCooperatively(validateMapSteps(index, options), options.signal);
+  return engineValidateMapAsync(index, options);
+}
+
+/** The TypeScript validation, kept only for `scripts/map-validation-parity.ts` until parity is clean. */
+export function typeScriptValidateMap(
+  index: MapWorkspaceIndex,
+  options: MapValidationOptions = {},
+): MapValidationResult {
+  return completeSynchronously(validateMapSteps(index, options));
 }
