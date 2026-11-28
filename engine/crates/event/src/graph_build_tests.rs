@@ -39,7 +39,7 @@ fn fragments(files: &[(&str, &str)]) -> Vec<Value> {
     analyze(&Context { known_event_ids: Some(events), known_helper_ids: Some(helpers), inventory_complete: Some(true), ..Context::default() })
 }
 
-fn input(files: &[(&str, &str)]) -> Input {
+pub(crate) fn input(files: &[(&str, &str)]) -> Input {
     Input {
         fragments: fragments(files),
         files: files.iter().map(|(path, _)| ((*path).to_string(), "hash".to_string())).collect(),
@@ -55,9 +55,9 @@ fn issue_codes(graph: &Value) -> Vec<String> {
     list(graph, "issues").iter().map(|issue| text(issue, "code").to_string()).collect()
 }
 
-const ENTRY: &str = "add_namespace = a\ncountry_event = { id = a.1 title = a.1.t desc = a.1.d is_triggered_only = yes immediate = { country_event = a.9 } option = { name = a.1.a my_helper = yes } }\n";
-const HELPER: &str = "my_helper = { country_event = a.2 }\n";
-const SECOND: &str = "country_event = { id = a.2 title = a.2.t desc = a.2.d is_triggered_only = yes option = { name = a.2.a } }\n";
+pub(crate) const ENTRY: &str = "add_namespace = a\ncountry_event = { id = a.1 title = a.1.t desc = a.1.d is_triggered_only = yes immediate = { country_event = a.9 } option = { name = a.1.a my_helper = yes } }\n";
+pub(crate) const HELPER: &str = "my_helper = { country_event = a.2 }\n";
+pub(crate) const SECOND: &str = "country_event = { id = a.2 title = a.2.t desc = a.2.d is_triggered_only = yes option = { name = a.2.a } }\n";
 
 fn derived(edge: &Value) -> bool {
     edge.get("derived").and_then(Value::as_bool).unwrap_or(false)

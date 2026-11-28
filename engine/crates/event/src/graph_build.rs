@@ -78,11 +78,11 @@ pub(crate) fn text_opt<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-fn meta<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+pub(crate) fn meta<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
     value.get("metadata").and_then(|m| m.get(key)).filter(|v| !v.is_null())
 }
 
-fn meta_text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+pub(crate) fn meta_text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     meta(value, key).and_then(Value::as_str)
 }
 
@@ -90,11 +90,11 @@ pub(crate) fn list<'a>(value: &'a Value, key: &str) -> &'a [Value] {
     value.get(key).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
 }
 
-fn offset(location: &Value, end: bool) -> i64 {
+pub(crate) fn offset(location: &Value, end: bool) -> i64 {
     location.get(if end { "end" } else { "start" }).and_then(|p| p.get("offset")).and_then(Value::as_i64).unwrap_or(-1)
 }
 
-fn location_key(location: Option<&Value>) -> String {
+pub(crate) fn location_key(location: Option<&Value>) -> String {
     match location {
         Some(location) => format!("{}:{}:{}", text(location, "path"), offset(location, false), offset(location, true)),
         None => ":-1:-1".to_string(),
@@ -122,13 +122,13 @@ fn worst_confidence<'a>(values: impl IntoIterator<Item = &'a str>) -> &'a str {
     worst
 }
 
-fn sorted_strings(values: impl IntoIterator<Item = String>) -> Vec<String> {
+pub(crate) fn sorted_strings(values: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut list: Vec<String> = values.into_iter().collect::<std::collections::BTreeSet<_>>().into_iter().collect();
     list.sort_by(|a, b| cmp(a, b));
     list
 }
 
-fn stable_unique(values: Vec<Value>) -> Vec<Value> {
+pub(crate) fn stable_unique(values: Vec<Value>) -> Vec<Value> {
     let mut seen = HashSet::new();
     let mut kept: Vec<Value> = values.into_iter().filter(|value| seen.insert(text(value, "id").to_string())).collect();
     kept.sort_by(|a, b| cmp(text(a, "id"), text(b, "id")));

@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use crate::algorithms::{self, Boundary, Direction, PathOptions};
 use crate::graph::Graph;
 use crate::graph_build;
+use crate::inspect;
 use crate::source_analysis;
 
 #[derive(Deserialize)]
@@ -73,6 +74,7 @@ fn blocked(error: algorithms::WorkBlocked) -> OpResponse {
 pub fn register(registry: &mut Registry) {
     register_fragments(registry);
     register_graph(registry);
+    register_inspect(registry);
     registry.add_fn("event.trace", |_, request, _| match parse::<TraceRequest>(request) {
         Ok(r) => match serde_json::to_value(algorithms::trace(&r.graph, &r.start_node_ids, &r.boundary)) {
             Ok(value) => OpResponse::ok(value),
@@ -273,6 +275,47 @@ pub fn register_graph(registry: &mut Registry) {
                 OpResponse::error(code, format!("Event-chain {label} exceeds the fixed result ceiling ({count} over {maximum})"))
             }
             Err(graph_build::BuildError::Input(message)) => OpResponse::error("DEPENDENCY_WALK_INPUT_INVALID", message),
+        }
+    });
+}
+
+/// `event.inspect` request: the built graph sits at `graphPayload` (`[offset, length]`) of the
+/// frame's raw payload as JSON, and `params` are the mode and its filters.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InspectRequest {
+    graph_payload: (usize, usize),
+    params: inspect::Request,
+}
+
+fn refusal_response(refusal: inspect::Refusal) -> OpResponse {
+    OpResponse { result: Err(json!({ "code": refusal.code, "message": refusal.message, "details": refusal.details })), payload: Vec::new() }
+}
+
+/// `event.inspect`: the report and the inline summary of one query mode over a built graph, as JSON
+/// in the response payload. `helper_expansion` is not answered here.
+pub fn register_inspect(registry: &mut Registry) {
+    registry.add_fn("event.inspect", |_, request, payload| {
+        let request = match parse::<InspectRequest>(request) {
+            Ok(request) => request,
+            Err(error) => return error,
+        };
+        let (offset, length) = request.graph_payload;
+        let Some(bytes) = payload.get(offset..offset.saturating_add(length)) else {
+            return OpResponse::error("invalid_request", "the graph payload ends past the end of the frame");
+        };
+        let graph: Value = match serde_json::from_slice(bytes) {
+            Ok(graph) => graph,
+            Err(error) => return OpResponse::error("invalid_request", format!("the graph is not JSON: {error}")),
+        };
+        let started = Instant::now();
+        match inspect::inspect(&graph, &request.params) {
+            Ok(inspection) => {
+                let answered = started.elapsed().as_millis() as u64;
+                let body = json!({ "report": inspection.report, "summary": inspection.summary });
+                payload_response("inspection", &body, 1, json!({ "inspect": answered }))
+            }
+            Err(refusal) => refusal_response(refusal),
         }
     });
 }

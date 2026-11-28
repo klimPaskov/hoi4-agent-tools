@@ -22,7 +22,11 @@ import {
   analyzeEventSource,
   type EventSourceAnalysisContext,
 } from '../src/hoi4_agent_tools/event/source-analysis.js';
-import type { EventType } from '../src/hoi4_agent_tools/event/model.js';
+import type { EventGraphSnapshot, EventType } from '../src/hoi4_agent_tools/event/model.js';
+import {
+  eventInspectOutcome,
+  type EventInspectInput,
+} from '../src/hoi4_agent_tools/event/service.js';
 
 /**
  * Parity check for the event source analysis on the shared Rust engine (packet P6). Every file is
@@ -44,6 +48,7 @@ const { values } = parseArgs({
     dir: { type: 'string', multiple: true },
     include: { type: 'string' },
     'skip-graph': { type: 'boolean' },
+    'skip-inspect': { type: 'boolean' },
     out: { type: 'string' },
   },
 });
@@ -218,6 +223,202 @@ function wire(context: EventSourceAnalysisContext): Record<string, unknown> {
     activeHelperPaths: map(context.activeHelperPaths),
     activeDecisionPaths: map(context.activeDecisionPaths),
   };
+}
+
+type InspectParams = Omit<EventInspectInput, 'workspaceId' | 'refresh' | 'principal' | 'signal'>;
+
+/** The mode queries of one graph, answered by TypeScript and by the engine's event.inspect. */
+async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<string[]> {
+  const events = graph.nodes.filter((node) => node.kind === 'event' && node.eventId !== undefined);
+  const first = events[0];
+  const last = events.at(-1);
+  const flowEdge = graph.edges.find(
+    (edge) =>
+      !edge.derived &&
+      edge.from.startsWith('event:') &&
+      edge.to.startsWith('event:') &&
+      edge.from !== edge.to,
+  );
+  const access = graph.stateAccesses[Math.floor(graph.stateAccesses.length / 2)];
+  const helper = graph.nodes.find((node) => node.kind === 'helper');
+  const eventSelector = (eventId: string) => ({ kind: 'event' as const, eventId });
+  const cases: Array<[string, InspectParams]> = [
+    ['scan', { mode: 'scan' }],
+    ['roots', { mode: 'roots' }],
+    ['lint', { mode: 'lint' }],
+    ['state flow', { mode: 'state_flow' }],
+    ['not found', { mode: 'roots', selector: eventSelector('definitely_missing.1') }],
+    ['no selector for trace', { mode: 'trace' }],
+    ['no subject for impact', { mode: 'impact' }],
+    ['unknown file', { mode: 'lint', selector: { kind: 'file', sourcePath: 'nowhere/none.txt' } }],
+    [
+      'unknown state',
+      { mode: 'state_flow', stateSubject: { kind: 'country_flag', name: 'no_such_flag_anywhere' } },
+    ],
+  ];
+  if (first?.eventId !== undefined) {
+    const selector = eventSelector(first.eventId);
+    cases.push(
+      ['roots of an event', { mode: 'roots', selector }],
+      ['lint of an event', { mode: 'lint', selector }],
+      ['trace both', { mode: 'trace', selector, maxDepth: 4 }],
+      [
+        'trace up expanded',
+        {
+          mode: 'trace',
+          selector,
+          direction: 'upstream',
+          expandHelpers: true,
+          maxDepth: 3,
+          maxNodes: 50,
+          maxEdges: 100,
+        },
+      ],
+      ['trace down', { mode: 'trace', selector, direction: 'downstream' }],
+      ['state flow of an event', { mode: 'state_flow', selector }],
+      [
+        'impact of an event',
+        { mode: 'impact', impactSubject: { kind: 'event', name: first.eventId } },
+      ],
+      [
+        'lint of a manifest',
+        { mode: 'lint', selector: { kind: 'manifest', manifest: { eventIds: [first.eventId] } } },
+      ],
+      ['near miss', { mode: 'roots', selector: eventSelector(`${first.eventId}x`) }],
+    );
+    if (first.namespace !== undefined)
+      cases.push([
+        'lint of a namespace',
+        { mode: 'lint', selector: { kind: 'namespace', namespace: first.namespace } },
+      ]);
+    if (first.sourcePath !== undefined)
+      cases.push([
+        'lint of a file',
+        { mode: 'lint', selector: { kind: 'file', sourcePath: first.sourcePath } },
+      ]);
+    if (first.location !== undefined)
+      cases.push([
+        'lint of a source line',
+        {
+          mode: 'lint',
+          selector: {
+            kind: 'source',
+            sourcePath: first.location.path,
+            line: first.location.start.line,
+          },
+        },
+      ]);
+  }
+  if (flowEdge !== undefined) {
+    const from = graph.nodes.find((node) => node.id === flowEdge.from);
+    const to = graph.nodes.find((node) => node.id === flowEdge.to);
+    if (from?.eventId !== undefined && to?.eventId !== undefined)
+      cases.push(
+        [
+          'explain a route',
+          {
+            mode: 'explain_path',
+            from: eventSelector(from.eventId),
+            to: eventSelector(to.eventId),
+          },
+        ],
+        [
+          'explain a route without helpers',
+          {
+            mode: 'explain_path',
+            from: eventSelector(from.eventId),
+            to: eventSelector(to.eventId),
+            expandHelpers: false,
+            maxDepth: 1,
+          },
+        ],
+      );
+  }
+  if (first?.eventId !== undefined && last?.eventId !== undefined && first !== last)
+    cases.push([
+      'explain a likely missing route',
+      {
+        mode: 'explain_path',
+        from: eventSelector(last.eventId),
+        to: eventSelector(first.eventId),
+        maxDepth: 2,
+      },
+    ]);
+  if (access !== undefined)
+    cases.push(
+      [
+        'state flow of a value',
+        { mode: 'state_flow', stateSubject: { kind: access.kind, name: access.name } },
+      ],
+      [
+        'impact of a value',
+        {
+          mode: 'impact',
+          impactSubject: {
+            kind: access.kind === 'variable' ? 'variable' : 'flag',
+            name: access.name,
+          },
+        },
+      ],
+    );
+  if (helper !== undefined)
+    cases.push([
+      'impact of a helper',
+      { mode: 'impact', impactSubject: { kind: 'helper', name: helper.label } },
+    ]);
+  const graphJson = Buffer.from(canonicalJson(graph), 'utf8');
+  const failed: string[] = [];
+  for (const [name, params] of cases) {
+    let expected: unknown;
+    try {
+      expected = eventInspectOutcome(graph, params);
+    } catch (error) {
+      const { code, message, details } = error as {
+        code?: string;
+        message: string;
+        details?: unknown;
+      };
+      expected = { error: { code, message, details } };
+    }
+    const outcome = await engine.request(
+      'event.inspect',
+      { graphPayload: [0, graphJson.length], params },
+      graphJson,
+      { timeoutMs: 1_800_000 },
+    );
+    let actual: unknown;
+    if (outcome.ok && outcome.response.payload.length > 0)
+      actual = JSON.parse(outcome.response.payload.toString('utf8'));
+    else if (outcome.ok) {
+      const error = outcome.response.result as {
+        code?: string;
+        message?: string;
+        details?: unknown;
+      };
+      actual = { error: { code: error.code, message: error.message, details: error.details } };
+    } else if (outcome.kind === 'error') {
+      // The engine nests a refusal's details under its own details key; none is null.
+      const nested = (outcome.details as { details?: unknown }).details;
+      actual = {
+        error: {
+          code: outcome.code,
+          message: outcome.message,
+          details: nested === null ? undefined : nested,
+        },
+      };
+    } else actual = { engine: outcome };
+    const left = canonicalJson(JSON.parse(canonicalJson(expected)));
+    const right = canonicalJson(actual);
+    if (left !== right) {
+      failed.push(`inspect ${label} ${name}`);
+      if (failed.length <= 3)
+        process.stderr.write(
+          `  inspect ${name}\n${firstDifference(JSON.parse(left), JSON.parse(right))}`,
+        );
+    }
+  }
+  process.stdout.write(`inspect ${label}: ${cases.length} cases, ${failed.length} differ\n`);
+  return failed;
 }
 
 const crashed: string[] = [];
@@ -399,6 +600,13 @@ if (values['skip-graph'] !== true) {
         );
     }
     compared += 1;
+    if (values['skip-inspect'] !== true) {
+      for (const failure of await inspectParity(
+        typescriptGraph,
+        `projectHelpers=${projectHelpers}`,
+      ))
+        graphFailures.push(failure);
+    }
   }
   failures.push(...graphFailures);
 }

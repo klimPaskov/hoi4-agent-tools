@@ -1150,6 +1150,220 @@ function coherentBranchPartitions(
   return { groups, omittedNodeIds: omittedNodeIds.sort(compareCodeUnits) };
 }
 
+/**
+ * The checks, the query, the report and the inline summary of one inspect mode over a built graph.
+ * Pure over the graph, so the Rust engine's `event.inspect` is compared with it directly.
+ */
+export function eventInspectOutcome(
+  graph: EventGraphSnapshot,
+  input: Omit<EventInspectInput, 'workspaceId' | 'refresh' | 'principal'>,
+): { report: unknown; summary: Record<string, JsonValue> } {
+  const maxDepth = input.maxDepth ?? 8;
+  const maxNodes = input.maxNodes ?? 500;
+  const maxEdges = input.maxEdges ?? 2_000;
+  // A selector or state subject that matches nothing is not-found, never an empty answer (#59).
+  if (
+    input.selector !== undefined &&
+    input.mode !== 'impact' &&
+    selectEventNodes(graph, input.selector).length === 0
+  )
+    throw selectorNotFound(graph, input.selector);
+  if (
+    input.mode === 'state_flow' &&
+    input.stateSubject !== undefined &&
+    !graph.stateAccesses.some(
+      ({ kind, name }) => kind === input.stateSubject!.kind && name === input.stateSubject!.name,
+    )
+  ) {
+    const { kind, name } = input.stateSubject;
+    const suggestions = nearestNames(
+      name,
+      new Set(graph.stateAccesses.filter((access) => access.kind === kind).map((a) => a.name)),
+    );
+    throw new ServiceError(
+      'EVENT_STATE_NOT_FOUND',
+      `No scanned file sets, checks or clears the ${kind.replaceAll('_', ' ')} ${name.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+      { kind, name: name.slice(0, 256), suggestions },
+    );
+  }
+  let report: unknown;
+  let summary: Record<string, JsonValue> | undefined;
+  switch (input.mode) {
+    case 'scan':
+      report = eventScanReport(graph);
+      // A selector narrows the findings to its events, as lint does (#59).
+      summary = summarizeEventIssues(
+        input.selector === undefined
+          ? graph.issues
+          : lintEventGraph(graph, input.selector, input.signal),
+      );
+      break;
+    case 'roots':
+      {
+        const unresolved = boundedUnresolved(graph);
+        const roots = discoverEventRoots(graph, input.signal, input.selector);
+        summary = summarizeEventRoots(roots);
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          roots,
+          unresolved: unresolved.values,
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      }
+      break;
+    case 'trace':
+      if (input.selector === undefined)
+        throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
+      {
+        const trace = traceSelectedEvents(
+          graph,
+          input.selector,
+          {
+            maxDepth,
+            maxNodes,
+            maxEdges,
+            direction: input.direction ?? 'both',
+            expandHelpers: input.expandHelpers ?? false,
+          },
+          input.signal,
+        );
+        const unresolved = boundedUnresolved(graph, new Set(trace.nodes.map(({ id }) => id)));
+        summary = {
+          trace: summarizeEventTrace(trace),
+          ...summarizeEventIssues(lintEventGraph(graph, input.selector, input.signal)),
+        };
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          trace,
+          unresolved: unresolved.values,
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      }
+      break;
+    case 'explain_path':
+      if (input.from === undefined || input.to === undefined)
+        throw new ServiceError(
+          'EVENT_PATH_SELECTORS_REQUIRED',
+          'Path explanation requires from and to selectors',
+        );
+      {
+        const explanation = explainEventPath(
+          graph,
+          input.from,
+          input.to,
+          { maxDepth, maxNodes, expandHelpers: input.expandHelpers ?? true },
+          input.signal,
+        );
+        summary = summarizeEventPath(explanation);
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          explanation,
+        };
+      }
+      break;
+    case 'state_flow':
+      {
+        const unresolved = boundedUnresolved(graph);
+        const subject = input.stateSubject;
+        const stateIssues = lintEventGraph(graph, input.selector, input.signal).filter(
+          ({ code, details }) =>
+            /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE|WRITER)/u.test(code) &&
+            // A subject narrows the issues as well as the flow. Analysis limits stay, because
+            // they make the flow partial.
+            (subject === undefined ||
+              (typeof details.name === 'string'
+                ? details.name === subject.name &&
+                  (details.stateKind === undefined || details.stateKind === subject.kind)
+                : code.endsWith('_LIMIT'))),
+        );
+        const flow = inspectEventStateFlow(graph, input.selector, input.stateSubject, input.signal);
+        const where = (accesses: readonly EventStateAccess[]): string[] =>
+          accesses.slice(0, 8).map(({ location }) => `${location.path}:${location.start.line}`);
+        summary = {
+          ...summarizeEventIssues(stateIssues),
+          // The subject's own flow answers inline; the report holds every access.
+          ...(subject === undefined
+            ? {}
+            : {
+                flow: {
+                  subject: `${subject.kind}:${subject.name}`,
+                  producers: flow.producers.length,
+                  consumers: flow.consumers.length,
+                  clears: flow.clears.length,
+                  links: flow.links.length,
+                  unproducedReads: flow.unproducedReads.length,
+                  producedAt: where(flow.producers),
+                  readAt: where(flow.consumers),
+                },
+              }),
+        };
+        const issues = boundedEvidence(stateIssues);
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          flow,
+          issues: issues.values,
+          unresolved: unresolved.values,
+          ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      }
+      break;
+    case 'lint':
+      {
+        const selectedIssues = lintEventGraph(graph, input.selector, input.signal);
+        summary = summarizeEventIssues(selectedIssues);
+        const issues = boundedEvidence(selectedIssues);
+        const unresolved = boundedUnresolved(graph);
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          issues: issues.values,
+          complete: graph.complete,
+          unresolved: unresolved.values,
+          ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      }
+      break;
+    case 'impact':
+      if (input.impactSubject === undefined)
+        throw new ServiceError(
+          'EVENT_IMPACT_SUBJECT_REQUIRED',
+          'Impact analysis requires a subject',
+        );
+      {
+        const unresolved = boundedUnresolved(graph);
+        const impact = analyzeEventImpact(graph, input.impactSubject, input.signal);
+        summary = summarizeEventImpact(impact);
+        report = {
+          graphRevision: graph.revision,
+          sourceHashes: graph.sourceHashes,
+          impact,
+          unresolved: unresolved.values,
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      }
+      break;
+  }
+  if (summary === undefined)
+    throw new ServiceError('EVENT_MODE_UNSUPPORTED', `The mode ${input.mode} has no query report`);
+  return { report, summary };
+}
+
 export class EventChainViewer {
   readonly #state: SharedEventServiceState;
   /** Effect names the installed game documented at each workspace's last scan. */
@@ -1291,209 +1505,7 @@ export class EventChainViewer {
       ...(input.impactSubject === undefined ? {} : { impactSubject: input.impactSubject }),
       refresh: input.refresh ?? input.mode === 'scan',
     };
-    // A selector or state subject that matches nothing is not-found, never an empty answer (#59).
-    if (
-      input.selector !== undefined &&
-      input.mode !== 'impact' &&
-      selectEventNodes(graph, input.selector).length === 0
-    )
-      throw selectorNotFound(graph, input.selector);
-    if (
-      input.mode === 'state_flow' &&
-      input.stateSubject !== undefined &&
-      !graph.stateAccesses.some(
-        ({ kind, name }) => kind === input.stateSubject!.kind && name === input.stateSubject!.name,
-      )
-    ) {
-      const { kind, name } = input.stateSubject;
-      const suggestions = nearestNames(
-        name,
-        new Set(graph.stateAccesses.filter((access) => access.kind === kind).map((a) => a.name)),
-      );
-      throw new ServiceError(
-        'EVENT_STATE_NOT_FOUND',
-        `No scanned file sets, checks or clears the ${kind.replaceAll('_', ' ')} ${name.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
-        { kind, name: name.slice(0, 256), suggestions },
-      );
-    }
-    let report: unknown;
-    let summary: Record<string, JsonValue> | undefined;
-    switch (input.mode) {
-      case 'scan':
-        report = eventScanReport(graph);
-        // A selector narrows the findings to its events, as lint does (#59).
-        summary = summarizeEventIssues(
-          input.selector === undefined
-            ? graph.issues
-            : lintEventGraph(graph, input.selector, input.signal),
-        );
-        break;
-      case 'roots':
-        {
-          const unresolved = boundedUnresolved(graph);
-          const roots = discoverEventRoots(graph, input.signal, input.selector);
-          summary = summarizeEventRoots(roots);
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            roots,
-            unresolved: unresolved.values,
-            ...(unresolved.inventory === undefined
-              ? {}
-              : { unresolvedInventory: unresolved.inventory }),
-          };
-        }
-        break;
-      case 'trace':
-        if (input.selector === undefined)
-          throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
-        {
-          const trace = traceSelectedEvents(
-            graph,
-            input.selector,
-            {
-              maxDepth,
-              maxNodes,
-              maxEdges,
-              direction: input.direction ?? 'both',
-              expandHelpers: input.expandHelpers ?? false,
-            },
-            input.signal,
-          );
-          const unresolved = boundedUnresolved(graph, new Set(trace.nodes.map(({ id }) => id)));
-          summary = {
-            trace: summarizeEventTrace(trace),
-            ...summarizeEventIssues(lintEventGraph(graph, input.selector, input.signal)),
-          };
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            trace,
-            unresolved: unresolved.values,
-            ...(unresolved.inventory === undefined
-              ? {}
-              : { unresolvedInventory: unresolved.inventory }),
-          };
-        }
-        break;
-      case 'explain_path':
-        if (input.from === undefined || input.to === undefined)
-          throw new ServiceError(
-            'EVENT_PATH_SELECTORS_REQUIRED',
-            'Path explanation requires from and to selectors',
-          );
-        {
-          const explanation = explainEventPath(
-            graph,
-            input.from,
-            input.to,
-            { maxDepth, maxNodes, expandHelpers: input.expandHelpers ?? true },
-            input.signal,
-          );
-          summary = summarizeEventPath(explanation);
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            explanation,
-          };
-        }
-        break;
-      case 'state_flow':
-        {
-          const unresolved = boundedUnresolved(graph);
-          const subject = input.stateSubject;
-          const stateIssues = lintEventGraph(graph, input.selector, input.signal).filter(
-            ({ code, details }) =>
-              /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE|WRITER)/u.test(code) &&
-              // A subject narrows the issues as well as the flow. Analysis limits stay, because
-              // they make the flow partial.
-              (subject === undefined ||
-                (typeof details.name === 'string'
-                  ? details.name === subject.name &&
-                    (details.stateKind === undefined || details.stateKind === subject.kind)
-                  : code.endsWith('_LIMIT'))),
-          );
-          const flow = inspectEventStateFlow(
-            graph,
-            input.selector,
-            input.stateSubject,
-            input.signal,
-          );
-          const where = (accesses: readonly EventStateAccess[]): string[] =>
-            accesses.slice(0, 8).map(({ location }) => `${location.path}:${location.start.line}`);
-          summary = {
-            ...summarizeEventIssues(stateIssues),
-            // The subject's own flow answers inline; the report holds every access.
-            ...(subject === undefined
-              ? {}
-              : {
-                  flow: {
-                    subject: `${subject.kind}:${subject.name}`,
-                    producers: flow.producers.length,
-                    consumers: flow.consumers.length,
-                    clears: flow.clears.length,
-                    links: flow.links.length,
-                    unproducedReads: flow.unproducedReads.length,
-                    producedAt: where(flow.producers),
-                    readAt: where(flow.consumers),
-                  },
-                }),
-          };
-          const issues = boundedEvidence(stateIssues);
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            flow,
-            issues: issues.values,
-            unresolved: unresolved.values,
-            ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
-            ...(unresolved.inventory === undefined
-              ? {}
-              : { unresolvedInventory: unresolved.inventory }),
-          };
-        }
-        break;
-      case 'lint':
-        {
-          const selectedIssues = lintEventGraph(graph, input.selector, input.signal);
-          summary = summarizeEventIssues(selectedIssues);
-          const issues = boundedEvidence(selectedIssues);
-          const unresolved = boundedUnresolved(graph);
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            issues: issues.values,
-            complete: graph.complete,
-            unresolved: unresolved.values,
-            ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
-            ...(unresolved.inventory === undefined
-              ? {}
-              : { unresolvedInventory: unresolved.inventory }),
-          };
-        }
-        break;
-      case 'impact':
-        if (input.impactSubject === undefined)
-          throw new ServiceError(
-            'EVENT_IMPACT_SUBJECT_REQUIRED',
-            'Impact analysis requires a subject',
-          );
-        {
-          const unresolved = boundedUnresolved(graph);
-          const impact = analyzeEventImpact(graph, input.impactSubject, input.signal);
-          summary = summarizeEventImpact(impact);
-          report = {
-            graphRevision: graph.revision,
-            sourceHashes: graph.sourceHashes,
-            impact,
-            unresolved: unresolved.values,
-            ...(unresolved.inventory === undefined
-              ? {}
-              : { unresolvedInventory: unresolved.inventory }),
-          };
-        }
-        break;
-    }
+    const { report, summary } = eventInspectOutcome(graph, input);
     const graphHash = cachedEventGraphHash(graph, input.signal);
     const name = `${safeSlug(`event-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`;
     const graphSnapshotName = `event-graph-${graph.revision}.json`;
