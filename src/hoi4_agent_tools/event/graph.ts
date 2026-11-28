@@ -50,7 +50,7 @@ import { compatibleProducerKeys, hasUnknownSavedScopeStorage, stateKey } from '.
 import { iterativeStronglyConnectedComponents } from './scc.js';
 import { analyzeEventSource, eventSemanticFragmentCacheKey } from './source-analysis.js';
 
-interface EventCatalog {
+export interface EventCatalog {
   eventIds: Set<string>;
   eventTypes: Map<string, EventType>;
   helperIds: Set<string>;
@@ -91,7 +91,7 @@ function worstConfidence(...values: EventConfidence[]): EventConfidence {
   );
 }
 
-function activeFiles(snapshot: ScanSnapshot): ScannedFile[] {
+export function activeFiles(snapshot: ScanSnapshot): ScannedFile[] {
   return snapshot.files
     .filter(
       ({ relativePath, shadowedBy }) =>
@@ -107,7 +107,7 @@ function activeFiles(snapshot: ScanSnapshot): ScannedFile[] {
 const EVENT_SETUP_CALL_PATTERN =
   /\b(?:country_event|news_event|state_event|unit_leader_event|operative_leader_event|fire_event|event)\s*=/iu;
 
-function shouldAnalyzeEventFile(file: ScannedFile): boolean {
+export function shouldAnalyzeEventFile(file: ScannedFile): boolean {
   const sourcePath = file.relativePath.replaceAll('\\', '/').toLowerCase();
   if (!sourcePath.startsWith('history/countries/') && !sourcePath.startsWith('history/states/')) {
     return true;
@@ -115,7 +115,7 @@ function shouldAnalyzeEventFile(file: ScannedFile): boolean {
   return EVENT_SETUP_CALL_PATTERN.test(file.bytes.toString('utf8'));
 }
 
-function catalogFor(snapshot: ScanSnapshot): EventCatalog {
+export function catalogFor(snapshot: ScanSnapshot): EventCatalog {
   const unshadowedEventSymbols = snapshot.index
     .findAll('event')
     .filter(({ sourceShadowed }) => !sourceShadowed);
