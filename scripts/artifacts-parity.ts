@@ -556,7 +556,7 @@ try {
         const plan = planManagedOutputs({
           manifestPath,
           sources: tsSources,
-          proposed: proposed as never,
+          proposed,
           operationId: 'plan',
           permitsPath: worldRules,
           ...(release ? { releasable: isWorldCountryOutput } : {}),
@@ -591,7 +591,7 @@ try {
         const refresh = refreshManagedOutputs({
           manifestPath,
           sources: tsSources,
-          proposed: proposed as never,
+          proposed,
           adoptAll,
           adoptUnrecorded,
           addable: (name) => worldRules(name) && !isWorldCountryOutput(name),
