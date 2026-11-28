@@ -49,7 +49,9 @@ jobs:
         working-directory: engine
         run: |
           rustup toolchain install
-          cargo build --release --locked -p hoi4-engine-cli
+          # The test-abort feature lets the crash tests of the rewrite journal abort the engine;
+          # the release and engine-binaries workflows build without it.
+          cargo build --release --locked -p hoi4-engine-cli --features test-abort
       - run: npm run check
       # Coverage runs the whole suite a second time (about 40 minutes), so only main measures it.
       - if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.node == 24

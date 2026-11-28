@@ -544,7 +544,7 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> (Vec<Token>, usize) {
                         SourceDiagnostic::syntax(
                             "SOURCE_STRING_TOO_LONG",
                             "warning",
-                            "Clausewitz quoted strings longer than 255 characters are not portable",
+                            "Quoted string longer than 255 characters. Vanilla has none, but no game limit is recorded: check it in game before shortening it",
                             span,
                         )
                     });
