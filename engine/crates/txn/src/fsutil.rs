@@ -7,7 +7,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hoi4_core::canonical::sha256_hex;
@@ -110,14 +109,17 @@ pub fn sync_directory(path: &Path) {
     }
 }
 
-/// A unique id such as `txn_0123abcd-…`, in the TypeScript `secureId` shape (36 hex and dashes).
+/// A random id such as `txn_0123abcd-…`, in the TypeScript `secureId` shape (a version 4 UUID after
+/// the prefix, as `randomUUID` writes it). The ids name journal, stage and backup files, so they
+/// come from the operating system's random source and cannot be predicted from the process id or
+/// the clock. A machine without a random source cannot write safely, so that is a panic.
 pub fn random_id(prefix: &str) -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_nanos()).unwrap_or_default();
-    let local = 0_u8;
-    let seed = format!("{}:{nanos}:{}:{:p}:{:?}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed), &local, std::thread::current().id());
-    let hash = sha256_hex(seed.as_bytes());
-    format!("{prefix}_{}-{}-{}-{}-{}", &hash[0..8], &hash[8..12], &hash[12..16], &hash[16..20], &hash[20..32])
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).expect("the operating system's random source is unavailable");
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("{prefix}_{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
 /// Milliseconds since the Unix epoch.
@@ -167,5 +169,10 @@ mod tests {
         assert!(first.starts_with("txn_"));
         assert!(first[4..].chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
         assert_ne!(first, random_id("txn"));
+        // A version 4 UUID, as `randomUUID` writes it, and no repeats among many ids.
+        assert_eq!(&first[18..19], "4");
+        assert!(matches!(&first[23..24], "8" | "9" | "a" | "b"));
+        let ids: std::collections::BTreeSet<String> = (0..5_000).map(|_| random_id("txn")).collect();
+        assert_eq!(ids.len(), 5_000);
     }
 }

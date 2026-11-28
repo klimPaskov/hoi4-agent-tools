@@ -11,7 +11,8 @@
 //!
 //! `txn.apply` adds `{ operationKind, diagnostics?, changes: [{ path, beforeSha256, afterSize }] }`,
 //! with the new bytes of every change whose `afterSize` is not null concatenated in the payload,
-//! in order. Answer: `{ changedPaths }`, or an error `{ code, message, diagnostics }`.
+//! in order. Answer: `{ changedPaths }`, or an error `{ code, message, diagnostics? }` (a refused
+//! rollback adds `retainedBackupCount` and `retainedBackups`, as the TypeScript details).
 //!
 //! `txn.recover` answers `{ recovered }`, the number of interrupted rewrites restored.
 
@@ -67,8 +68,26 @@ struct ApplyRequest {
     diagnostics: Vec<Diagnostic>,
 }
 
-fn refused(refusal: Refusal) -> OpResponse {
-    OpResponse { result: Err(json!({ "code": refusal.code, "message": refusal.message, "diagnostics": refusal.diagnostics })), payload: Vec::new() }
+/// The error of a refused call: `{ code, message, ... }`. The keys after the message become the
+/// TypeScript `ServiceError` details. A refused rollback names the backups it left in the
+/// workspace; the engine carries them as one diagnostic (`RETAINED_BACKUPS_CODE`), which is
+/// mapped back here to the manager's own details, `retainedBackupCount` and `retainedBackups`,
+/// so the refusal has the same fields as `withRetainedBackups` in `transactions.ts`. Other
+/// diagnostics stay under `diagnostics`, and only when there are any.
+fn refused(mut refusal: Refusal) -> OpResponse {
+    let mut error = serde_json::Map::new();
+    error.insert("code".into(), json!(refusal.code));
+    error.insert("message".into(), json!(refusal.message));
+    if let Some(at) = refusal.diagnostics.iter().position(|diagnostic| diagnostic.code == crate::RETAINED_BACKUPS_CODE) {
+        let retained = refusal.diagnostics.remove(at);
+        for (key, value) in retained.details.into_iter().flatten() {
+            error.insert(key, value);
+        }
+    }
+    if !refusal.diagnostics.is_empty() {
+        error.insert("diagnostics".into(), json!(refusal.diagnostics));
+    }
+    OpResponse { result: Err(Value::Object(error)), payload: Vec::new() }
 }
 
 fn applier(request: &Value) -> Result<TxnApplier, OpResponse> {
@@ -154,4 +173,41 @@ fn recover(request: &Value) -> OpResponse {
 pub fn register(registry: &mut Registry) {
     registry.add_fn("txn.apply", |_: &OpContext, request, payload| apply(request, payload));
     registry.add_fn("txn.recover", |_: &OpContext, request, _| recover(request));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hoi4_core::diagnostics::{Category, Severity};
+
+    fn retained(paths: &[&str]) -> Diagnostic {
+        let mut diagnostic = Diagnostic::new(crate::RETAINED_BACKUPS_CODE, Severity::Info, Category::Validation, "backups stay");
+        let mut details = serde_json::Map::new();
+        details.insert("retainedBackupCount".into(), json!(paths.len()));
+        details.insert("retainedBackups".into(), json!(paths));
+        diagnostic.details = Some(details);
+        diagnostic
+    }
+
+    /// A refused rollback's retained backups are the same top-level fields the TypeScript manager
+    /// puts in the refusal's details, and the diagnostic itself is not repeated.
+    #[test]
+    fn a_refused_rollback_carries_the_typescript_details() {
+        let mut refusal = Refusal::new("TRANSACTION_ROLLBACK_STALE", "stale");
+        refusal.diagnostics.push(retained(&["common/two.txt"]));
+        let Err(error) = refused(refusal).result else { panic!("an error answer") };
+        assert_eq!(error, json!({ "code": "TRANSACTION_ROLLBACK_STALE", "message": "stale", "retainedBackupCount": 1, "retainedBackups": ["common/two.txt"] }));
+    }
+
+    #[test]
+    fn other_diagnostics_stay_and_an_empty_list_is_left_out() {
+        let note = Diagnostic::new("NOTE", Severity::Info, Category::Validation, "note");
+        let mut refusal = Refusal::new("TRANSACTION_VALIDATION_BLOCKED", "blocked");
+        refusal.diagnostics = vec![note.clone(), retained(&["a.txt"])];
+        let Err(error) = refused(refusal).result else { panic!("an error answer") };
+        assert_eq!(error["diagnostics"], json!([note]));
+        assert_eq!(error["retainedBackupCount"], json!(1));
+        let Err(plain) = refused(Refusal::new("TRANSACTION_STALE", "stale")).result else { panic!("an error answer") };
+        assert_eq!(plain, json!({ "code": "TRANSACTION_STALE", "message": "stale" }));
+    }
 }

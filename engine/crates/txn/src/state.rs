@@ -77,6 +77,50 @@ pub fn assert_no_link_components(path: &Path) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// The device and index of a directory, read without following a link.
+#[cfg(unix)]
+fn directory_identity(path: &Path) -> io::Result<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a real directory"));
+    }
+    Ok((metadata.dev(), metadata.ino()))
+}
+
+/// The volume and file index of a directory. Rust's standard library gives no index from
+/// `symlink_metadata` on Windows, so a read-attributes handle is opened for the one call and
+/// closed at once; it does not follow a reparse point (`from_path_any` opens the link itself).
+#[cfg(windows)]
+fn directory_identity(path: &Path) -> io::Result<(u64, u64)> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a real directory"));
+    }
+    let handle = winapi_util::Handle::from_path_any(path)?;
+    let information = winapi_util::file::information(&handle)?;
+    Ok((information.volume_serial_number(), information.file_index()))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn directory_identity(_path: &Path) -> io::Result<(u64, u64)> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "directory identity is not supported on this platform"))
+}
+
+/// Creates `directory` and its missing parents; on POSIX every folder it creates is private
+/// (`0o700`), as the TypeScript server's `mkdir` makes the head folders.
+fn create_private_directories(directory: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(directory)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir_all(directory)
+    }
+}
+
 /// Creates `path` with `bytes` only when it does not exist: written to a private temporary, then
 /// hard-linked into place. `false` when the path existed already.
 fn atomic_create(path: &Path, bytes: &[u8]) -> io::Result<bool> {
@@ -163,6 +207,25 @@ impl ServerState {
         let metadata = fs::symlink_metadata(root).map_err(|_| state_error("SERVER_STATE_ROOT_INVALID", "Server state root must be a real directory"))?;
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             return Err(state_error("SERVER_STATE_ROOT_INVALID", "Server state root must be a real directory"));
+        }
+        // The permission and identity checks of `ServerState.create`: group and other access to
+        // the root is refused on POSIX, and the root, as written and as the file system resolves
+        // it, must be the same directory before and after the resolution, so a replacement raced
+        // in between fails closed.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if metadata.permissions().mode() & 0o077 != 0 {
+                return Err(state_error("SERVER_STATE_ROOT_PERMISSIONS", "Server state root permissions must exclude group and other access"));
+            }
+        }
+        let not_canonical = || state_error("SERVER_STATE_ROOT_NOT_CANONICAL", "Server state root changed while its canonical identity was being established");
+        let canonical = fs::canonicalize(root).map_err(|_| not_canonical())?;
+        assert_no_link_components(root)?;
+        assert_no_link_components(&canonical)?;
+        let identity = directory_identity(root).map_err(|_| not_canonical())?;
+        if directory_identity(&canonical).map_err(|_| not_canonical())? != identity || directory_identity(root).map_err(|_| not_canonical())? != identity {
+            return Err(not_canonical());
         }
         Ok(Self { root: root.to_path_buf(), key })
     }
@@ -314,7 +377,7 @@ impl ServerState {
         }
         let directory = self.head_directory(input.workspace_identity, input.transaction_id)?;
         assert_no_link_components(&directory)?;
-        fs::create_dir_all(&directory)
+        create_private_directories(&directory)
             .map_err(|_| state_error("TRANSACTION_HEAD_WRITE_FAILED", "Protected transaction journal state could not be recorded"))?;
         assert_no_link_components(&directory)?;
         if let Some(latest) = self.latest(&directory, input)? {
@@ -427,11 +490,85 @@ mod tests {
 
     #[test]
     fn refuses_missing_short_and_malformed_keys() {
-        let root = std::env::temp_dir();
+        let root = private_root();
         for key in ["", "00", &"0".repeat(63), &"g".repeat(64), &"0".repeat(66)] {
             assert_eq!(ServerState::open(&root, key).unwrap_err().code, "SERVER_STATE_KEY_INVALID");
         }
         let state = ServerState::open(&root, &"ab".repeat(32)).unwrap();
         assert!(!format!("{state:?}").contains("abab"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A fresh state root the way the TypeScript server makes it: a real folder, private on POSIX.
+    fn private_root() -> PathBuf {
+        let root = std::env::temp_dir().join(random_id("hoi4-txn-state"));
+        fs::create_dir_all(&root).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        crate::paths::canonical_path(&root).unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_state_root_open_to_group_or_other() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = private_root();
+        for mode in [0o750, 0o705, 0o777] {
+            fs::set_permissions(&root, fs::Permissions::from_mode(mode)).unwrap();
+            assert_eq!(ServerState::open(&root, &"ab".repeat(32)).unwrap_err().code, "SERVER_STATE_ROOT_PERMISSIONS", "{mode:o}");
+        }
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        ServerState::open(&root, &"ab".repeat(32)).unwrap();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_head_folders_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = private_root();
+        let state = ServerState::open(&root, &"ab".repeat(32)).unwrap();
+        let identity = "c".repeat(64);
+        let (tag, hash) = ("d".repeat(64), "e".repeat(64));
+        let input = HeadInput {
+            workspace_identity: &identity,
+            transaction_id: "txn_00000000-0000-4000-8000-000000000000",
+            revision: 1,
+            authentication_tag: &tag,
+            manifest_hash: &hash,
+        };
+        state.record_initial_head(&input).unwrap();
+        let mut directory = root.join("transaction-heads");
+        for part in [&identity[..2], &identity, input.transaction_id] {
+            directory = directory.join(part);
+            assert_eq!(fs::metadata(&directory).unwrap().permissions().mode() & 0o077, 0, "{}", directory.display());
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn refuses_a_state_root_that_is_a_link_or_has_one_in_its_path() {
+        let root = private_root();
+        let real = root.join("real");
+        fs::create_dir_all(&real).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&real, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let link = root.join("link");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        #[cfg(windows)]
+        assert!(std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(&link).arg(&real).output().unwrap().status.success());
+        for candidate in [link.clone(), link.join("inner")] {
+            assert!(ServerState::open(&candidate, &"ab".repeat(32)).is_err(), "{}", candidate.display());
+        }
+        #[cfg(windows)]
+        let _ = fs::remove_dir(&link);
+        let _ = fs::remove_dir_all(&root);
     }
 }

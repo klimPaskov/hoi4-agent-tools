@@ -45,6 +45,18 @@ pub(crate) trait Hooks: Send + Sync {
     fn before_post_validation(&self) -> Result<(), Refusal> {
         Ok(())
     }
+    /// Before the backup of a replaced file is removed after the verified write.
+    fn before_backup_removal(&self, _relative_path: &str) -> Result<(), Refusal> {
+        Ok(())
+    }
+    /// Before the journal is marked applied.
+    fn before_applied_write(&self) -> Result<(), Refusal> {
+        Ok(())
+    }
+    /// Before the finished journal is reclaimed.
+    fn before_reclaim(&self) -> Result<(), Refusal> {
+        Ok(())
+    }
 }
 
 /// The rules a negative test proves by dropping them (tests only).
@@ -64,7 +76,8 @@ pub(crate) enum Rule {
 }
 
 /// The variable that makes the engine abort right after replacing the file at this index: the
-/// crash the cross-recovery tests of the TypeScript server need from a real engine process.
+/// crash the cross-recovery tests of the TypeScript server need from a real engine process. Only
+/// a build with the `test-abort` feature reads it.
 pub const TEST_ABORT_VARIABLE: &str = "HOI4_TXN_TEST_ABORT_AFTER_REPLACE";
 
 /// One file of a plan, resolved and read.
@@ -737,24 +750,23 @@ impl TxnApplier {
 
         manifest.state = State::Applying;
         journal.write_manifest(&mut manifest)?;
-        match self.replace_all(&journal, &mut manifest, &work) {
+        // The verified write, the removal of the backups and the applied mark are one unit: a
+        // failure in any of them rolls the rewrite back, as `apply` of the TypeScript manager does
+        // inside its try. Only once the journal says applied is the rewrite reported as written.
+        match self.replace_all(&journal, &mut manifest, &work).and_then(|()| self.finish_applied(&journal, &mut manifest, &work)) {
             Ok(()) => {
-                for item in &work {
-                    let backup = with_suffix(&item.target, &format!(".hoi4-agent-{transaction_id}.backup"));
-                    if exists(&backup) {
-                        fs::remove_file(&backup)
-                            .map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "A replaced source backup cannot be removed", &error))?;
-                    }
+                // The applied journal of a one-call rewrite is never read again; the rewrite has
+                // landed, so a failed reclaim is not an error; the journal is reclaimed by pruning once the
+                // journal budget needs the room, as for any applied journal.
+                if self.hook(|hooks| hooks.before_reclaim()).is_ok() {
+                    let _ = journal.reclaim(transaction_id);
                 }
-                manifest.state = State::Applied;
-                journal.write_manifest(&mut manifest)?;
-                // The applied journal of a one-call rewrite is never read again.
-                journal.reclaim(transaction_id)?;
                 let mut changed_paths: Vec<String> = work.into_iter().map(|item| item.relative_path).collect();
                 changed_paths.sort_by(|left, right| compare_code_units(left, right));
                 Ok(Applied { changed_paths })
             }
             Err(error) => {
+                manifest.state = State::Applying;
                 manifest.failure = Some(Failure { code: error.code.clone(), message: "Transaction apply failed".into() });
                 let rollback = self.restore_before_state(&journal, &mut manifest);
                 if let Err(rollback) = &rollback {
@@ -774,10 +786,28 @@ impl TxnApplier {
         }
     }
 
+    /// Removes the backups of the replaced files and marks the journal applied.
+    fn finish_applied(&self, journal: &Journal<'_>, manifest: &mut Manifest, work: &[Work]) -> Result<(), Refusal> {
+        for item in work {
+            let backup = with_suffix(&item.target, &format!(".hoi4-agent-{}.backup", manifest.transaction_id));
+            if exists(&backup) {
+                self.hook(|hooks| hooks.before_backup_removal(&item.relative_path))?;
+                fs::remove_file(&backup).map_err(|error| io_refusal("TRANSACTION_APPLY_FAILED", "A replaced source backup cannot be removed", &error))?;
+            }
+        }
+        self.hook(|hooks| hooks.before_applied_write())?;
+        manifest.state = State::Applied;
+        journal.write_manifest(manifest)
+    }
+
     fn replace_all(&self, journal: &Journal<'_>, manifest: &mut Manifest, work: &[Work]) -> Result<(), Refusal> {
         let stale = |message: &str| Refusal::new("TRANSACTION_STALE", message);
         let transaction_id = manifest.transaction_id.clone();
+        // Only a test build (feature `test-abort`) reads the variable; a release build ignores it.
+        #[cfg(feature = "test-abort")]
         let abort_after: Option<usize> = std::env::var(TEST_ABORT_VARIABLE).ok().and_then(|value| value.parse().ok());
+        #[cfg(not(feature = "test-abort"))]
+        let abort_after: Option<usize> = None;
         // Stage every new file beside its target. All staging joins before any failure is
         // handled, so no writer outlives the rollback.
         let staged: Vec<Result<Option<PathBuf>, Refusal>> = work

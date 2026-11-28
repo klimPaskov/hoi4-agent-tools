@@ -49,6 +49,11 @@ fn fixture() -> Fixture {
     let cache = mod_root.join(".hoi4-agent").join("cache");
     let state = root.join("state");
     fs::create_dir_all(&state).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+    }
     Fixture { root, mod_root, cache, state }
 }
 
@@ -158,6 +163,9 @@ struct At {
     after_replace: Option<IndexHook>,
     before_post_validation: Option<PlainHook>,
     after_batch_intent: Option<BatchHook>,
+    before_backup_removal: Option<PathHook>,
+    before_applied_write: Option<PlainHook>,
+    before_reclaim: Option<PlainHook>,
 }
 
 impl Hooks for At {
@@ -172,6 +180,15 @@ impl Hooks for At {
     }
     fn after_batch_intent(&self, relative_paths: &[String]) -> Result<(), Refusal> {
         self.after_batch_intent.as_ref().map_or(Ok(()), |hook| hook(relative_paths))
+    }
+    fn before_backup_removal(&self, relative_path: &str) -> Result<(), Refusal> {
+        self.before_backup_removal.as_ref().map_or(Ok(()), |hook| hook(relative_path))
+    }
+    fn before_applied_write(&self) -> Result<(), Refusal> {
+        self.before_applied_write.as_ref().map_or(Ok(()), |hook| hook())
+    }
+    fn before_reclaim(&self) -> Result<(), Refusal> {
+        self.before_reclaim.as_ref().map_or(Ok(()), |hook| hook())
     }
 }
 
@@ -348,17 +365,19 @@ fn refuses_duplicates_and_aliases_of_one_file() {
     let fixture = fixture();
     let duplicate = plan(vec![change("a.txt", None, Some(b"1")), change("a.txt", None, Some(b"2"))]);
     assert_eq!(fixture.applier().apply(&duplicate).unwrap_err().code, "TRANSACTION_DUPLICATE_FILE");
+    // A backslash is a separator only on Windows; elsewhere it is part of a file name of its own.
     let alias = plan(vec![change("common/a.txt", None, Some(b"1")), change("common\\a.txt", None, Some(b"2"))]);
-    let refusal = fixture.applier().apply(&alias).unwrap_err();
-    assert_eq!(refusal.code, "TRANSACTION_DUPLICATE_FILE");
-    assert!(refusal.message.contains("aliases"));
     if cfg!(windows) {
+        let refusal = fixture.applier().apply(&alias).unwrap_err();
+        assert_eq!(refusal.code, "TRANSACTION_DUPLICATE_FILE");
+        assert!(refusal.message.contains("aliases"));
         let cased = plan(vec![change("Common/A.txt", None, Some(b"1")), change("common/a.txt", None, Some(b"2"))]);
         assert_eq!(fixture.applier().apply(&cased).unwrap_err().code, "TRANSACTION_DUPLICATE_FILE");
     }
     assert!(fixture.snapshot().is_empty());
     // Without the rule nothing refuses the plan as a duplicate.
-    for plan in [&duplicate, &alias] {
+    let dropped: Vec<&RewritePlan> = if cfg!(windows) { vec![&duplicate, &alias] } else { vec![&duplicate] };
+    for plan in dropped {
         let outcome = fixture.applier().dropping(Rule::Duplicate).apply(plan);
         assert_ne!(outcome.err().map(|refusal| refusal.code), Some("TRANSACTION_DUPLICATE_FILE".to_string()));
     }
@@ -1073,5 +1092,101 @@ fn reclaims_an_expired_failed_journal_only_at_its_after_state() {
             assert_eq!(fixture.journal_state(&id), State::Failed);
             assert_eq!(backups(&fixture).len(), 1);
         }
+    }
+}
+
+// --- A cleanup that fails after the write, and hostile journals -----------------------------
+
+/// "rolls back when removing a backup fails" and "when marking the journal applied fails": the
+/// verified write, the backups and the applied mark are one unit, so the agent is told the rewrite
+/// was refused and every file is back, never "refused" over new bytes.
+#[test]
+fn rolls_back_when_a_cleanup_step_before_applied_fails() {
+    fn failure() -> Result<(), Refusal> {
+        Err(Refusal::new("TEST_FAILURE", "injected"))
+    }
+    for step in ["backup removal of the first file", "backup removal of the second file", "the applied mark"] {
+        let fixture = fixture();
+        let (rewrite, before) = three_file_plan(&fixture);
+        let hooks = match step {
+            "backup removal of the first file" => At { before_backup_removal: Some(Box::new(move |_| failure())), ..At::default() },
+            "backup removal of the second file" => {
+                let seen = std::sync::atomic::AtomicUsize::new(0);
+                At {
+                    before_backup_removal: Some(Box::new(
+                        move |_| if seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 1 { failure() } else { Ok(()) },
+                    )),
+                    ..At::default()
+                }
+            }
+            _ => At { before_applied_write: Some(Box::new(failure)), ..At::default() },
+        };
+        let refusal = fixture.applier().with_hooks(Arc::new(hooks)).apply(&rewrite).unwrap_err();
+        assert_eq!(refusal.code, "TEST_FAILURE", "{step}");
+        assert_eq!(fixture.snapshot(), before, "{step}: every file is back, with no stage or backup");
+        assert_eq!(fixture.journal_state(&fixture.only_journal()), State::RolledBack, "{step}");
+        // The same plan applies afterwards: nothing is left stale.
+        fixture.applier().apply(&rewrite).unwrap();
+        assert_eq!(fixture.read("common/a.txt").unwrap(), b"a = 2\r\n", "{step}");
+    }
+}
+
+/// A rewrite that landed is reported as written even when its journal cannot be reclaimed.
+#[test]
+fn reports_a_landed_rewrite_when_the_reclaim_fails() {
+    let fixture = fixture();
+    let (rewrite, _) = three_file_plan(&fixture);
+    let hooks = At { before_reclaim: Some(Box::new(|| Err(Refusal::new("TEST_FAILURE", "injected")))), ..At::default() };
+    let applied = fixture.applier().with_hooks(Arc::new(hooks)).apply(&rewrite).unwrap();
+    assert_eq!(applied.changed_paths, ["common/a.txt", "common/b.txt", "common/new/c.txt"]);
+    assert_eq!(fixture.read("common/a.txt").unwrap(), b"a = 2\r\n");
+    assert!(fixture.read("common/b.txt").is_none());
+    let id = fixture.only_journal();
+    assert_eq!(fixture.journal_state(&id), State::Applied);
+    // The applied journal is not a pending recovery: nothing rolls the files back.
+    assert_eq!(fixture.applier().recover().unwrap(), 0);
+    assert_eq!(fixture.read("common/a.txt").unwrap(), b"a = 2\r\n");
+}
+
+/// Rewrites a journal's manifest on disk without re-authenticating it, as a hostile writer would.
+fn tamper_manifest(fixture: &Fixture, id: &str, change: impl FnOnce(&mut serde_json::Value)) {
+    let path = fixture.cache.join(JOURNAL_FOLDER).join(id).join("manifest.json");
+    let mut manifest: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    change(&mut manifest);
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+}
+
+/// A manifest the TypeScript schema would refuse is refused before it is authenticated, and
+/// without a panic: a `createdAt` whose byte 19 falls inside a multi-byte character used to
+/// slice through it.
+#[test]
+fn refuses_a_manifest_that_breaks_the_schema_before_authenticating_it() {
+    let long = |length: usize| "x".repeat(length);
+    let check = |i: usize| json!({ "id": format!("c{i}"), "passed": true, "message": "m" });
+    let operation = |i: usize| json!({ "id": format!("op-{i}"), "kind": "k", "summary": "s", "data": {} });
+    type Tamper = Box<dyn Fn(&mut serde_json::Value)>;
+    let cases: Vec<(&str, Tamper)> = vec![
+        ("a time with a multi-byte character at byte 19", Box::new(|m| m["createdAt"] = json!("0000-00-00T00:00:0\u{e9}Z"))),
+        ("an expiry with a multi-byte character", Box::new(|m| m["expiresAt"] = json!("2026-11-27T00:00:00.00\u{e9}Z"))),
+        ("1,001 operations", Box::new(move |m| m["operations"] = json!((0..1001).map(operation).collect::<Vec<_>>()))),
+        ("10,001 read dependencies", Box::new(|m| m["readDependencies"] = json!(vec![json!({}); 10_001]))),
+        ("6,001 artifacts", Box::new(|m| m["artifacts"] = json!(vec![json!({}); 6_001]))),
+        ("6,001 execution artifacts", Box::new(|m| m["executionArtifacts"] = json!(vec![json!({}); 6_001]))),
+        ("a 1,025 character principal", Box::new(move |m| m["principal"] = json!(long(1_025)))),
+        ("a 257 character failure code", Box::new(move |m| m["failure"] = json!({ "code": "x".repeat(257), "message": "m" }))),
+        ("a 4,097 character failure message", Box::new(move |m| m["failure"] = json!({ "code": "C", "message": "x".repeat(4_097) }))),
+        ("101 validation checks", Box::new(move |m| m["validation"]["checks"] = json!((0..101).map(check).collect::<Vec<_>>()))),
+        ("a 257 character operation id on a file", Box::new(|m| m["files"][0]["operationIds"] = json!(["x".repeat(257)]))),
+    ];
+    for (name, change) in cases {
+        let fixture = fixture();
+        let (rewrite, _) = three_file_plan(&fixture);
+        crash_after_replace(&fixture, &rewrite, 0);
+        let id = fixture.only_journal();
+        tamper_manifest(&fixture, &id, change);
+        let refusal = fixture.applier().recover().unwrap_err();
+        assert_eq!(refusal.code, "TRANSACTION_MANIFEST_INVALID", "{name}");
+        // The same applier does not apply over it either.
+        assert_eq!(fixture.applier().apply(&rewrite).unwrap_err().code, "TRANSACTION_RECOVERY_REQUIRED", "{name}");
     }
 }

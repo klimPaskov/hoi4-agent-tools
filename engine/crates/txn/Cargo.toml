@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 hoi4-core.workspace = true
+getrandom = "0.3.3"
 hoi4-engine.workspace = true
 rayon.workspace = true
 serde.workspace = true
@@ -18,6 +19,11 @@ sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 winapi-util = "0.1.11"
+
+[features]
+# Lets the HOI4_TXN_TEST_ABORT_AFTER_REPLACE variable abort a rewrite, for the cross-recovery tests
+# of the TypeScript server. Release builds never enable it.
+test-abort = []
 
 [lints]
 workspace = true

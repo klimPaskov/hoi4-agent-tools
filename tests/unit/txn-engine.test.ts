@@ -138,6 +138,23 @@ async function typescriptApply(
   });
 }
 
+/**
+ * The engine aborts after replacing a file when `HOI4_TXN_TEST_ABORT_AFTER_REPLACE` is set, but
+ * only a test build reads it (`cargo build --release -p hoi4-engine-cli --features test-abort`);
+ * release builds ignore it, so a plain build fails these tests loudly instead of quietly.
+ */
+async function expectEngineCrash(work: Promise<unknown>): Promise<void> {
+  const outcome = await work.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  if (outcome === undefined)
+    throw new Error(
+      'hoi4-engine did not abort: build it with --features test-abort for the crash tests',
+    );
+  expect(outcome).toMatchObject({ code: 'ENGINE_UNAVAILABLE' });
+}
+
 async function snapshot(root: string): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
   for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
@@ -308,6 +325,98 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
     expect(await manager.recover('test')).toEqual([]);
   });
 
+  it('refuses a recovery the same way the TypeScript manager does, field for field', async () => {
+    // Three files are replaced and the run is interrupted; then a modder edits one of them. A
+    // recovery cannot restore it without overwriting the edit, so it refuses, removes the
+    // backups of the files still at their written bytes and names the one it kept.
+    const changes: Change[] = [
+      {
+        path: 'common/bom.txt',
+        before: START['common/bom.txt']!,
+        after: Buffer.from('replaced\n'),
+      },
+      { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('later\n') },
+      { path: 'map.bmp', before: START['map.bmp']!, after: Buffer.from([0x42, 0x4d, 7, 7]) },
+    ];
+    const edited = Buffer.from('later\nedited by the modder\n');
+
+    const engine = await setup();
+    const crashing = new ResidentEngine({
+      env: { ...process.env, HOI4_TXN_TEST_ABORT_AFTER_REPLACE: '2' },
+    });
+    engines.push(crashing);
+    await expectEngineCrash(engineApply(engine.binding, changes, crashing));
+    await writeFile(path.join(engine.mod, 'common', 'one.txt'), edited);
+    const fromEngine = await engineRecover(engine.binding).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // The same interrupted rewrite, left by the TypeScript manager: every file at its written
+    // bytes with its backup beside it, the journal applying.
+    const typescript = await setup();
+    const plan = await typescript.manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: changes.map((change) => ({
+        relativePath: change.path,
+        content: change.after,
+        operationIds: ['op-1'],
+      })),
+      validate: () => Promise.resolve({ diagnostics: [], checks }),
+    });
+    for (const change of changes) {
+      const target = path.join(typescript.mod, change.path);
+      await writeFile(`${target}.hoi4-agent-${plan.transactionId}.backup`, change.before!);
+      await writeFile(target, change.after!);
+    }
+    await writeFile(path.join(typescript.mod, 'common', 'one.txt'), edited);
+    await updateJournal(
+      typescript.resolver,
+      path.join(
+        typescript.workspace.cacheRoot,
+        'transactions',
+        plan.transactionId,
+        'manifest.json',
+      ),
+      (manifest) => {
+        manifest.state = 'applying';
+        manifest.appliedFiles = changes.map((change) => change.path).sort();
+      },
+    );
+    const fromTypescript = await typescript.manager.recover('test').then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(fromTypescript).toBeInstanceOf(ServiceError);
+    expect(fromEngine).toBeInstanceOf(ServiceError);
+    const expected = fromTypescript as ServiceError;
+    const actual = fromEngine as ServiceError;
+    expect(expected.code).toBe('TRANSACTION_ROLLBACK_STALE');
+    expect(actual.code).toBe(expected.code);
+    expect(actual.message).toBe(expected.message);
+    expect(actual.details).toEqual(expected.details);
+    expect(actual.details).toEqual({
+      retainedBackupCount: 1,
+      retainedBackups: ['common/one.txt'],
+    });
+    // Both leave the same files, and only the edited file keeps its backup.
+    const backups = async (mod: string) =>
+      (await readdir(mod, { recursive: true }))
+        .map((entry) =>
+          entry.replaceAll('\\', '/').replace(/\.hoi4-agent-[^.]+\.backup$/u, '.backup'),
+        )
+        .filter((entry) => entry.endsWith('.backup'));
+    expect(await backups(engine.mod)).toEqual(['common/one.txt.backup']);
+    expect(await backups(typescript.mod)).toEqual(await backups(engine.mod));
+    expect((await readFile(path.join(engine.mod, 'common', 'bom.txt'))).toString()).toBe(
+      'replaced\n',
+    );
+    expect(await readFile(path.join(engine.mod, 'common', 'one.txt'))).toEqual(edited);
+  });
+
   it('leaves a journal the TypeScript manager recovers when the engine crashes', async () => {
     const { mod, manager, binding } = await setup();
     const crashing = new ResidentEngine({
@@ -322,9 +431,7 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
       },
       { path: 'common/one.txt', before: START['common/one.txt']!, after: Buffer.from('never\n') },
     ];
-    await expect(engineApply(binding, changes, crashing)).rejects.toMatchObject({
-      code: 'ENGINE_UNAVAILABLE',
-    });
+    await expectEngineCrash(engineApply(binding, changes, crashing));
     expect((await readFile(path.join(mod, 'common', 'bom.txt'))).toString()).toBe('replaced\n');
     // The crashed engine left its lock and an applying journal; the manager clears the lock of
     // the dead process and restores the files.
@@ -385,9 +492,7 @@ describe.skipIf(!engineAvailable)('the engine rewrite journal (txn.apply, txn.re
     const back: Change[] = [
       { path: 'common/one.txt', before: Buffer.from('x\n'), after: Buffer.from('y\n') },
     ];
-    await expect(engineApply(wrong, back, crashing)).rejects.toMatchObject({
-      code: 'ENGINE_UNAVAILABLE',
-    });
+    await expectEngineCrash(engineApply(wrong, back, crashing));
     expect(await codeOf(engineRecover(binding))).toBe('TRANSACTION_MANIFEST_AUTHENTICATION_FAILED');
     expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(Buffer.from('y\n'));
   });

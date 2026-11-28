@@ -7,6 +7,10 @@
 /// more than 8,000; 15,000 files fit the manifest cap with room for longer paths.
 pub const MAX_FILES: usize = 15_000;
 pub const MAX_DIAGNOSTICS: usize = 100;
+pub const MAX_OPERATIONS: usize = 1_000;
+pub const MAX_VALIDATION_CHECKS: usize = 100;
+pub const MAX_ARTIFACTS: usize = 6_000;
+pub const MAX_READ_DEPENDENCIES: usize = 10_000;
 pub const MAX_MANIFEST_BYTES: u64 = 33_554_432;
 /// Smallest replacement batch: one intent and one checkpoint manifest write per batch.
 pub const MAX_PENDING_FILES: usize = 16;

@@ -22,7 +22,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::fsutil::{FileIdentity, durable_write, sync_directory};
-use crate::limits::{MAX_BATCH_FILES, MAX_DIAGNOSTICS, MAX_FILES, MAX_MANIFEST_BYTES};
+use crate::limits::{
+    MAX_ARTIFACTS, MAX_BATCH_FILES, MAX_DIAGNOSTICS, MAX_FILES, MAX_MANIFEST_BYTES, MAX_OPERATIONS, MAX_READ_DEPENDENCIES, MAX_VALIDATION_CHECKS,
+};
 use crate::paths::{contained_generated_path, io_refusal};
 use crate::state::{HeadInput, ServerState, is_sha256};
 
@@ -213,14 +215,21 @@ pub fn valid_transaction_id(id: &str) -> bool {
 
 fn valid_iso_time(text: &str) -> bool {
     let bytes = text.as_bytes();
+    // `YYYY-MM-DDTHH:MM:SS`, an optional `.` and digits, then `Z`: what `z.iso.datetime()` accepts.
+    // `get` is false inside a multi-byte character, where a slice would panic on hostile text.
+    let Some((head, rest)) = text.get(..19).zip(text.get(19..)) else { return false };
     bytes.len() >= 20
         && bytes[4] == b'-'
         && bytes[7] == b'-'
         && bytes[10] == b'T'
         && bytes[13] == b':'
         && bytes[16] == b':'
-        && text.ends_with('Z')
-        && text[..19].bytes().enumerate().all(|(index, b)| [4, 7, 10, 13, 16].contains(&index) || b.is_ascii_digit())
+        && head.bytes().enumerate().all(|(index, b)| [4, 7, 10, 13, 16].contains(&index) || b.is_ascii_digit())
+        && (rest == "Z"
+            || rest
+                .strip_prefix('.')
+                .and_then(|fraction| fraction.strip_suffix('Z'))
+                .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())))
 }
 
 fn valid_relative(path: &str) -> bool {
@@ -237,6 +246,26 @@ fn schema_check(manifest: &Manifest) -> bool {
             && file.media_type.len() <= 255
     };
     let payload = &manifest.plan_payload;
+    let utf16 = |text: &str| text.encode_utf16().count();
+    let identifier = |text: &str| (1..=256).contains(&utf16(text));
+    let summary = |text: &str| utf16(text) <= 4_096;
+    let operations_ok = |operations: &[Value]| {
+        operations.len() <= MAX_OPERATIONS
+            && operations.iter().all(|operation| {
+                let text = |key: &str| operation.get(key).and_then(Value::as_str);
+                text("id").is_some_and(identifier) && text("kind").is_some_and(identifier) && text("summary").is_some_and(summary)
+            })
+    };
+    let validation_ok = |validation: &Value| {
+        validation.get("checks").and_then(Value::as_array).is_some_and(|checks| {
+            checks.len() <= MAX_VALIDATION_CHECKS
+                && checks.iter().all(|check| {
+                    check.get("id").and_then(Value::as_str).is_some_and(identifier) && check.get("message").and_then(Value::as_str).is_some_and(summary)
+                })
+        })
+    };
+    let principal_ok = |principal: &Option<String>| principal.as_deref().is_none_or(|text| utf16(text) <= 1_024);
+    let operation_ids_ok = |file: &FileRecord| file.operation_ids.len() <= MAX_OPERATIONS && file.operation_ids.iter().all(|id| identifier(id));
     (manifest.version == 1 || manifest.version == JOURNAL_VERSION)
         && (payload.version == 1 || payload.version == JOURNAL_VERSION)
         && manifest.revision >= 1
@@ -253,6 +282,23 @@ fn schema_check(manifest: &Manifest) -> bool {
         && manifest.applied_files.iter().all(|path| valid_relative(path))
         && manifest.files.iter().all(file_ok)
         && payload.files.iter().all(file_ok)
+        && manifest.files.iter().all(operation_ids_ok)
+        && payload.files.iter().all(operation_ids_ok)
+        && payload.diagnostics.len() <= MAX_DIAGNOSTICS
+        && principal_ok(&manifest.principal)
+        && principal_ok(&payload.principal)
+        && identifier(&manifest.operation_kind)
+        && identifier(&payload.operation_kind)
+        && operations_ok(&manifest.operations)
+        && operations_ok(&payload.operations)
+        && manifest.read_dependencies.len() <= MAX_READ_DEPENDENCIES
+        && payload.read_dependencies.len() <= MAX_READ_DEPENDENCIES
+        && manifest.artifacts.len() <= MAX_ARTIFACTS
+        && payload.artifacts.len() <= MAX_ARTIFACTS
+        && manifest.execution_artifacts.as_ref().is_none_or(|artifacts| artifacts.len() <= MAX_ARTIFACTS)
+        && validation_ok(&manifest.validation)
+        && validation_ok(&payload.validation)
+        && manifest.failure.as_ref().is_none_or(|failure| identifier(&failure.code) && summary(&failure.message))
         && manifest
             .pending_files
             .as_ref()
@@ -549,6 +595,27 @@ fn directory_bytes(directory: &Path) -> Result<u64, Refusal> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `z.iso.datetime()`: seconds, an optional fraction, `Z`; never a panic on hostile text.
+    #[test]
+    fn checks_iso_times_like_the_typescript_schema() {
+        for good in ["2026-11-27T12:00:00Z", "2026-11-27T12:00:00.1Z", "2026-11-18T11:06:40.123Z"] {
+            assert!(valid_iso_time(good), "{good}");
+        }
+        for bad in [
+            "",
+            "2026-11-27T12:00:00",
+            "2026-11-27T12:00:00.Z",
+            "2026-11-27T12:00:00.1xZ",
+            "2026-11-27T12:00:00+01:00",
+            "2026-11-27 12:00:00Z",
+            "0000-00-00T00:00:0\u{e9}Z",
+            "2026-11-27T12:00:00.00\u{e9}Z",
+            "\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}Z",
+        ] {
+            assert!(!valid_iso_time(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn infers_media_types_like_the_typescript_manager() {
