@@ -208,10 +208,14 @@ async function linuxRows(): Promise<ProcessRow[]> {
     const field = (name: string): string | undefined =>
       new RegExp(`^${name}:\\s*(.+)$`, 'mu').exec(status)?.[1]?.trim();
     const rss = /^(\d+)\s*kB$/u.exec(field('VmRSS') ?? '');
+    // The status Name is the main thread's name, which a process may rename (Node 24 calls its
+    // main thread "MainThread"), so the executable comes from argv[0] when the process has one.
+    const cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8').catch(() => '');
+    const argv0 = cmdline.split('\0')[0]?.split('/').pop() ?? '';
     rows.push({
       pid: Number(entry),
       ppid: Number(field('PPid')),
-      name: field('Name') ?? '',
+      name: argv0 === '' ? (field('Name') ?? '') : argv0,
       bytes: rss === null ? 0 : Number(rss[1]) * 1024,
     });
   }
