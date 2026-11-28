@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
-import { canonicalJson } from '../core/canonical.js';
+import { currentAnalysisCheckpoints } from '../core/analysis-checkpoints.js';
+import { canonicalJson, hashCanonical } from '../core/canonical.js';
 import { callEngineOperation } from '../core/engine-operation.js';
 import { ServiceError } from '../core/result.js';
 import type { ScanSnapshot } from '../core/engine.js';
@@ -28,6 +29,8 @@ const graphPayloadSchema = z.looseObject({
   schemaVersion: z.literal(2),
   technologies: z.array(z.unknown()),
 });
+
+const scanCheckpointSchema = z.object({ stage: z.literal('scanned'), files: z.number() }).strict();
 
 const querySchema = z.object({ report: z.unknown(), summary: z.unknown().optional() }).strict();
 
@@ -97,11 +100,39 @@ export interface EngineGraphOptions {
   analysisMode?: 'full' | 'focused';
 }
 
+/**
+ * Records the finished source scan as the job's analysis checkpoint, bound to the scan's source
+ * revision, before the engine analyses it. A recovered job reuses the record only when the
+ * revision still matches; after the sources changed it records the new scan instead. The
+ * engine's analysis itself is atomic, so this is the one interruption point of the build.
+ */
+async function recordScanCheckpoint(
+  snapshot: ScanSnapshot,
+  analysisMode: EngineGraphOptions['analysisMode'],
+): Promise<void> {
+  const checkpoints = currentAnalysisCheckpoints();
+  if (checkpoints === undefined) return;
+  const key = hashCanonical({
+    algorithm: 'technology-engine-graph.v1',
+    analysisMode: analysisMode ?? 'full',
+  });
+  const restored = await checkpoints.load(key, snapshot.revision, scanCheckpointSchema);
+  if (restored !== undefined) return;
+  await checkpoints.save(
+    key,
+    snapshot.revision,
+    { stage: 'scanned', files: snapshot.files.length },
+    1,
+    2,
+  );
+}
+
 /** `buildTechnologyGraph` on the engine. */
 export async function buildTechnologyGraphOnEngine(
   snapshot: ScanSnapshot,
   options: EngineGraphOptions,
 ): Promise<TechnologyGraphSnapshot> {
+  await recordScanCheckpoint(snapshot, options.analysisMode);
   const lookups = (analysis: Analysis): Record<string, unknown> => {
     const sprites: Record<string, [string, string | null]> = {};
     for (const name of analysis.wants.sprites) {
