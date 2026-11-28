@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../core/engine.js';
-import { IdleCacheLifetime } from '../core/idle-cache-lifetime.js';
+import { idleCacheLifetime } from '../core/idle-cache-lifetime.js';
 import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult, type ToolResultImage } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
@@ -33,7 +33,7 @@ interface FocusExecution {
 /** Registers read-only focus operations without invoking transport handlers. */
 export function registerFocusJobs(operations: JobOperations, engine: CoreEngine): void {
   const workbench = new FocusWorkbench(engine.resolver, engine.transactions, engine.artifacts);
-  const lifetime = new IdleCacheLifetime(() => engine.releaseScanCaches());
+  const lifetime = idleCacheLifetime(engine, () => engine.releaseScanCaches());
   function register<Input extends { workspaceId: string }, Request extends { workspaceId: string }>(
     name: string,
     schema: z.ZodType<Input>,
