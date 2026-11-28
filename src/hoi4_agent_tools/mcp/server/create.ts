@@ -4,6 +4,7 @@ import type { CoreEngine } from '../../core/engine.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../version.js';
 import type { ServerContext } from './base-tools.js';
 import { registerCharacterWriteTools } from '../tools/character-write.js';
+import { registerCommonWriteTools } from '../tools/common-write.js';
 import { registerDecisionWriteTools } from '../tools/decision-write.js';
 import { registerDoctrineWriteTools } from '../tools/doctrine-write.js';
 import { registerTechWriteTools } from '../tools/tech-write.js';
@@ -85,6 +86,7 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerCharacterWriteTools(server, engine, serverContext);
   registerEventWriteTools(server, engine, serverContext);
   registerDecisionWriteTools(server, engine, serverContext);
+  registerCommonWriteTools(server, engine, serverContext);
   registerTechWriteTools(server, engine, serverContext);
   registerDoctrineWriteTools(server, engine, serverContext);
   registerReferenceTools(server, engine, serverContext);

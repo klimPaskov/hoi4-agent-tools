@@ -15,14 +15,14 @@ A modern native task handoff ends that request's heartbeat without declaring the
 
 ## Supported tools
 
-Optional tasks are available for all 20 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
+Optional tasks are available for all 27 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
 
 - `hoi4.event_inspect` and `hoi4.event_render`
 - `hoi4.impact_inspect`, `hoi4.decision_inspect`, `hoi4.mechanic_test`, `hoi4.package_check`, and `hoi4.scenario_test`
 - `hoi4.tech_inspect` and `hoi4.tech_render`
 - `hoi4.probability_inspect` and `hoi4.probability_analyze`
 - `hoi4.map_inspect` and `hoi4.map_rewrite`
-- `hoi4.localisation_write`, `hoi4.idea_write`, `hoi4.character_write`, `hoi4.event_write`, `hoi4.decision_write`, `hoi4.tech_write` and `hoi4.doctrine_write`
+- `hoi4.localisation_write`, `hoi4.idea_write`, `hoi4.character_write`, `hoi4.event_write`, `hoi4.decision_write`, `hoi4.tech_write`, `hoi4.doctrine_write` and `hoi4.common_write`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`
 - `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite`
 

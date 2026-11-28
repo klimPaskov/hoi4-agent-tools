@@ -11,6 +11,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::character::{self, CharacterWriteInput};
+use crate::common::{self, CommonWriteInput};
 use crate::decision::{self, DecisionWriteInput};
 use crate::doctrine::{self, DoctrineWriteInput};
 use crate::event::{self, EventWriteInput};
@@ -135,7 +136,16 @@ fn event_contents(_: &OpContext, request: &Value, payload: &[u8]) -> OpResponse 
     OpResponse::ok(json!({ "ids": ids, "namespaces": namespaces }))
 }
 
+fn common_plan(_: &OpContext, request: &Value, payload: &[u8]) -> OpResponse {
+    let request = match parse::<CommonWriteInput>(request) {
+        Ok(request) => request,
+        Err(response) => return response,
+    };
+    respond(common::plan_common_write(payload, &request.path, &request.input, request.new_file).map(|plan| (plan.to_json(), plan.bytes)))
+}
+
 pub fn register(registry: &mut Registry) {
+    registry.add_fn("common.block_write.plan", common_plan);
     registry.add_fn("event_write.plan", event_plan);
     registry.add_fn("event_write.contents", event_contents);
     registry.add_fn("tech_write.plan", tech_plan);

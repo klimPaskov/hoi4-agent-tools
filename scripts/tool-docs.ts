@@ -58,6 +58,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
     heading: 'Technology and doctrines',
     tools: ['hoi4.tech_inspect', 'hoi4.tech_render', 'hoi4.tech_write', 'hoi4.doctrine_write'],
   },
+  { heading: 'Balance of power, AI and on_actions', tools: ['hoi4.common_write'] },
   {
     heading: 'AI weights and timing',
     tools: ['hoi4.probability_inspect', 'hoi4.probability_analyze'],

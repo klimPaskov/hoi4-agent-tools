@@ -32,6 +32,7 @@ const expectedToolNames = [
   'hoi4.decision_write',
   'hoi4.tech_write',
   'hoi4.doctrine_write',
+  'hoi4.common_write',
   'hoi4.reference_search',
   'hoi4.reference_read',
   'hoi4.reference_context',

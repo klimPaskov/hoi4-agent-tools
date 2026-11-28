@@ -68,6 +68,7 @@ const WRITE_SCOPED_TOOLS = new Set([
   'hoi4.decision_write',
   'hoi4.tech_write',
   'hoi4.doctrine_write',
+  'hoi4.common_write',
 ]);
 const MCP_ALLOWED_METHODS = 'GET, POST, DELETE';
 const SINGLETON_SECURITY_HEADERS = new Set([
