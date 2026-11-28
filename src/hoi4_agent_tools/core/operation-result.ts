@@ -695,30 +695,13 @@ export function internalServiceError(error: unknown): ServiceError {
   );
 }
 
-export function errorResult(
-  error: unknown,
-  workspaceId = '',
-  context: {
-    proposedFiles?: string[];
-    changedFiles?: string[];
-    artifacts?: ServiceResult['artifacts'];
-    validation?: ServiceResult['validation'];
-    data?: unknown;
-  } = {},
-): ReturnType<typeof toolResult> {
-  const serviceError = error instanceof ServiceError ? error : internalServiceError(error);
-  const internalWriteError = serviceError.code.startsWith('TRANSACTION_');
-  const publicCode = internalWriteError
-    ? `REWRITE_${serviceError.code.slice('TRANSACTION_'.length)}`
-    : serviceError.code;
-  const publicMessage = internalWriteError
-    ? serviceError.code === 'TRANSACTION_STRUCTURE_LIMIT'
-      ? 'Rewrite exceeds the supported file, operation, validation, or evidence limits'
-      : serviceError.code === 'TRANSACTION_JOURNAL_LIMIT'
-        ? 'The requested rewrite exceeds the bounded rollback storage allowance'
-        : 'Rewrite could not be completed'
-    : serviceError.message;
-  const publicDetails = internalWriteError
+/**
+ * The refusal details a tool result may carry for this error: internal write details are reduced
+ * to their public limits and path, stack and transaction fields are dropped. Applying it twice
+ * gives the same details, so a job can store them and rebuild the same error envelope.
+ */
+export function publicServiceErrorDetails(serviceError: ServiceError): Record<string, unknown> {
+  return serviceError.code.startsWith('TRANSACTION_')
     ? ['TRANSACTION_STRUCTURE_LIMIT', 'TRANSACTION_JOURNAL_LIMIT'].includes(serviceError.code)
       ? Object.fromEntries(
           Object.entries(serviceError.details).filter(
@@ -760,6 +743,32 @@ export function errorResult(
             ].includes(key),
         ),
       );
+}
+
+export function errorResult(
+  error: unknown,
+  workspaceId = '',
+  context: {
+    proposedFiles?: string[];
+    changedFiles?: string[];
+    artifacts?: ServiceResult['artifacts'];
+    validation?: ServiceResult['validation'];
+    data?: unknown;
+  } = {},
+): ReturnType<typeof toolResult> {
+  const serviceError = error instanceof ServiceError ? error : internalServiceError(error);
+  const internalWriteError = serviceError.code.startsWith('TRANSACTION_');
+  const publicCode = internalWriteError
+    ? `REWRITE_${serviceError.code.slice('TRANSACTION_'.length)}`
+    : serviceError.code;
+  const publicMessage = internalWriteError
+    ? serviceError.code === 'TRANSACTION_STRUCTURE_LIMIT'
+      ? 'Rewrite exceeds the supported file, operation, validation, or evidence limits'
+      : serviceError.code === 'TRANSACTION_JOURNAL_LIMIT'
+        ? 'The requested rewrite exceeds the bounded rollback storage allowance'
+        : 'Rewrite could not be completed'
+    : serviceError.message;
+  const publicDetails = publicServiceErrorDetails(serviceError);
   return toolResult({
     status: publicCode.includes('BLOCKED') ? 'blocked' : 'error',
     code: publicCode,

@@ -2,7 +2,16 @@ import { lstat, mkdir, open, opendir, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { hostname } from 'node:os';
 import { z } from 'zod/v4';
-import { canonicalJson, hashCanonical, secureId } from './canonical.js';
+import {
+  canonicalize,
+  canonicalJson,
+  canonicalJsonByteLength,
+  compareCodeUnits,
+  hashCanonical,
+  secureId,
+  type JsonValue,
+} from './canonical.js';
+import { publicServiceErrorDetails } from './operation-result.js';
 import { ServiceError } from './result.js';
 import { retryWindowsSharing, type SharingRetryOptions } from './windows-sharing.js';
 import type { ServerState } from './server-state.js';
@@ -11,6 +20,106 @@ import { containedGeneratedPath } from './workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
+
+/** Largest canonical JSON, in UTF-8 bytes, of the refusal details a failed job keeps. */
+export const JOB_FAILURE_DETAILS_MAX_BYTES = 64 * 1024;
+/** How many omitted top-level detail names a truncation marker lists. */
+const JOB_FAILURE_OMITTED_KEYS_LISTED = 64;
+/** Room the truncation marker's own fields keep free inside the limit. */
+const JOB_FAILURE_MARKER_RESERVE_BYTES = 8 * 1024;
+
+function defineMember(target: Record<string, JsonValue>, key: string, value: JsonValue): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * Bound a refusal's public details for a job record (issue 327). Details whose canonical JSON fits
+ * in {@link JOB_FAILURE_DETAILS_MAX_BYTES} are kept unchanged. Larger details are replaced by a
+ * deterministic marker:
+ *
+ * `{ truncated: true, originalBytes, maximumBytes, omittedKeyCount, omittedKeys, details }`
+ *
+ * where `details` keeps whole top-level members in code-unit key order while they fit, and
+ * `omittedKeys` lists the first omitted names (at most 64) in the same order. Empty or
+ * non-serializable details give `undefined`, so a failure without details shows none.
+ */
+export function boundedJobFailureDetails(
+  details: Record<string, unknown>,
+): Record<string, JsonValue> | undefined {
+  let value: JsonValue;
+  try {
+    value = canonicalize(JSON.parse(JSON.stringify(details)) as unknown);
+  } catch {
+    return undefined;
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const keys = Object.keys(value).sort(compareCodeUnits);
+  if (keys.length === 0) return undefined;
+  const originalBytes = Buffer.byteLength(JSON.stringify(value));
+  if (originalBytes <= JOB_FAILURE_DETAILS_MAX_BYTES) return value;
+  const budget = JOB_FAILURE_DETAILS_MAX_BYTES - JOB_FAILURE_MARKER_RESERVE_BYTES;
+  const kept: Record<string, JsonValue> = {};
+  const omitted: string[] = [];
+  let keptBytes = 2;
+  for (const key of keys) {
+    const member = value[key]!;
+    const separator = keptBytes > 2 ? 1 : 0;
+    const memberBytes = canonicalJsonByteLength(member, budget);
+    const entryBytes =
+      memberBytes === undefined
+        ? undefined
+        : separator + Buffer.byteLength(JSON.stringify(key)) + 1 + memberBytes;
+    if (entryBytes !== undefined && keptBytes + entryBytes <= budget) {
+      defineMember(kept, key, member);
+      keptBytes += entryBytes;
+    } else omitted.push(key);
+  }
+  const marker = (listed: string[], retained: Record<string, JsonValue>) => ({
+    truncated: true,
+    originalBytes,
+    maximumBytes: JOB_FAILURE_DETAILS_MAX_BYTES,
+    omittedKeyCount: omitted.length,
+    omittedKeys: listed,
+    details: retained,
+  });
+  const listed = omitted.slice(0, JOB_FAILURE_OMITTED_KEYS_LISTED);
+  for (const candidate of [marker(listed, kept), marker([], kept), marker([], {})]) {
+    if (canonicalJsonByteLength(candidate, JOB_FAILURE_DETAILS_MAX_BYTES) !== undefined)
+      return canonicalize(candidate) as Record<string, JsonValue>;
+  }
+  return undefined;
+}
+
+/** The stored failure for a refusal: its code, message and bounded public details. */
+export function jobFailureFromError(error: ServiceError): JobFailure {
+  const details = boundedJobFailureDetails(publicServiceErrorDetails(error));
+  return {
+    code: error.code,
+    message: error.message,
+    ...(details === undefined ? {} : { details }),
+  };
+}
+
+const failureDetailsSchema = z
+  .record(z.string(), z.json())
+  .refine(
+    (value) => canonicalJsonByteLength(value, JOB_FAILURE_DETAILS_MAX_BYTES) !== undefined,
+    'Job failure details exceed the stored size limit',
+  );
+const failureSchema = z
+  .object({
+    code: z.string().min(1),
+    message: z.string().max(4096),
+    /** Optional: records written before issue 327 carry no details. */
+    details: failureDetailsSchema.optional(),
+  })
+  .strict();
+export type JobFailure = z.infer<typeof failureSchema>;
 const jobId = z.string().regex(/^job_[a-f0-9]{64}$/u);
 const scopeSchema = z
   .object({
@@ -105,10 +214,7 @@ const recordBaseSchema = z
      * ends (ADR 0087). The task answers with it; the job's final result follows in `result`.
      */
     earlyResult: z.record(z.string(), z.json()).optional(),
-    failure: z
-      .object({ code: z.string().min(1), message: z.string().max(4096) })
-      .strict()
-      .optional(),
+    failure: failureSchema.optional(),
   })
   .strict();
 const recordSchema = recordBaseSchema.superRefine((value, context) => {

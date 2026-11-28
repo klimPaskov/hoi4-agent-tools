@@ -6,8 +6,11 @@ import { once } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonicalJson, hashCanonical } from '../../src/hoi4_agent_tools/core/canonical.js';
 import {
+  JOB_FAILURE_DETAILS_MAX_BYTES,
   JobStore,
+  boundedJobFailureDetails,
   currentJobOwner,
+  jobFailureFromError,
   jobRetentionExpired,
   jobTaskTiming,
   publishJobRecord,
@@ -16,6 +19,7 @@ import {
   type JobScope,
   type JobUpdate,
 } from '../../src/hoi4_agent_tools/core/job-store.js';
+import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
 import { ServerState } from '../../src/hoi4_agent_tools/core/server-state.js';
 import { PACKAGE_VERSION } from '../../src/hoi4_agent_tools/version.js';
 
@@ -674,5 +678,94 @@ describe('job record sweep', () => {
     expect(await store.sweepExpired()).toBe(1);
     await expect(store.get(scope, done.id)).rejects.toBeDefined();
     await expect(store.get(scope, queued.id)).resolves.toMatchObject({ status: 'queued' });
+  });
+});
+
+describe('job failure details (#327)', () => {
+  it('keeps details within the limit unchanged and drops empty or unserializable ones', () => {
+    const details = { files: ['common/a.txt', 'common/b.txt'], count: 2, nested: { ok: true } };
+    expect(boundedJobFailureDetails(details)).toEqual(details);
+    expect(boundedJobFailureDetails({})).toBeUndefined();
+    expect(boundedJobFailureDetails({ value: 1n })).toBeUndefined();
+    // Only the public details are stored: paths, stacks and causes never reach the record.
+    expect(
+      jobFailureFromError(
+        new ServiceError('SYNTHETIC_REFUSAL', 'Refused', {
+          files: ['x.txt'],
+          absolutePath: '/private/x.txt',
+          stack: 'trace',
+        }),
+      ),
+    ).toEqual({ code: 'SYNTHETIC_REFUSAL', message: 'Refused', details: { files: ['x.txt'] } });
+    expect(jobFailureFromError(new ServiceError('SYNTHETIC_REFUSAL', 'Refused'))).toEqual({
+      code: 'SYNTHETIC_REFUSAL',
+      message: 'Refused',
+    });
+  });
+
+  it('cuts oversized details to a deterministic marked shape within the limit', () => {
+    const big = 'x'.repeat(40 * 1024);
+    const details = { a_small: 1, b_large: big, c_large: big, d_small: ['kept'] };
+    const bounded = boundedJobFailureDetails(details)!;
+    const originalBytes = Buffer.byteLength(canonicalJson(details));
+    expect(bounded).toEqual({
+      truncated: true,
+      originalBytes,
+      maximumBytes: JOB_FAILURE_DETAILS_MAX_BYTES,
+      omittedKeyCount: 1,
+      omittedKeys: ['c_large'],
+      details: { a_small: 1, b_large: big, d_small: ['kept'] },
+    });
+    expect(Buffer.byteLength(canonicalJson(bounded))).toBeLessThanOrEqual(
+      JOB_FAILURE_DETAILS_MAX_BYTES,
+    );
+    expect(
+      boundedJobFailureDetails({ d_small: ['kept'], c_large: big, b_large: big, a_small: 1 }),
+    ).toEqual(bounded);
+    // A single member larger than the limit is omitted whole, and many names are listed capped.
+    const many = Object.fromEntries(
+      Array.from({ length: 200 }, (_, index) => [`k${String(index).padStart(3, '0')}`, big]),
+    );
+    const capped = boundedJobFailureDetails({ huge: 'y'.repeat(100 * 1024), ...many })!;
+    expect(capped).toMatchObject({ truncated: true, omittedKeyCount: 200 });
+    expect(capped.omittedKeys).toHaveLength(64);
+    expect(Buffer.byteLength(canonicalJson(capped))).toBeLessThanOrEqual(
+      JOB_FAILURE_DETAILS_MAX_BYTES,
+    );
+  });
+
+  it('stores and reloads failure details, and refuses details over the limit', async () => {
+    const { store } = await fixture();
+    const { record } = await store.submit(scope, request);
+    const running = await store.update(scope, record.id, record.revision, { status: 'running' });
+    await expect(
+      store.update(scope, record.id, running.revision, {
+        status: 'failed',
+        failure: { code: 'TOO_BIG', message: 'x', details: { blob: 'x'.repeat(70 * 1024) } },
+      }),
+    ).rejects.toThrow();
+    const failed = await store.update(scope, record.id, running.revision, {
+      status: 'failed',
+      failure: { code: 'SYNTHETIC_REFUSAL', message: 'Refused', details: { files: ['a.txt'] } },
+    });
+    expect((await store.get(scope, record.id)).failure).toEqual(failed.failure);
+    expect(failed.failure?.details).toEqual({ files: ['a.txt'] });
+  });
+
+  it('still loads a failed record written before failures kept details', async () => {
+    const { state, store } = await fixture();
+    const { record } = await store.submit(scope, request);
+    const legacy: JobRecord = {
+      ...record,
+      revision: record.revision + 1,
+      status: 'failed',
+      failure: { code: 'LEGACY_FAILURE', message: 'Recorded before #327' },
+    };
+    await writeAuthenticatedRecord(state, legacy);
+    const reopened = await JobStore.create(state);
+    const loaded = await reopened.get(scope, record.id);
+    expect(loaded.status).toBe('failed');
+    expect(loaded.failure).toEqual({ code: 'LEGACY_FAILURE', message: 'Recorded before #327' });
+    expect(loaded.failure).not.toHaveProperty('details');
   });
 });
