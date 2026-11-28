@@ -276,6 +276,7 @@ name = "hoi4-event"
 version = "0.1.0"
 dependencies = [
  "hoi4-core",
+ "hoi4-engine",
  "serde",
  "serde_json",
 ]
@@ -339,6 +340,8 @@ name = "hoi4-map"
 version = "0.1.0"
 dependencies = [
  "hoi4-core",
+ "hoi4-engine",
+ "hoi4-texture",
  "serde",
  "serde_json",
 ]
