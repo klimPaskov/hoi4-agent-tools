@@ -6,7 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { CoreEngine } from './engine.js';
 import { JobService } from './job-service.js';
-import { jobOwnerLiveness, readCheckpointIdentity, type JobRecord } from './job-store.js';
+import {
+  jobFailureFromError,
+  jobOwnerLiveness,
+  readCheckpointIdentity,
+  type JobFailure,
+  type JobRecord,
+} from './job-store.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity, type SharedCapacityLease } from './shared-request-capacity.js';
 import { containedGeneratedPath, type ResolvedWorkspace } from './workspace.js';
@@ -70,11 +76,8 @@ function nativeFailureCode(error: unknown): string | undefined {
 }
 
 /** Map a launcher failure to a stable, path-free job failure. */
-export function workerFailure(
-  error: unknown,
-  stage: WorkerStage,
-): { code: string; message: string } {
-  if (error instanceof ServiceError) return { code: error.code, message: error.message };
+export function workerFailure(error: unknown, stage: WorkerStage): JobFailure {
+  if (error instanceof ServiceError) return jobFailureFromError(error);
   const nativeCode = nativeFailureCode(error);
   return nativeCode === undefined
     ? {

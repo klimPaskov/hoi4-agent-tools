@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod/v4';
 import type { CoreEngine } from './engine.js';
 import type { JobService } from './job-service.js';
-import { currentJobOwner, type JobRecord } from './job-store.js';
+import { currentJobOwner, jobFailureFromError, type JobRecord } from './job-store.js';
 import { JobTransactions } from './job-transactions.js';
 import { ServiceError } from './result.js';
 import type { TransactionManifest } from './transactions.js';
@@ -407,13 +407,14 @@ export class JobExecutor {
       const cause = watchFailure ?? error;
       return await this.jobs.store.updateOwned(scope, id, owner.token, {
         status: 'failed',
-        failure: {
-          code: cause instanceof ServiceError ? cause.code : 'JOB_EXECUTION_FAILED',
-          message:
-            cause instanceof ServiceError
-              ? cause.message
-              : 'The typed operation failed; no completed result was recorded',
-        },
+        // A refusal keeps its bounded public details so every answer can return them (#327).
+        failure:
+          cause instanceof ServiceError
+            ? jobFailureFromError(cause)
+            : {
+                code: 'JOB_EXECUTION_FAILED',
+                message: 'The typed operation failed; no completed result was recorded',
+              },
       });
     } finally {
       if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);

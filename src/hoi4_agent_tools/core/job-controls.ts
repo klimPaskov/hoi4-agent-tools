@@ -34,7 +34,16 @@ const jobStatusDataSchema = z
       .strict()
       .optional(),
     failure: z
-      .object({ code: z.string().max(256), message: z.string().max(4096) })
+      .object({
+        code: z.string().max(256),
+        message: z.string().max(4096),
+        /**
+         * The refusal's public details, unchanged. Details over 64 KiB of canonical JSON are
+         * replaced by `{ truncated: true, originalBytes, maximumBytes, omittedKeyCount,
+         * omittedKeys, details }`. Absent when the refusal carried none.
+         */
+        details: z.record(z.string().max(256), z.unknown()).optional(),
+      })
       .strict()
       .optional(),
   })
@@ -63,7 +72,8 @@ function statusResult(record: JobRecord) {
   if (record.status === 'failed') {
     result.status = 'error';
     result.validation.passed = false;
-    result.blockers = [record.failure!];
+    const { code, message, details } = record.failure!;
+    result.blockers = [{ code, message, ...(details === undefined ? {} : { details }) }];
   } else if (record.status === 'cancelled') {
     result.status = 'blocked';
     result.code = 'JOB_CANCELLED';

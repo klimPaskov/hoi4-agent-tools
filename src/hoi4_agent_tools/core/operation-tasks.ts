@@ -358,6 +358,7 @@ export class OperationTaskService {
         new ServiceError(
           record.failure?.code ?? 'JOB_FAILED',
           record.failure?.message ?? 'The background operation failed',
+          record.failure?.details ?? {},
         ),
         record.scope.workspaceId,
       );

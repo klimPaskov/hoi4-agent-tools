@@ -3,10 +3,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { JobExecutor, JobOperations } from '../../src/hoi4_agent_tools/core/job-executor.js';
+import { JobService } from '../../src/hoi4_agent_tools/core/job-service.js';
+import { errorResult } from '../../src/hoi4_agent_tools/core/operation-result.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { registerCharacterWriteJobs } from '../../src/hoi4_agent_tools/characters/job-operations.js';
+import { previewCharacterWrite } from '../../src/hoi4_agent_tools/characters/write-operations.js';
+import { characterWriteRequestSchema } from '../../src/hoi4_agent_tools/schemas/character-write.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 
 const close: Array<() => Promise<void>> = [];
@@ -20,7 +27,7 @@ interface Envelope {
   proposedFiles: string[];
   changedFiles: string[];
   diagnostics: Array<{ code: string; severity: string }>;
-  blockers: Array<{ code: string }>;
+  blockers: Array<{ code: string; message?: string; details?: Record<string, unknown> }>;
   data: {
     operation: string;
     id: string;
@@ -82,7 +89,8 @@ async function fixture() {
       ],
     }),
   );
-  const server = createMcpServer(new CoreEngine(resolver));
+  const engine = new CoreEngine(resolver);
+  const server = createMcpServer(engine);
   const client = new Client({ name: 'character-write-test', version: '1' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -99,7 +107,13 @@ async function fixture() {
     return result.structuredContent as unknown as Envelope;
   };
   const read = (relative: string) => readFile(path.join(mod, ...relative.split('/')), 'utf8');
-  return { call, read, put: (relative: string, content: string) => put(mod, relative, content) };
+  return {
+    call,
+    read,
+    put: (relative: string, content: string) => put(mod, relative, content),
+    client,
+    engine,
+  };
 }
 
 describe('hoi4.character_write through an MCP client', () => {
@@ -239,5 +253,105 @@ describe('hoi4.character_write through an MCP client', () => {
       const refused = await call({ ...file, id: 'TST_nope', file: bad, createFile: true });
       expect(refused.status).toBe('error');
     }
+  });
+
+  it('keeps refusal details in the job answer, the task result and job_inspect (#327)', async () => {
+    const { call, put, client, engine } = await fixture();
+    await put('common/characters/TST2.txt', 'characters = {\n}\n');
+    const request = { operation: 'add', id: 'TST_other', body: 'name = x' };
+    const files = ['common/characters/TST.txt', 'common/characters/TST2.txt'];
+
+    // The same refusal from the typed operation itself, without the job path.
+    let direct: Envelope | undefined;
+    try {
+      await previewCharacterWrite(
+        engine,
+        characterWriteRequestSchema.parse({ workspaceId: 'fixture', ...request }),
+        { workspaceId: 'fixture' },
+      );
+    } catch (error) {
+      direct = errorResult(error, 'fixture').structuredContent as unknown as Envelope;
+    }
+    expect(direct?.blockers).toEqual([
+      expect.objectContaining({ code: 'CHARACTER_WRITE_FILE_REQUIRED', details: { files } }),
+    ]);
+
+    // The synchronous answer goes through a job and returns the identical error envelope.
+    const answered = await call(request);
+    expect(answered.code).toBe('CHARACTER_WRITE_FILE_REQUIRED');
+    expect(answered.blockers).toEqual(direct!.blockers);
+
+    // A durable job records the details and job_inspect returns them unchanged.
+    const jobs = await JobService.create(engine.resolver);
+    const operations = new JobOperations();
+    registerCharacterWriteJobs(operations, engine);
+    const executor = new JobExecutor(engine, jobs, operations);
+    const { record } = await jobs.submit('fixture', {
+      toolName: 'hoi4.character_write',
+      mutation: true,
+      arguments: { workspaceId: 'fixture', ...request },
+      requestKey: 'details-327-inspect',
+    });
+    const failed = await executor.run('fixture', record.id);
+    expect(failed.status).toBe('failed');
+    expect(failed.failure).toEqual({
+      code: 'CHARACTER_WRITE_FILE_REQUIRED',
+      message: direct!.blockers[0]!.message,
+      details: { files },
+    });
+    const inspected = await client.callTool({
+      name: 'hoi4.job_inspect',
+      arguments: { workspaceId: 'fixture', jobId: record.id },
+    });
+    expect(inspected.structuredContent).toMatchObject({
+      code: 'JOB_FAILED',
+      data: { failure: { code: 'CHARACTER_WRITE_FILE_REQUIRED', details: { files } } },
+      blockers: [{ code: 'CHARACTER_WRITE_FILE_REQUIRED', details: { files } }],
+    });
+
+    // A protocol task's result carries the same envelope as the synchronous answer.
+    const task = (
+      await jobs.submit('fixture', {
+        toolName: 'hoi4.character_write',
+        mutation: true,
+        arguments: { workspaceId: 'fixture', ...request },
+        requestKey: 'details-327-task',
+        protocolTask: { ttl: null, pollInterval: 250 },
+      })
+    ).record;
+    await executor.run('fixture', task.id);
+    const taskResult = await client.experimental.tasks.getTaskResult(
+      `fixture:${task.id}`,
+      CallToolResultSchema,
+    );
+    expect(taskResult).toMatchObject({ isError: true });
+    expect((taskResult.structuredContent as unknown as Envelope).blockers).toEqual(
+      direct!.blockers,
+    );
+  });
+
+  it('shows no details for a refusal that carries none', async () => {
+    const { client, engine } = await fixture();
+    const jobs = await JobService.create(engine.resolver);
+    const operations = new JobOperations();
+    registerCharacterWriteJobs(operations, engine);
+    const { record } = await jobs.submit('fixture', {
+      toolName: 'hoi4.character_write',
+      mutation: true,
+      // The job's workspace and the request's disagree: a refusal without details.
+      arguments: { workspaceId: 'elsewhere', operation: 'add', id: 'TST_x', body: 'name = x' },
+      requestKey: 'details-327-none',
+    });
+    const failed = await new JobExecutor(engine, jobs, operations).run('fixture', record.id);
+    expect(failed.failure?.code).toBe('JOB_ARGUMENT_SCOPE_MISMATCH');
+    expect(failed.failure).not.toHaveProperty('details');
+    const inspected = (
+      await client.callTool({
+        name: 'hoi4.job_inspect',
+        arguments: { workspaceId: 'fixture', jobId: record.id },
+      })
+    ).structuredContent as { data: { failure: object }; blockers: object[] };
+    expect(inspected.data.failure).not.toHaveProperty('details');
+    expect(inspected.blockers[0]).not.toHaveProperty('details');
   });
 });
