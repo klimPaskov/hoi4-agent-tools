@@ -49,6 +49,7 @@ const { values } = parseArgs({
     include: { type: 'string' },
     'skip-graph': { type: 'boolean' },
     'skip-inspect': { type: 'boolean' },
+    'only-graph': { type: 'boolean' },
     out: { type: 'string' },
   },
 });
@@ -534,7 +535,7 @@ async function rustBatch(files: ScannedFile[], context: EventSourceAnalysisConte
 const files = sources.map(({ file }) => file);
 const failures: string[] = [];
 let compared = 0;
-for (const pass of [0, 1] as const) {
+for (const pass of values['only-graph'] === true ? [] : ([0, 1] as const)) {
   let context: EventSourceAnalysisContext = {};
   if (pass === 1) {
     const eventIds = new Set<string>();
@@ -643,7 +644,7 @@ if (values['skip-graph'] !== true) {
     const typescriptGraph = buildEventGraph(snapshot, { projectHelpers });
     const typescriptMs = performance.now() - typescriptStarted;
     process.stdout.write(
-      `timing projectHelpers=${projectHelpers}: engine ${Math.round(graphMs)} ms for ${covered.length} files and ${Math.round(outcome.response.payload.length / 1048576)} MB of graph (${JSON.stringify((outcome.response.result as { timingsMs?: unknown }).timingsMs)}), TypeScript ${Math.round(typescriptMs)} ms\n`,
+      `timing projectHelpers=${projectHelpers}: engine ${Math.round(graphMs)} ms for ${covered.length} files and ${Math.round(outcome.response.payload.length / 1048576)} MB of graph (${JSON.stringify((outcome.response.result as { timingsMs?: unknown }).timingsMs)}), TypeScript ${Math.round(typescriptMs)} ms (node rss ${Math.round(process.memoryUsage().rss / 1048576)} MB)\n`,
     );
     const left = JSON.parse(canonicalJson(typescriptGraph)) as Record<string, unknown>;
     const right = JSON.parse(outcome.response.payload.toString('utf8')) as Record<string, unknown>;
