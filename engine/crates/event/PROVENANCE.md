@@ -1,13 +1,18 @@
 # Provenance: hoi4-event
 
-| Rust file                  | Adapted from                                                                                                                                                  | Commit     |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `src/graph.rs`             | `src/hoi4_agent_tools/event/model.ts` (`EventGraphNode`, `EventGraphEdge`)                                                                                    | `ad8cd7e8` |
-| `src/algorithms.rs`        | `event/algorithms.ts` (`eventFlowEdges`, `traceEventGraph`, `shortestEventPath`, `eventStronglyConnectedComponents`, `reachableEventNodeIds`), `event/scc.ts` | `ad8cd7e8` |
-| `src/source_analysis.rs`   | `event/source-analysis.ts` (`analyzeEventSource`), run on the engine reader's CST (`symbol_index::reader`)                                                    | `4463c2c6` |
-| `src/native_effects.rs`    | `focus/native-effects.ts` (`NATIVE_EFFECT_KEYS`), generated and sorted                                                                                        | `4463c2c6` |
-| `src/graph_build.rs`       | `event/graph.ts` (`buildEventGraph`), `core/dependency-walk.ts` (`DependencyWalk`), `event/limits.ts`                                                         | `4463c2c6` |
-| `src/state_keys.rs`        | `event/state-keys.ts`                                                                                                                                         | `4463c2c6` |
-| `src/graph_build_tests.rs` | new, synthetic sources; parity against TypeScript in `scripts/event-parity.ts`                                                                                |            |
-| `src/tests.rs`             | `tests/unit/event-algorithms.test.ts`, `tests/unit/event-explain-path-278.test.ts`                                                                            | `ad8cd7e8` |
-| `src/ops.rs`, `src/lib.rs` | new, adapted from no source                                                                                                                                   |            |
+| Rust file                  | Adapted from                                                                                                                                                                            | Commit     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `src/graph.rs`             | `src/hoi4_agent_tools/event/model.ts` (`EventGraphNode`, `EventGraphEdge`)                                                                                                              | `ad8cd7e8` |
+| `src/algorithms.rs`        | `event/algorithms.ts` (`eventFlowEdges`, `traceEventGraph`, `shortestEventPath`, `eventStronglyConnectedComponents`, `reachableEventNodeIds`), `event/scc.ts`                           | `ad8cd7e8` |
+| `src/source_analysis.rs`   | `event/source-analysis.ts` (`analyzeEventSource`), run on the engine reader's CST (`symbol_index::reader`)                                                                              | `4463c2c6` |
+| `src/native_effects.rs`    | `focus/native-effects.ts` (`NATIVE_EFFECT_KEYS`), generated and sorted                                                                                                                  | `4463c2c6` |
+| `src/graph_build.rs`       | `event/graph.ts` (`buildEventGraph`), `core/dependency-walk.ts` (`DependencyWalk`), `event/limits.ts`                                                                                   | `4463c2c6` |
+| `src/state_keys.rs`        | `event/state-keys.ts`                                                                                                                                                                   | `4463c2c6` |
+| `src/graph_build_tests.rs` | new, synthetic sources; parity against TypeScript in `scripts/event-parity.ts`                                                                                                          |            |
+| `src/tests.rs`             | `tests/unit/event-algorithms.test.ts`, `tests/unit/event-explain-path-278.test.ts`                                                                                                      | `ad8cd7e8` |
+| `src/ops.rs`, `src/lib.rs` | new, adapted from no source                                                                                                                                                             |            |
+| `src/inspect.rs`           | `event/service.ts` (`EventChainViewer.inspect` mode switch, `eventScanReport`, `boundedEvidence`, `boundedUnresolved`, `selectorNotFound`), `reference/suggestions.ts` (`nearestNames`) | `f6ff1d3a` |
+| `src/queries.rs`           | `event/queries.ts` (node selection, roots, trace, route explanation, state flow, findings selection, impact)                                                                            | `f6ff1d3a` |
+| `src/summary.rs`           | `event/summary.ts`                                                                                                                                                                      | `f6ff1d3a` |
+| `src/inspect_tests.rs`     | new, synthetic graphs; parity against TypeScript in `scripts/event-parity.ts`                                                                                                           |            |
+| `src/ported_tests.rs`      | `tests/unit/event-summary.test.ts`, `tests/unit/event-explain-path-278.test.ts` (`event-partial-reasons.test.ts` tests `operations.ts`, which stays in TypeScript)                      | `a9156fcc` |

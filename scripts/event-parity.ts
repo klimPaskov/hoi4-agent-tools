@@ -22,7 +22,11 @@ import {
   analyzeEventSource,
   type EventSourceAnalysisContext,
 } from '../src/hoi4_agent_tools/event/source-analysis.js';
-import type { EventType } from '../src/hoi4_agent_tools/event/model.js';
+import type { EventGraphSnapshot, EventType } from '../src/hoi4_agent_tools/event/model.js';
+import {
+  eventInspectOutcome,
+  type EventInspectInput,
+} from '../src/hoi4_agent_tools/event/service.js';
 
 /**
  * Parity check for the event source analysis on the shared Rust engine (packet P6). Every file is
@@ -44,6 +48,8 @@ const { values } = parseArgs({
     dir: { type: 'string', multiple: true },
     include: { type: 'string' },
     'skip-graph': { type: 'boolean' },
+    'skip-inspect': { type: 'boolean' },
+    'only-graph': { type: 'boolean' },
     out: { type: 'string' },
   },
 });
@@ -160,7 +166,8 @@ GER = { country_event = a.1 }
 interface Source {
   file: ScannedFile;
 }
-const include = new RegExp(values.include ?? '', 'u');
+/** `--include` matches from the start of the path relative to the root, so `events` does not also take `docs/x/events`. */
+const include = new RegExp(`^(?:${values.include ?? ''})`, 'u');
 /** Files read from disk: the engine reads these itself by path instead of taking their bytes. */
 const onDisk = new Set<string>();
 const sources: Source[] = SYNTHETIC.map(([relativePath, text]) => ({
@@ -188,14 +195,38 @@ for (const root of values.dir ?? []) {
 }
 sources.sort((a, b) => (a.file.relativePath < b.file.relativePath ? -1 : 1));
 
-/** The first element of two arrays that differs, or both values cut short. */
-function firstDifference(left: unknown, right: unknown): string {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    const at = left.findIndex((item, index) => canonicalJson(item) !== canonicalJson(right[index]));
-    const index = at === -1 ? Math.min(left.length, right.length) : at;
-    return `    [${index}] of ${left.length} ts, ${right.length} rust\n    ts:   ${canonicalJson(left[index]).slice(0, 700)}\n    rust: ${canonicalJson(right[index]).slice(0, 700)}\n`;
+/** A value as text, cut short, for a report of where two values differ. */
+function shown(value: unknown): string {
+  try {
+    return canonicalJson(value).slice(0, 700);
+  } catch {
+    return '(too large to show)';
   }
-  return `    ts:   ${canonicalJson(left).slice(0, 700)}\n    rust: ${canonicalJson(right).slice(0, 700)}\n`;
+}
+
+/** Where two values first differ: the path down to the first differing piece, and both pieces. */
+function firstDifference(left: unknown, right: unknown, at = ''): string {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    const index = left.findIndex((item, position) => !sameValue(item, right[position]));
+    if (index !== -1 && index < right.length)
+      return firstDifference(left[index], right[index], `${at}[${index}]`);
+    return `    ${at || 'value'}: ${left.length} ts items, ${right.length} rust items\n    ts tail:   ${shown(left[right.length])}\n    rust tail: ${shown(right[left.length])}\n`;
+  }
+  if (typeof left === 'object' && left !== null && typeof right === 'object' && right !== null) {
+    const a = left as Record<string, unknown>;
+    const b = right as Record<string, unknown>;
+    const key = [...new Set([...Object.keys(a), ...Object.keys(b)])].find(
+      (candidate) => !sameValue(a[candidate], b[candidate]),
+    );
+    if (key !== undefined) return firstDifference(a[key], b[key], `${at}.${key}`);
+  }
+  const size = (value: unknown): string =>
+    Array.isArray(value)
+      ? `array of ${value.length}`
+      : typeof value === 'object' && value !== null
+        ? `object with keys ${Object.keys(value).join(',')}`
+        : typeof value;
+  return `    at ${at || 'value'}\n    ts:   ${size(left)} ${shown(left)}\n    rust: ${size(right)} ${shown(right)}\n`;
 }
 
 function wire(context: EventSourceAnalysisContext): Record<string, unknown> {
@@ -225,6 +256,284 @@ function wire(context: EventSourceAnalysisContext): Record<string, unknown> {
     activeHelperPaths: map(context.activeHelperPaths),
     activeDecisionPaths: map(context.activeDecisionPaths),
   };
+}
+
+type InspectParams = Omit<EventInspectInput, 'workspaceId' | 'refresh' | 'principal' | 'signal'>;
+
+/** Whether two values are the same JSON, compared piece by piece when one string cannot hold them. */
+function sameValue(left: unknown, right: unknown): boolean {
+  try {
+    return canonicalJson(left) === canonicalJson(right);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    if (Array.isArray(left) && Array.isArray(right))
+      return (
+        left.length === right.length && left.every((item, index) => sameValue(item, right[index]))
+      );
+    if (typeof left === 'object' && left !== null && typeof right === 'object' && right !== null) {
+      const a = left as Record<string, unknown>;
+      const b = right as Record<string, unknown>;
+      return [...new Set([...Object.keys(a), ...Object.keys(b)])].every((key) =>
+        sameValue(a[key], b[key]),
+      );
+    }
+    return false;
+  }
+}
+
+/** The mode queries of one graph, answered by TypeScript and by the engine's event.inspect. */
+async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<string[]> {
+  const events = graph.nodes.filter((node) => node.kind === 'event' && node.eventId !== undefined);
+  const first = events[0];
+  const last = events.at(-1);
+  const flowEdge = graph.edges.find(
+    (edge) =>
+      !edge.derived &&
+      edge.from.startsWith('event:') &&
+      edge.to.startsWith('event:') &&
+      edge.from !== edge.to,
+  );
+  const access = graph.stateAccesses[Math.floor(graph.stateAccesses.length / 2)];
+  const helper = graph.nodes.find((node) => node.kind === 'helper');
+  const eventSelector = (eventId: string) => ({ kind: 'event' as const, eventId });
+  const cases: Array<[string, InspectParams]> = [
+    ['scan', { mode: 'scan' }],
+    ['roots', { mode: 'roots' }],
+    ['lint', { mode: 'lint' }],
+    ['not found', { mode: 'roots', selector: eventSelector('definitely_missing.1') }],
+    ['no selector for trace', { mode: 'trace' }],
+    ['no subject for impact', { mode: 'impact' }],
+    ['unknown file', { mode: 'lint', selector: { kind: 'file', sourcePath: 'nowhere/none.txt' } }],
+    [
+      'unknown state',
+      { mode: 'state_flow', stateSubject: { kind: 'country_flag', name: 'no_such_flag_anywhere' } },
+    ],
+  ];
+  cases.push(['state flow', { mode: 'state_flow' }]);
+  if (first?.eventId !== undefined) {
+    const selector = eventSelector(first.eventId);
+    cases.push(
+      ['roots of an event', { mode: 'roots', selector }],
+      ['lint of an event', { mode: 'lint', selector }],
+      ['trace both', { mode: 'trace', selector, maxDepth: 4 }],
+      [
+        'trace up expanded',
+        {
+          mode: 'trace',
+          selector,
+          direction: 'upstream',
+          expandHelpers: true,
+          maxDepth: 3,
+          maxNodes: 50,
+          maxEdges: 100,
+        },
+      ],
+      ['trace down', { mode: 'trace', selector, direction: 'downstream' }],
+      ['state flow of an event', { mode: 'state_flow', selector }],
+      [
+        'impact of an event',
+        { mode: 'impact', impactSubject: { kind: 'event', name: first.eventId } },
+      ],
+      [
+        'lint of a manifest',
+        { mode: 'lint', selector: { kind: 'manifest', manifest: { eventIds: [first.eventId] } } },
+      ],
+      ['near miss', { mode: 'roots', selector: eventSelector(`${first.eventId}x`) }],
+      ['lint of a node', { mode: 'lint', selector: { kind: 'node', nodeId: first.id } }],
+      [
+        'trace cut at the edge limit',
+        { mode: 'trace', selector, maxEdges: 3, maxNodes: 4, maxDepth: 6 },
+      ],
+      [
+        'manifest with every field',
+        {
+          mode: 'lint',
+          selector: {
+            kind: 'manifest',
+            manifest: {
+              id: 'parity',
+              eventIds: [first.eventId],
+              namespaces: first.namespace === undefined ? [] : [first.namespace],
+              sourcePaths: first.sourcePath === undefined ? [] : [first.sourcePath],
+              nodeIds: [first.id],
+            },
+          },
+        },
+      ],
+    );
+    if (first.sourcePath !== undefined)
+      cases.push([
+        'manifest of a source path',
+        {
+          mode: 'roots',
+          selector: { kind: 'manifest', manifest: { sourcePaths: [first.sourcePath] } },
+        },
+      ]);
+    if (first.namespace !== undefined)
+      cases.push([
+        'lint of a namespace',
+        { mode: 'lint', selector: { kind: 'namespace', namespace: first.namespace } },
+      ]);
+    if (first.sourcePath !== undefined)
+      cases.push([
+        'lint of a file',
+        { mode: 'lint', selector: { kind: 'file', sourcePath: first.sourcePath } },
+      ]);
+    if (first.location !== undefined)
+      cases.push([
+        'lint of a source line',
+        {
+          mode: 'lint',
+          selector: {
+            kind: 'source',
+            sourcePath: first.location.path,
+            line: first.location.start.line,
+          },
+        },
+      ]);
+  }
+  if (flowEdge !== undefined) {
+    const from = graph.nodes.find((node) => node.id === flowEdge.from);
+    const to = graph.nodes.find((node) => node.id === flowEdge.to);
+    if (from?.eventId !== undefined && to?.eventId !== undefined)
+      cases.push(
+        [
+          'explain a route',
+          {
+            mode: 'explain_path',
+            from: eventSelector(from.eventId),
+            to: eventSelector(to.eventId),
+          },
+        ],
+        [
+          'explain a route without helpers',
+          {
+            mode: 'explain_path',
+            from: eventSelector(from.eventId),
+            to: eventSelector(to.eventId),
+            expandHelpers: false,
+            maxDepth: 1,
+          },
+        ],
+      );
+  }
+  if (first?.eventId !== undefined && last?.eventId !== undefined && first !== last)
+    cases.push([
+      'explain a likely missing route',
+      {
+        mode: 'explain_path',
+        from: eventSelector(last.eventId),
+        to: eventSelector(first.eventId),
+        maxDepth: 2,
+      },
+    ]);
+  if (first?.location !== undefined) {
+    const { path: sourcePath, start } = first.location;
+    cases.push(
+      [
+        'lint of a source column',
+        {
+          mode: 'lint',
+          selector: { kind: 'source', sourcePath, line: start.line, column: start.column },
+        },
+      ],
+      [
+        'lint past the column',
+        { mode: 'lint', selector: { kind: 'source', sourcePath, line: start.line, column: 9999 } },
+      ],
+    );
+  }
+  if (access !== undefined)
+    cases.push(
+      [
+        'unknown state with a near miss',
+        { mode: 'state_flow', stateSubject: { kind: access.kind, name: `${access.name}x` } },
+      ],
+      [
+        'state flow of a value',
+        { mode: 'state_flow', stateSubject: { kind: access.kind, name: access.name } },
+      ],
+      [
+        'impact of a value',
+        {
+          mode: 'impact',
+          impactSubject: {
+            kind: access.kind === 'variable' ? 'variable' : 'flag',
+            name: access.name,
+          },
+        },
+      ],
+    );
+  if (helper !== undefined)
+    cases.push([
+      'impact of a helper',
+      { mode: 'impact', impactSubject: { kind: 'helper', name: helper.label } },
+    ]);
+  const graphJson = Buffer.from(canonicalJson(graph), 'utf8');
+  const failed: string[] = [];
+  const tooLarge: string[] = [];
+  let ran = 0;
+  for (const [name, params] of cases) {
+    if (process.env.PARITY_CASE !== undefined && !name.includes(process.env.PARITY_CASE)) continue;
+    ran += 1;
+    let expected: unknown;
+    try {
+      expected = eventInspectOutcome(graph, params);
+    } catch (error) {
+      const { code, message, details } = error as {
+        code?: string;
+        message: string;
+        details?: unknown;
+      };
+      expected = { error: { code, message, details } };
+    }
+    const outcome = await engine.request(
+      'event.inspect',
+      { graphPayload: [0, graphJson.length], params },
+      graphJson,
+      { timeoutMs: 1_800_000 },
+    );
+    let actual: unknown;
+    if (outcome.ok && outcome.response.payload.length > 0)
+      actual = JSON.parse(outcome.response.payload.toString('utf8'));
+    else if (outcome.ok) {
+      const error = outcome.response.result as {
+        code?: string;
+        message?: string;
+        details?: unknown;
+      };
+      actual = { error: { code: error.code, message: error.message, details: error.details } };
+    } else if (outcome.kind === 'error') {
+      // The engine nests a refusal's details under its own details key; none is null.
+      const nested = (outcome.details as { details?: unknown }).details;
+      actual = {
+        error: {
+          code: outcome.code,
+          message: outcome.message,
+          details: nested === null ? undefined : nested,
+        },
+      };
+    } else actual = { engine: outcome };
+    // The pipe carries at most 512 MiB. A TypeScript report over that is refused by the engine with
+    // EVENT_RESULT_TOO_LARGE: a named divergence per corpus, never a silent pass.
+    const refusedAsTooLarge =
+      (actual as { error?: { code?: string } }).error?.code === 'EVENT_RESULT_TOO_LARGE' &&
+      Buffer.byteLength(canonicalJson(expected), 'utf8') > 512 * 1024 * 1024;
+    if (refusedAsTooLarge) {
+      tooLarge.push(`inspect ${label} ${name}`);
+      continue;
+    }
+    if (!sameValue(expected, actual)) {
+      failed.push(`inspect ${label} ${name}`);
+      if (failed.length <= 3)
+        process.stderr.write(`  inspect ${name}\n${firstDifference(expected, actual)}`);
+    }
+  }
+  const filter = process.env.PARITY_CASE;
+  process.stdout.write(
+    `inspect ${label}: ${ran} of ${cases.length} cases${filter === undefined ? '' : ` (PARITY_CASE=${filter}: a partial run, not a pass)`}, ${failed.length} differ, ${tooLarge.length} refused as over the 512 MiB pipe (${tooLarge.join('; ') || 'none'})\n`,
+  );
+  return failed;
 }
 
 const crashed: string[] = [];
@@ -290,7 +599,7 @@ async function rustBatch(files: ScannedFile[], context: EventSourceAnalysisConte
 const files = sources.map(({ file }) => file);
 const failures: string[] = [];
 let compared = 0;
-for (const pass of [0, 1] as const) {
+for (const pass of values['only-graph'] === true ? [] : ([0, 1] as const)) {
   let context: EventSourceAnalysisContext = {};
   if (pass === 1) {
     const eventIds = new Set<string>();
@@ -399,7 +708,7 @@ if (values['skip-graph'] !== true) {
     const typescriptGraph = buildEventGraph(snapshot, { projectHelpers });
     const typescriptMs = performance.now() - typescriptStarted;
     process.stdout.write(
-      `timing projectHelpers=${projectHelpers}: engine ${Math.round(graphMs)} ms for ${covered.length} files and ${Math.round(outcome.response.payload.length / 1048576)} MB of graph (${JSON.stringify((outcome.response.result as { timingsMs?: unknown }).timingsMs)}), TypeScript ${Math.round(typescriptMs)} ms\n`,
+      `timing projectHelpers=${projectHelpers}: engine ${Math.round(graphMs)} ms for ${covered.length} files and ${Math.round(outcome.response.payload.length / 1048576)} MB of graph (${JSON.stringify((outcome.response.result as { timingsMs?: unknown }).timingsMs)}), TypeScript ${Math.round(typescriptMs)} ms (node rss ${Math.round(process.memoryUsage().rss / 1048576)} MB)\n`,
     );
     const left = JSON.parse(canonicalJson(typescriptGraph)) as Record<string, unknown>;
     const right = JSON.parse(outcome.response.payload.toString('utf8')) as Record<string, unknown>;
@@ -415,6 +724,13 @@ if (values['skip-graph'] !== true) {
         );
     }
     compared += 1;
+    if (values['skip-inspect'] !== true) {
+      for (const failure of await inspectParity(
+        typescriptGraph,
+        `projectHelpers=${projectHelpers}`,
+      ))
+        graphFailures.push(failure);
+    }
   }
   failures.push(...graphFailures);
 }
