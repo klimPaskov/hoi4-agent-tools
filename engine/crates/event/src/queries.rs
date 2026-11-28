@@ -5,6 +5,7 @@
 //! `serde_json::Value` (as `event.graph` built it), so every node, edge and access reaches the
 //! report exactly as the build made it. The typed [`Graph`] view feeds the graph algorithms.
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use hoi4_core::canonical::compare_code_units as cmp;
@@ -72,6 +73,13 @@ pub struct ImpactSubject {
 pub struct Query<'a> {
     pub graph: &'a Value,
     pub typed: Graph,
+    /// Steps spent so far by the whole-graph passes (state flow, ownership closure, route search,
+    /// impact). The TypeScript queries checked the caller's abort signal; the engine has no cancel
+    /// token yet, so these passes stop at the same fixed ceiling as the graph build.
+    spent: Cell<u64>,
+    limit: u64,
+    blocked: Cell<Option<(&'static str, u64)>>,
+    malformed: Cell<Option<&'static str>>,
 }
 
 pub type Failed = WorkBlocked;
@@ -79,7 +87,41 @@ pub type Failed = WorkBlocked;
 impl<'a> Query<'a> {
     pub fn new(graph: &'a Value) -> Result<Query<'a>, serde_json::Error> {
         let typed = Graph { nodes: serde_json::from_value(graph["nodes"].clone())?, edges: serde_json::from_value(graph["edges"].clone())? };
-        Ok(Query { graph, typed })
+        Ok(Query { graph, typed, spent: Cell::new(0), limit: algorithms::WORK_LIMIT, blocked: Cell::new(None), malformed: Cell::new(None) })
+    }
+
+    /// The same query with another work ceiling (tests).
+    pub fn with_work_limit(mut self, limit: u64) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    /// Charges `steps` to the work ceiling; false once it is passed, and the pass must stop.
+    pub fn spend(&self, label: &'static str, steps: usize) -> bool {
+        let spent = self.spent.get().saturating_add(steps as u64);
+        self.spent.set(spent);
+        if spent > self.limit {
+            if self.blocked.get().is_none() {
+                self.blocked.set(Some((label, spent)));
+            }
+            return false;
+        }
+        true
+    }
+
+    /// Records that the graph broke an invariant a query relies on, so the answer is refused.
+    pub fn malformed(&self, what: &'static str) {
+        self.malformed.set(Some(what));
+    }
+
+    /// The work ceiling that was passed, if any.
+    pub fn work_blocked(&self) -> Option<WorkBlocked> {
+        self.blocked.get().map(|(label, spent)| WorkBlocked { label, spent })
+    }
+
+    /// The broken invariant a query hit, if any.
+    pub fn malformed_reason(&self) -> Option<&'static str> {
+        self.malformed.get()
     }
 
     pub fn nodes(&self) -> &'a [Value] {
@@ -447,6 +489,9 @@ pub fn explain_event_path(query: &Query<'_>, from: &Selector, to: &Selector, bou
         });
     }
     let options = PathOptions { expand_helpers: boundary.expand_helpers, max_depth: boundary.max_depth, max_nodes: boundary.max_nodes };
+    if !query.spend("route search", query.nodes().len() + query.edges().len()) {
+        return Value::Null;
+    }
     if let Some(path) = algorithms::shortest_path(&query.typed, &from_ids, &to_ids, options) {
         let by_id = query.node_by_id();
         let edges: Vec<Value> = path.edges.iter().map(|edge| serde_json::to_value(edge).unwrap_or(Value::Null)).collect();
@@ -457,7 +502,11 @@ pub fn explain_event_path(query: &Query<'_>, from: &Selector, to: &Selector, bou
             step.insert("index".into(), json!(index));
             step.insert("node".into(), (*node).clone());
             if index > 0 {
-                step.insert("via".into(), edges[index - 1].clone());
+                let Some(via) = edges.get(index - 1) else {
+                    query.malformed("a path has fewer edges than its nodes need");
+                    return Value::Null;
+                };
+                step.insert("via".into(), via.clone());
             }
             step.insert("requiredState".into(), json!(state_for_node(query, node_id, &["read"])));
             step.insert("producedState".into(), json!(state_for_node(query, node_id, &["write", "replace", "clear"])));
@@ -473,6 +522,9 @@ pub fn explain_event_path(query: &Query<'_>, from: &Selector, to: &Selector, bou
         });
     }
     let node_count = query.nodes().len();
+    if !query.spend("route search", node_count + query.edges().len()) {
+        return Value::Null;
+    }
     let unrestricted = algorithms::shortest_path(
         &query.typed,
         &from_ids,
@@ -560,6 +612,9 @@ fn selected_ownership_ids(query: &Query<'_>, selector: &Selector) -> HashSet<Str
     sort_by_id(&mut ownership);
     let mut changed = true;
     while changed {
+        if !query.spend("ownership closure", ownership.len() + 1) {
+            break;
+        }
         changed = false;
         for edge in &ownership {
             let (from, to) = (text(edge, "from"), text(edge, "to"));
@@ -639,6 +694,9 @@ pub fn inspect_event_state_flow(query: &Query<'_>, selector: Option<&Selector>, 
             continue;
         }
         let compatible = compatible_producers(&all_producers, consumer);
+        if !query.spend("state flow producers", compatible.len() + 1) {
+            break;
+        }
         let ambiguous = has_unknown_saved_scope_storage(consumer);
         for producer in &compatible {
             let confidence = if ambiguous {
@@ -748,6 +806,9 @@ pub fn lint_event_graph<'a>(query: &Query<'a>, selector: Option<&Selector>) -> V
 // ---------------------------------------------------------------------------------------------
 
 fn reachable_from_roots_without(query: &Query<'_>, root_ids: &[String], removed: &HashSet<String>) -> HashSet<String> {
+    if !query.spend("impact reachability", query.nodes().len() + query.edges().len()) {
+        return HashSet::new();
+    }
     let retained: HashSet<&str> = query.nodes().iter().map(|node| text(node, "id")).filter(|id| !removed.contains(*id)).collect();
     let mut outgoing: HashMap<&str, Vec<&str>> = HashMap::new();
     for edge in algorithms::flow_edges(&query.typed, true) {

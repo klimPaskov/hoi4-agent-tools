@@ -99,8 +99,33 @@ fn edit_distance(a: &[u16], b: &[u16]) -> usize {
 /// A stand-in for `localeCompare(_, 'en')` on identifiers: letters without case first, then case
 /// (lower before upper), then code units. The ICU collation orders punctuation and digits ahead
 /// of letters as code units mostly do, so this agrees on plain identifiers.
-fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
-    a.to_lowercase().cmp(&b.to_lowercase()).then_with(|| b.cmp(a))
+pub(crate) fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    let primary = |value: &str| -> Vec<u32> { value.chars().map(collation_rank).collect() };
+    primary(a).cmp(&primary(b)).then_with(|| {
+        // Tertiary: at the first difference lower case sorts before upper case.
+        for (left, right) in a.chars().zip(b.chars()) {
+            if left != right {
+                return right.is_lowercase().cmp(&left.is_lowercase()).then_with(|| left.cmp(&right));
+            }
+        }
+        std::cmp::Ordering::Equal
+    })
+}
+
+/// The primary collation weight of one character in the English (CLDR root) order of ASCII:
+/// white space, then punctuation and symbols in the order below, then digits, then letters
+/// without case. Other characters sort after the ASCII letters by their lower-case code point.
+fn collation_rank(c: char) -> u32 {
+    const PUNCTUATION: &str = " _-,;:!?.'\"()[]{}@*/\\&#%`^+<=>|~$";
+    if let Some(index) = PUNCTUATION.chars().position(|p| p == c) {
+        return 1 + index as u32;
+    }
+    match c {
+        '0'..='9' => 100 + (c as u32 - '0' as u32),
+        'a'..='z' | 'A'..='Z' => 200 + (c.to_ascii_lowercase() as u32 - 'a' as u32),
+        _ if c.is_ascii() => 0,
+        _ => 1_000 + c.to_lowercase().next().map_or(c as u32, |lower| lower as u32),
+    }
 }
 
 /// `nearestNames`: the closest candidates within three edits, nearest first.
@@ -133,7 +158,7 @@ fn nearest_names(target: &str, candidates: impl IntoIterator<Item = String>) -> 
     scored.into_iter().take(5).map(|(_, candidate)| candidate).collect()
 }
 
-fn slice_units(value: &str, limit: usize) -> String {
+pub(crate) fn slice_units(value: &str, limit: usize) -> String {
     let mut used = 0usize;
     for (index, c) in value.char_indices() {
         used += c.len_utf16();
@@ -336,7 +361,24 @@ pub fn inspect(graph: &Value, request: &Request) -> Result<Inspection, Refusal> 
 }
 
 pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -> Result<Inspection, Refusal> {
-    let query = Query::new(graph).map_err(|error| refuse("invalid_request", format!("the graph is malformed: {error}")))?;
+    inspect_with_limits(graph, request, scan_limit, crate::algorithms::WORK_LIMIT)
+}
+
+/// `inspect` with its two ceilings given: the record count of a full scan and the work of the
+/// whole-graph passes. A pass that reaches the second is refused, never cut short silently.
+pub fn inspect_with_limits(graph: &Value, request: &Request, scan_limit: usize, work_limit: u64) -> Result<Inspection, Refusal> {
+    let query = Query::new(graph).map_err(|error| refuse("invalid_request", format!("the graph is malformed: {error}")))?.with_work_limit(work_limit);
+    let answered = answer(graph, request, scan_limit, &query);
+    if let Some(blocked) = query.work_blocked() {
+        return Err(failed(blocked));
+    }
+    if let Some(what) = query.malformed_reason() {
+        return Err(refuse("invalid_request", format!("the graph is malformed: {what}")));
+    }
+    answered
+}
+
+fn answer(graph: &Value, request: &Request, scan_limit: usize, query: &Query<'_>) -> Result<Inspection, Refusal> {
     let max_depth = request.max_depth.unwrap_or(8);
     let max_nodes = request.max_nodes.unwrap_or(500);
     let max_edges = request.max_edges.unwrap_or(2_000);
@@ -344,9 +386,9 @@ pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -
     // A selector or state subject that matches nothing is not-found, never an empty answer.
     if let Some(selector) = &request.selector
         && mode != "impact"
-        && queries::select_event_nodes(&query, selector).is_empty()
+        && queries::select_event_nodes(query, selector).is_empty()
     {
-        return Err(selector_not_found(&query, selector));
+        return Err(selector_not_found(query, selector));
     }
     if mode == "state_flow"
         && let Some(subject) = &request.state_subject
@@ -368,13 +410,13 @@ pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -
         "scan" => {
             let issues: Vec<&Value> = match selector {
                 None => query.issues().iter().collect(),
-                Some(_) => queries::lint_event_graph(&query, selector),
+                Some(_) => queries::lint_event_graph(query, selector),
             };
             Ok(Inspection { report: event_scan_report(graph, scan_limit), summary: Some(summary::summarize_event_issues(&issues)) })
         }
         "roots" => {
-            let unresolved = bounded_unresolved(&query, None);
-            let roots = queries::discover_event_roots(&query, selector).map_err(failed)?;
+            let unresolved = bounded_unresolved(query, None);
+            let roots = queries::discover_event_roots(query, selector).map_err(failed)?;
             let mut report = base(graph);
             report.insert("roots".into(), roots.to_json());
             report.insert("unresolved".into(), Value::Array(unresolved.values.clone()));
@@ -390,10 +432,10 @@ pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -
                 direction: request.direction.unwrap_or(Direction::Both),
                 expand_helpers: request.expand_helpers.unwrap_or(false),
             };
-            let trace = queries::trace_selected_events(&query, selector, &boundary);
+            let trace = queries::trace_selected_events(query, selector, &boundary);
             let ids: HashSet<String> = list(&trace, "nodes").iter().map(|node| text(node, "id").to_string()).collect();
-            let unresolved = bounded_unresolved(&query, Some(&ids));
-            let mut summary = summary::summarize_event_issues(&queries::lint_event_graph(&query, Some(selector)));
+            let unresolved = bounded_unresolved(query, Some(&ids));
+            let mut summary = summary::summarize_event_issues(&queries::lint_event_graph(query, Some(selector)));
             if let Some(map) = summary.as_object_mut() {
                 map.insert("trace".into(), summary::summarize_event_trace(&trace));
             }
@@ -408,18 +450,18 @@ pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -
                 return Err(refuse("EVENT_PATH_SELECTORS_REQUIRED", "Path explanation requires from and to selectors"));
             };
             let explanation =
-                queries::explain_event_path(&query, from, to, &PathBoundary { max_depth, max_nodes, expand_helpers: request.expand_helpers.unwrap_or(true) });
+                queries::explain_event_path(query, from, to, &PathBoundary { max_depth, max_nodes, expand_helpers: request.expand_helpers.unwrap_or(true) });
             let summary = summary::summarize_event_path(&explanation);
             let mut report = base(graph);
             report.insert("explanation".into(), explanation);
             Ok(Inspection { report: Value::Object(report), summary: Some(summary) })
         }
-        "state_flow" => state_flow(graph, &query, request),
+        "state_flow" => state_flow(graph, query, request),
         "lint" => {
-            let selected = queries::lint_event_graph(&query, selector);
+            let selected = queries::lint_event_graph(query, selector);
             let summary = summary::summarize_event_issues(&selected);
             let issues = bounded_evidence(selected.into_iter().cloned().collect(), FOCUSED_EVIDENCE_LIMIT);
-            let unresolved = bounded_unresolved(&query, None);
+            let unresolved = bounded_unresolved(query, None);
             let mut report = base(graph);
             report.insert("issues".into(), Value::Array(issues.values.clone()));
             report.insert("complete".into(), graph.get("complete").cloned().unwrap_or(Value::Null));
@@ -432,8 +474,8 @@ pub fn inspect_with_limit(graph: &Value, request: &Request, scan_limit: usize) -
             let Some(subject) = &request.impact_subject else {
                 return Err(refuse("EVENT_IMPACT_SUBJECT_REQUIRED", "Impact analysis requires a subject"));
             };
-            let unresolved = bounded_unresolved(&query, None);
-            let impact = queries::analyze_event_impact(&query, subject).map_err(failed)?;
+            let unresolved = bounded_unresolved(query, None);
+            let impact = queries::analyze_event_impact(query, subject).map_err(failed)?;
             let summary = summary::summarize_event_impact(&impact);
             let mut report = base(graph);
             report.insert("impact".into(), impact);

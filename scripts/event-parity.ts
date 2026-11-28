@@ -166,7 +166,8 @@ GER = { country_event = a.1 }
 interface Source {
   file: ScannedFile;
 }
-const include = new RegExp(values.include ?? '', 'u');
+/** `--include` matches from the start of the path relative to the root, so `events` does not also take `docs/x/events`. */
+const include = new RegExp(`^(?:${values.include ?? ''})`, 'u');
 /** Files read from disk: the engine reads these itself by path instead of taking their bytes. */
 const onDisk = new Set<string>();
 const sources: Source[] = SYNTHETIC.map(([relativePath, text]) => ({
@@ -308,8 +309,7 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
       { mode: 'state_flow', stateSubject: { kind: 'country_flag', name: 'no_such_flag_anywhere' } },
     ],
   ];
-  // The whole state flow of a large graph passes the response limit, which the engine refuses; its filtered forms are compared.
-  if (graph.stateAccesses.length <= 5_000) cases.push(['state flow', { mode: 'state_flow' }]);
+  cases.push(['state flow', { mode: 'state_flow' }]);
   if (first?.eventId !== undefined) {
     const selector = eventSelector(first.eventId);
     cases.push(
@@ -339,7 +339,39 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
         { mode: 'lint', selector: { kind: 'manifest', manifest: { eventIds: [first.eventId] } } },
       ],
       ['near miss', { mode: 'roots', selector: eventSelector(`${first.eventId}x`) }],
+      [
+        'lint of a node',
+        { mode: 'lint', selector: { kind: 'node', nodeId: first.id } },
+      ],
+      [
+        'trace cut at the edge limit',
+        { mode: 'trace', selector, maxEdges: 3, maxNodes: 4, maxDepth: 6 },
+      ],
+      [
+        'manifest with every field',
+        {
+          mode: 'lint',
+          selector: {
+            kind: 'manifest',
+            manifest: {
+              id: 'parity',
+              eventIds: [first.eventId],
+              namespaces: first.namespace === undefined ? [] : [first.namespace],
+              sourcePaths: first.sourcePath === undefined ? [] : [first.sourcePath],
+              nodeIds: [first.id],
+            },
+          },
+        },
+      ],
     );
+    if (first.sourcePath !== undefined)
+      cases.push([
+        'manifest of a source path',
+        {
+          mode: 'roots',
+          selector: { kind: 'manifest', manifest: { sourcePaths: [first.sourcePath] } },
+        },
+      ]);
     if (first.namespace !== undefined)
       cases.push([
         'lint of a namespace',
@@ -398,8 +430,25 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
         maxDepth: 2,
       },
     ]);
+  if (first?.location !== undefined) {
+    const { path: sourcePath, start } = first.location;
+    cases.push(
+      [
+        'lint of a source column',
+        { mode: 'lint', selector: { kind: 'source', sourcePath, line: start.line, column: start.column } },
+      ],
+      [
+        'lint past the column',
+        { mode: 'lint', selector: { kind: 'source', sourcePath, line: start.line, column: 9999 } },
+      ],
+    );
+  }
   if (access !== undefined)
     cases.push(
+      [
+        'unknown state with a near miss',
+        { mode: 'state_flow', stateSubject: { kind: access.kind, name: `${access.name}x` } },
+      ],
       [
         'state flow of a value',
         { mode: 'state_flow', stateSubject: { kind: access.kind, name: access.name } },
@@ -422,8 +471,11 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
     ]);
   const graphJson = Buffer.from(canonicalJson(graph), 'utf8');
   const failed: string[] = [];
+  const tooLarge: string[] = [];
+  let ran = 0;
   for (const [name, params] of cases) {
     if (process.env.PARITY_CASE !== undefined && !name.includes(process.env.PARITY_CASE)) continue;
+    ran += 1;
     let expected: unknown;
     try {
       expected = eventInspectOutcome(graph, params);
@@ -462,13 +514,25 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
         },
       };
     } else actual = { engine: outcome };
+    // The pipe carries at most 512 MiB. A TypeScript report over that is refused by the engine with
+    // EVENT_RESULT_TOO_LARGE: a named divergence per corpus, never a silent pass.
+    const refusedAsTooLarge =
+      (actual as { error?: { code?: string } }).error?.code === 'EVENT_RESULT_TOO_LARGE' &&
+      Buffer.byteLength(canonicalJson(expected), 'utf8') > 512 * 1024 * 1024;
+    if (refusedAsTooLarge) {
+      tooLarge.push(`inspect ${label} ${name}`);
+      continue;
+    }
     if (!sameValue(expected, actual)) {
       failed.push(`inspect ${label} ${name}`);
       if (failed.length <= 3)
         process.stderr.write(`  inspect ${name}\n${firstDifference(expected, actual)}`);
     }
   }
-  process.stdout.write(`inspect ${label}: ${cases.length} cases, ${failed.length} differ\n`);
+  const filter = process.env.PARITY_CASE;
+  process.stdout.write(
+    `inspect ${label}: ${ran} of ${cases.length} cases${filter === undefined ? '' : ` (PARITY_CASE=${filter}: a partial run, not a pass)`}, ${failed.length} differ, ${tooLarge.length} refused as over the 512 MiB pipe (${tooLarge.join('; ') || 'none'})\n`,
+  );
   return failed;
 }
 

@@ -15,3 +15,4 @@
 | `src/queries.rs`           | `event/queries.ts` (node selection, roots, trace, route explanation, state flow, findings selection, impact)                                                                            | `f6ff1d3a` |
 | `src/summary.rs`           | `event/summary.ts`                                                                                                                                                                      | `f6ff1d3a` |
 | `src/inspect_tests.rs`     | new, synthetic graphs; parity against TypeScript in `scripts/event-parity.ts`                                                                                                           |            |
+| `src/ported_tests.rs`      | `tests/unit/event-summary.test.ts`, `tests/unit/event-explain-path-278.test.ts` (`event-partial-reasons.test.ts` tests `operations.ts`, which stays in TypeScript)                      | `a9156fcc` |
