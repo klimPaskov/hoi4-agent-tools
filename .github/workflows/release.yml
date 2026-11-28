@@ -113,7 +113,10 @@ jobs:
         working-directory: engine
         run: |
           rustup toolchain install
-          cargo build --release --locked -p hoi4-engine-cli
+          # The rewrite journal's crash tests need the test-abort feature, as in ci.yml. This
+          # binary only runs the tests; the package bundles the build_engine binaries, built
+          # without it.
+          cargo build --release --locked -p hoi4-engine-cli --features test-abort
       - run: npm run check
       - run: npm run test:coverage
       - run: npm run inspector
