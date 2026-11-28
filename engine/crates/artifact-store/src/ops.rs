@@ -323,8 +323,22 @@ pub fn register(registry: &mut Registry) {
         };
         with_store(request, |store, workspace| store.available(workspace, &uris).map(|available| json!({ "available": available })))
     });
+    // The links travel as the payload (a JSON array): a root near the default entry limit lists far
+    // more than a response header may hold.
     registry.add_fn("artifacts.list", |_: &OpContext, request, _| {
-        with_store(request, |store, workspace| store.list(workspace).map(|artifacts| json!({ "artifacts": artifacts })))
+        let run = || -> Result<StoreResult<Vec<crate::store::ArtifactLink>>, OpResponse> {
+            let store = store_of(request)?;
+            let workspace: StoreWorkspace = parse(request, "workspace")?;
+            Ok(store.list(&workspace))
+        };
+        match run() {
+            Ok(Ok(links)) => match serde_json::to_vec(&links) {
+                Ok(bytes) => OpResponse::ok_with_payload(json!({ "count": links.len() }), bytes),
+                Err(_) => StoreError::new("ARTIFACT_READ_FAILED", "Artifact list could not be encoded").into_response(),
+            },
+            Ok(Err(error)) => error.into_response(),
+            Err(response) => response,
+        }
     });
     registry.add_fn("artifacts.list_page", |_: &OpContext, request, _| {
         let limit: usize = match parse(request, "limit") {
@@ -522,5 +536,33 @@ mod tests {
         let summary =
             call(&registry, "artifacts.changed_summary", json!({ "files": [{ "relativePath": "a/b.txt", "beforeSha256": null, "afterSha256": "x" }] }), &[]);
         assert_eq!(summary.result.unwrap()["created"], 1);
+    }
+
+    /// More links than a response header may hold (1 MiB) still list, in the payload.
+    #[test]
+    fn a_list_larger_than_a_header_comes_back_in_the_payload() {
+        let registry = registry();
+        let dir = tempfile::tempdir().unwrap();
+        let workspace =
+            json!({ "id": "w", "artifactRoot": dir.path().to_string_lossy(), "workspaceIdentity": "a".repeat(64), "ownerIdentity": "b".repeat(64) });
+        let provenance = json!({ "kind": "k", "toolVersion": "1", "schemaVersion": "1", "sourceHashes": {} });
+        let limits = json!({ "maxEntries": 6000, "maxBytes": 100_000_000, "maxSingleBytes": 1000 });
+        let count = 2700usize;
+        let names: Vec<String> = (0..count).map(|n| format!("{n:05}-{}", "x".repeat(110))).collect();
+        let writes: Vec<Value> = names.iter().map(|name| json!({ "name": name, "mimeType": "text/plain", "length": 5, "provenance": provenance })).collect();
+        let mut payload = Vec::new();
+        for n in 0..count {
+            payload.extend_from_slice(format!("{n:05}").as_bytes());
+        }
+        let put = call(&registry, "artifacts.put", json!({ "workspace": workspace, "limits": limits, "writes": writes }), &payload);
+        assert!(put.result.is_ok(), "{:?}", put.result);
+        let listed = call(&registry, "artifacts.list", json!({ "workspace": workspace, "limits": limits }), &[]);
+        let header = listed.result.unwrap();
+        assert_eq!(header["count"], count);
+        assert!(header.to_string().len() < 100, "the header carries only the count");
+        assert!(listed.payload.len() > 1_048_576, "{} bytes of links", listed.payload.len());
+        let links: Vec<Value> = serde_json::from_slice(&listed.payload).unwrap();
+        assert_eq!(links.len(), count);
+        assert!(links.windows(2).all(|pair| pair[0]["uri"].as_str() <= pair[1]["uri"].as_str()));
     }
 }

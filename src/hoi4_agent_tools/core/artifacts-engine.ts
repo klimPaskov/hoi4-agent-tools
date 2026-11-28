@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { callEngineOperation } from './engine-operation.js';
+import { ServiceError } from './result.js';
 import type { ResidentEngineRequestOptions } from './resident-engine.js';
 
 /**
@@ -236,13 +237,25 @@ export async function listArtifacts(
   workspace: EngineStoreWorkspace,
   limits?: EngineStoreLimits,
 ): Promise<Array<z.infer<typeof engineArtifactLinkSchema>>> {
-  return (
-    await callEngineOperation({
-      op: 'artifacts.list',
-      body: storeBody(workspace, limits),
-      result: z.object({ artifacts: z.array(engineArtifactLinkSchema) }),
-    })
-  ).result.artifacts;
+  // The links are the payload (a JSON array): a full root lists more than a response header may hold.
+  const answer = await callEngineOperation({
+    op: 'artifacts.list',
+    body: storeBody(workspace, limits),
+    result: z.object({ count: z.number() }),
+  });
+  const links = z
+    .array(engineArtifactLinkSchema)
+    .parse(JSON.parse(answer.payload.toString('utf8')));
+  if (links.length !== answer.result.count)
+    throw new ServiceError(
+      'ENGINE_UNAVAILABLE',
+      'hoi4-engine artifacts.list answered out of shape',
+      {
+        op: 'artifacts.list',
+        reason: 'invalid_response',
+      },
+    );
+  return links;
 }
 
 export async function listArtifactPage(

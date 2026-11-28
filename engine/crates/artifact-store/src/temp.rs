@@ -409,6 +409,8 @@ mod tests {
     #[test]
     fn the_verbatim_prefix_is_removed_before_paths_are_compared() {
         assert_eq!(normalize(Path::new(r"\\?\C:\Temp\Job")), normalize(Path::new(r"C:\Temp\Job")));
+        // Backslash-separated paths are only paths on Windows.
+        #[cfg(windows)]
         assert!(overlaps(Path::new(r"\\?\C:\Temp"), Path::new(r"C:\Temp\Job")));
     }
 

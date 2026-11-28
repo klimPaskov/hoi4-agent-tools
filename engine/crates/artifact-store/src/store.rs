@@ -597,6 +597,11 @@ struct ClaimState {
     epoch: u64,
     #[serde(default)]
     claims: BTreeMap<String, ClaimRecord>,
+    /// Set when the claim file could not be trusted: every claim it held is lost, so until this
+    /// time (one claim lifetime, after which each lost claim has expired anyway) a release deletes
+    /// nothing and no eviction happens. Stores still work.
+    #[serde(default)]
+    quarantined_until_ms: u64,
 }
 
 fn wall_clock_ms() -> u64 {
@@ -613,22 +618,30 @@ fn claim_absolute(root: &Path, relative: &str) -> PathBuf {
 
 impl ClaimState {
     /// Reads the claims under the publication lock and drops the expired ones. A missing file is an
-    /// empty state; an unreadable or tampered one is too, with the epoch set to the clock so that
-    /// every list of pins made before is refused.
+    /// empty state. A file that exists but cannot be read, is too large or does not parse is not an
+    /// empty state: the claims it held are unknown, so the state is quarantined (see
+    /// `quarantined_until_ms`) and its epoch is set to the clock, which refuses every list of pins
+    /// made before.
     fn load(root: &Path, now_ms: u64) -> StoreResult<Self> {
         let path = root.join(CLAIMS_FILE);
+        let untrusted = || Self { epoch: now_ms, claims: BTreeMap::new(), quarantined_until_ms: now_ms.saturating_add(CLAIM_LIFETIME_MS) };
         let mut state = match metadata_checked(&path)? {
             None => Self::default(),
             Some(metadata) if metadata.is_file() && metadata.len() <= CLAIMS_MAX_BYTES => {
                 match fs::read(&path).ok().and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok()) {
                     Some(state) => state,
-                    None => Self { epoch: now_ms, claims: BTreeMap::new() },
+                    None => untrusted(),
                 }
             }
-            Some(_) => Self { epoch: now_ms, claims: BTreeMap::new() },
+            Some(_) => untrusted(),
         };
         state.claims.retain(|_, claim| claim.expires_at_ms > now_ms);
         Ok(state)
+    }
+
+    /// Whether the claims are unknown right now: nothing may be deleted on their account.
+    fn quarantined(&self, now_ms: u64) -> bool {
+        self.quarantined_until_ms > now_ms
     }
 
     /// Replaces the file atomically; callers hold the publication lock.
@@ -692,6 +705,11 @@ fn artifact_usage(root: &str, cleanup: bool) -> StoreResult<(u64, u64)> {
             let Some(metadata) = metadata_checked(&path)? else { continue };
             if metadata.file_type().is_symlink() {
                 return Err(StoreError::new("ARTIFACT_STORAGE_UNSAFE", "Artifact storage contains a symbolic link or junction"));
+            }
+            // The store's own bookkeeping files are not artifacts and never count against its budget,
+            // so a damaged claim file cannot starve the store.
+            if metadata.is_file() && (name == LOCK_FILE || name == CLAIMS_FILE) {
+                continue;
             }
             if metadata.is_file() && name.starts_with(TEMPORARY_PREFIX) {
                 if cleanup && now_ms() - modified_ms(&metadata) >= DEBRIS_MINIMUM_AGE_MS {
@@ -1332,6 +1350,7 @@ impl ArtifactStore {
             &mut protected_targets,
             retained,
             claims.epoch,
+            claims.quarantined(now),
         )?;
 
         let mut created = Created::default();
@@ -1391,7 +1410,8 @@ impl ArtifactStore {
         }
         let mut claims = ClaimState::load(&root, self.now_ms.unwrap_or_else(wall_clock_ms))?;
         let shared = claims.settle(created.batch.as_deref());
-        let kept = |path: &&String| !shared.contains(&claim_relative(&root, Path::new(path.as_str())));
+        let quarantined = claims.quarantined(self.now_ms.unwrap_or_else(wall_clock_ms));
+        let kept = |path: &&String| !quarantined && !shared.contains(&claim_relative(&root, Path::new(path.as_str())));
         let own = Created {
             targets: created.targets.iter().filter(kept).cloned().collect(),
             manifests: created.manifests.iter().filter(kept).cloned().collect(),
@@ -1453,6 +1473,7 @@ impl ArtifactStore {
         protected_targets: &mut BTreeSet<PathBuf>,
         retained_uris: Option<&[String]>,
         epoch: u64,
+        quarantined: bool,
     ) -> StoreResult<()> {
         let StoreLimits { max_bytes, max_entries, .. } = self.limits;
         let (mut usage_bytes, mut usage_entries) = usage;
@@ -1460,6 +1481,12 @@ impl ArtifactStore {
             return Ok(());
         }
         // The caller keeps durable pins of its own: it must hand them over before anything is evicted.
+        if quarantined {
+            return Err(StoreError::new(
+                "ARTIFACT_CLAIMS_UNAVAILABLE",
+                "The artifact claim file could not be trusted, so nothing can be evicted until it has been rebuilt",
+            ));
+        }
         let retention_required =
             || StoreError::with_details("ARTIFACT_RETENTION_REQUIRED", "Artifact admission needs the caller's retained artifacts", json!({ "epoch": epoch }));
         let Some(retained_uris) = retained_uris else {
@@ -2193,5 +2220,58 @@ mod tests {
         let state = ClaimState::load(&root, wall_clock_ms()).unwrap();
         assert!(state.claims.is_empty());
         assert!(state.epoch > 1_000_000, "the epoch jumps to the clock so every older list is refused");
+        assert!(state.quarantined(wall_clock_ms()), "the lost claims are unknown, not absent");
+    }
+
+    // ---- Claims that cannot be trusted fail closed: nothing is deleted on their account.
+
+    #[test]
+    fn a_tampered_claim_file_makes_release_and_eviction_delete_nothing() {
+        for damage in ["garbage", "oversized"] {
+            let dir = tempfile::tempdir().unwrap();
+            let ws = workspace(dir.path());
+            let store = small_store(2);
+            let root = contained_path(&ws.artifact_root, &[]).unwrap();
+            let damage_file = |bytes: Vec<u8>| fs::write(root.join(CLAIMS_FILE), bytes).unwrap();
+            let damaged = || if damage == "garbage" { b"not json".to_vec() } else { vec![b' '; CLAIMS_MAX_BYTES as usize + 1] };
+
+            // Release: the claims are gone, so a batch another call reused must not be deleted.
+            let (first, created) = store.put_batch(&ws, &[write("a", b"1")], Some(&[])).unwrap();
+            let (second, reuse) = store.put_batch(&ws, &[write("a", b"1")], Some(&[])).unwrap();
+            assert_eq!(first[0].link.uri, second[0].link.uri);
+            damage_file(damaged());
+            store.release(&ws, &created).unwrap();
+            assert_eq!(store.read(&ws, &second[0].link.uri, None).unwrap().bytes, b"1", "{damage}: release deleted a reused artifact");
+            store.commit(&ws, &reuse).unwrap();
+
+            // Eviction: an uncommitted batch whose claim was lost must not be evicted either.
+            let (held, held_created) = store.put_batch(&ws, &[write("b", b"2")], Some(&[])).unwrap();
+            damage_file(damaged());
+            let refused = store.put_batch(&ws, &[write("c", b"3"), write("d", b"4")], Some(&[])).unwrap_err();
+            assert_eq!(refused.code, "ARTIFACT_CLAIMS_UNAVAILABLE", "{damage}");
+            assert_eq!(store.read(&ws, &held[0].link.uri, None).unwrap().bytes, b"2", "{damage}: eviction removed a held artifact");
+            // Stores that need no eviction still work, and the rebuilt file keeps the quarantine.
+            assert!(small_store(10).put_batch(&ws, &[write("e", b"5")], Some(&[])).is_ok(), "{damage}: stores that need no eviction still work");
+            assert!(ClaimState::load(&root, wall_clock_ms()).unwrap().quarantined(wall_clock_ms()), "{damage}");
+
+            // One claim lifetime later every lost claim has expired anyway: eviction works again.
+            let later = ArtifactStore { now_ms: Some(wall_clock_ms() + CLAIM_LIFETIME_MS + 1000), ..small_store(2) };
+            store.commit(&ws, &held_created).unwrap();
+            assert!(later.put_batch(&ws, &[write("c", b"3"), write("d", b"4")], Some(&[])).is_ok(), "{damage}");
+        }
+    }
+
+    #[test]
+    fn a_claim_path_that_is_a_directory_deletes_nothing_either() {
+        let dir = tempfile::tempdir().unwrap();
+        let ws = workspace(dir.path());
+        let store = small_store(2);
+        let root = contained_path(&ws.artifact_root, &[]).unwrap();
+        let (stored, created) = store.put_batch(&ws, &[write("a", b"1")], Some(&[])).unwrap();
+        fs::remove_file(root.join(CLAIMS_FILE)).unwrap();
+        fs::create_dir(root.join(CLAIMS_FILE)).unwrap();
+        // Whether or not the release can record its outcome, it must not delete.
+        let _ = store.release(&ws, &created);
+        assert_eq!(store.read(&ws, &stored[0].link.uri, None).unwrap().bytes, b"1");
     }
 }
