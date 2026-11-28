@@ -347,6 +347,7 @@ if (values['skip-graph'] !== true) {
     const covered = activeFiles(snapshot).filter(
       (file) => shouldAnalyzeEventFile(file) && !snapshot.index.isSourceSkipped(file.displayPath),
     );
+    const fragmentsStarted = performance.now();
     const fragments = await rust(covered, {
       knownEventIds: catalog.eventIds,
       knownEventTypes: catalog.eventTypes,
@@ -358,6 +359,7 @@ if (values['skip-graph'] !== true) {
       activeDecisionPaths: catalog.activeDecisionPaths,
       inventoryComplete: snapshot.complete,
     });
+    const graphStarted = performance.now();
     const outcome = await engine.request(
       'event.graph',
       {
@@ -374,11 +376,16 @@ if (values['skip-graph'] !== true) {
       undefined,
       { timeoutMs: 1_800_000 },
     );
+    const graphMs = performance.now() - graphStarted;
     if (!outcome.ok) throw new Error(`engine unavailable: ${JSON.stringify(outcome)}`);
-    const left = JSON.parse(canonicalJson(buildEventGraph(snapshot, { projectHelpers }))) as Record<
-      string,
-      unknown
-    >;
+    const typescriptStarted = performance.now();
+    const typescriptGraph = buildEventGraph(snapshot, { projectHelpers });
+    const typescriptMs = performance.now() - typescriptStarted;
+    process.stdout.write(
+      `timing projectHelpers=${projectHelpers}: engine fragments ${Math.round(graphStarted - fragmentsStarted)} ms (${covered.length} files), engine graph ${Math.round(graphMs)} ms, TypeScript graph ${Math.round(typescriptMs)} ms
+`,
+    );
+    const left = JSON.parse(canonicalJson(typescriptGraph)) as Record<string, unknown>;
     const right = JSON.parse(outcome.response.payload.toString('utf8')) as Record<string, unknown>;
     for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
       if (canonicalJson(left[key]) === canonicalJson(right[key])) continue;
