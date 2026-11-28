@@ -1,0 +1,7 @@
+# Provenance: hoi4-os
+
+This crate adapts no source file. It is new in the packet P3 review (2026-11-28) and holds every `unsafe` block of the engine workspace (see the amendment to ADR 0091).
+
+| Rust file    | Adapted from | What it mirrors                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs` | none         | Node's `process.kill(pid, 0)` (a permission error counts as alive, `core/temporary-directories.ts`), the file identity of `core/artifacts.ts` (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`), `os.hostname()`, and `process.geteuid()`. System calls: `kill`, `gethostname`, `geteuid`, `OpenProcess`, `GetExitCodeProcess`, `GetFileInformationByHandle(Ex)`, `GetComputerNameExW`. |

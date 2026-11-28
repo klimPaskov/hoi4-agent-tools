@@ -48,15 +48,18 @@ fn store_of(request: &Value) -> Result<ArtifactStore, OpResponse> {
         max_single_bytes: Option<u64>,
     }
     let limits: Option<Limits> = optional(request, "limits")?;
+    let retention_epoch: Option<u64> = optional(request, "retentionEpoch")?;
     let defaults = StoreLimits::default();
-    Ok(ArtifactStore::new(match limits {
+    let mut store = ArtifactStore::new(match limits {
         None => defaults,
         Some(limits) => StoreLimits {
             max_bytes: limits.max_bytes.unwrap_or(defaults.max_bytes),
             max_entries: limits.max_entries.unwrap_or(defaults.max_entries),
             max_single_bytes: limits.max_single_bytes.unwrap_or(defaults.max_single_bytes),
         },
-    }))
+    });
+    store.retention_epoch = retention_epoch;
+    Ok(store)
 }
 
 /// The caller's retained URIs: `None` when it keeps pins it has not supplied yet.
@@ -177,14 +180,23 @@ fn utf8(request: &Value, field: &str) -> Result<String, OpResponse> {
     parse(request, field)
 }
 
-fn diff_text(request: &Value) -> OpResponse {
-    let run = || -> Result<Value, OpResponse> {
-        let (old, new) = (utf8(request, "old")?, utf8(request, "new")?);
+fn text_of<'a>(bytes: &'a [u8], field: &str) -> Result<&'a str, OpResponse> {
+    std::str::from_utf8(bytes).map_err(|_| invalid(format!("{field} is not valid UTF-8")))
+}
+
+/// Both texts travel in the payload (`oldLength` bytes of the old one, then the new one) and the
+/// diff comes back as the payload, so a large file never meets the header size limit.
+fn diff_text(request: &Value, payload: &[u8]) -> OpResponse {
+    let run = || -> Result<OpResponse, OpResponse> {
+        let (old, new) = split_payload(request, payload, "oldLength")?;
+        let (old, new) = (text_of(old, "old")?, text_of(new, "new")?);
         let (old_name, new_name) = (utf8(request, "oldName")?, utf8(request, "newName")?);
         let options = TextDiffOptions { max_matrix_cells: optional(request, "maxMatrixCells")?, context: optional(request, "context")? };
-        Ok(json!({ "diff": unified_text_diff(&old, &new, &old_name, &new_name, &options) }))
+        crate::diff::check_options(&options).map_err(StoreError::into_response)?;
+        let diff = unified_text_diff(old, new, &old_name, &new_name, &options);
+        Ok(OpResponse::ok_with_payload(json!({ "length": diff.len() }), diff.into_bytes()))
     };
-    run().map_or_else(|response| response, OpResponse::ok)
+    run().unwrap_or_else(|response| response)
 }
 
 type ManagedSources = (Vec<SourceFile>, Option<String>, Vec<ProposedChange>);
@@ -288,6 +300,13 @@ pub fn register(registry: &mut Registry) {
         };
         with_store(request, |store, workspace| store.release(workspace, &created).map(|()| json!({})))
     });
+    registry.add_fn("artifacts.commit", |_: &OpContext, request, _| {
+        let created: Created = match parse(request, "created") {
+            Ok(created) => created,
+            Err(response) => return response,
+        };
+        with_store(request, |store, workspace| store.commit(workspace, &created).map(|()| json!({})))
+    });
     registry.add_fn("artifacts.read", |_: &OpContext, request, _| read_op(request, false));
     registry.add_fn("artifacts.read_logical", |_: &OpContext, request, _| read_op(request, true));
     registry.add_fn("artifacts.describe", |_: &OpContext, request, _| {
@@ -336,7 +355,7 @@ pub fn register(registry: &mut Registry) {
     registry.add_fn("artifacts.managed_plan", |_: &OpContext, request, _| managed_plan(request));
     registry.add_fn("artifacts.managed_refresh", |_: &OpContext, request, _| managed_refresh(request));
     registry.add_fn("artifacts.sweep_temporary", |_: &OpContext, request, _| sweep(request));
-    registry.add_fn("diff.text", |_: &OpContext, request, _| diff_text(request));
+    registry.add_fn("diff.text", |_: &OpContext, request, payload| diff_text(request, payload));
     registry.add_fn("diff.binary", |_: &OpContext, request, payload| match split_payload(request, payload, "oldLength") {
         Ok((old, new)) => OpResponse::ok(json!(binary_diff(old, new))),
         Err(response) => response,
@@ -391,6 +410,7 @@ mod tests {
         assert_eq!(registry.check(), Ok(()));
         for name in [
             "artifacts.put",
+            "artifacts.commit",
             "artifacts.read",
             "artifacts.list_page",
             "artifacts.managed_plan",
@@ -406,12 +426,23 @@ mod tests {
     #[test]
     fn diff_text_and_binary_answer_over_the_wire() {
         let registry = registry();
-        let text = call(&registry, "diff.text", json!({ "old": "a\n", "new": "b\n", "oldName": "a/x", "newName": "b/x", "context": 3 }), &[]);
-        assert_eq!(text.result.unwrap()["diff"], "--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\n+b\n-a");
+        let text = call(&registry, "diff.text", json!({ "oldLength": 2, "oldName": "a/x", "newName": "b/x", "context": 3 }), b"a\nb\n");
+        assert_eq!(text.payload, b"--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\n+b\n-a");
+        assert_eq!(text.result.unwrap()["length"], 37);
         let binary = call(&registry, "diff.binary", json!({ "oldLength": 2 }), &[1, 2, 1, 9]);
         assert_eq!(binary.result.unwrap(), json!({ "oldSize": 2, "newSize": 2, "changedBytes": 1, "firstChangedOffset": 1, "lastChangedOffset": 1 }));
-        let bad = call(&registry, "diff.text", json!({ "old": 1 }), &[]);
+        let bad = call(&registry, "diff.text", json!({ "oldName": "a", "newName": "b" }), &[]);
         assert_eq!(bad.result.unwrap_err()["code"], "invalid_request");
+        let not_utf8 = call(&registry, "diff.text", json!({ "oldLength": 1, "oldName": "a", "newName": "b" }), &[0xff, b'x']);
+        assert_eq!(not_utf8.result.unwrap_err()["code"], "invalid_request");
+        // A diff far past the header size limit still comes back, in the payload.
+        let big_old: String = (0..60_000).map(|n| format!("line number {n}\n")).collect();
+        let big_new = big_old.replace("line number 30000\n", "changed\n");
+        let mut payload = big_old.clone().into_bytes();
+        payload.extend_from_slice(big_new.as_bytes());
+        let big = call(&registry, "diff.text", json!({ "oldLength": big_old.len(), "oldName": "a", "newName": "b" }), &payload);
+        assert!(big.payload.len() > 1_048_576);
+        assert!(big.result.unwrap()["length"].as_u64().unwrap() > 1_048_576);
     }
 
     #[test]
@@ -459,7 +490,9 @@ mod tests {
             request.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
             call(&registry, "artifacts.put", request, b"x")
         };
-        assert!(one("a", json!({})).result.is_ok());
+        let first = one("a", json!({})).result.unwrap();
+        // The caller commits the first put, so it no longer holds its artifact against eviction.
+        assert!(call(&registry, "artifacts.commit", json!({ "workspace": workspace, "created": first["created"].clone() }), &[]).result.is_ok());
         let needed = one("b", json!({})).result.unwrap_err();
         assert_eq!(needed["code"], "ARTIFACT_RETENTION_REQUIRED");
         assert!(one("b", json!({ "retainedUris": [] })).result.is_ok());

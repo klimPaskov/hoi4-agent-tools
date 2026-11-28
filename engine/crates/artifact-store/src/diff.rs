@@ -11,6 +11,9 @@ use serde::Serialize;
 
 /// Matrix threshold before the exact linear-memory patience algorithm is used.
 pub const DEFAULT_MAX_MATRIX_CELLS: u64 = 16_000_000;
+/// The most matrix cells a caller may ask for (four bytes each); a larger request is refused
+/// instead of letting a hostile option allocate until the process aborts.
+pub const MAX_MATRIX_CELLS_CEILING: u64 = 64_000_000;
 /// Unchanged lines a source writer shows around each change in its preview.
 pub const DIFF_CONTEXT_LINES: usize = 3;
 
@@ -19,6 +22,18 @@ pub struct TextDiffOptions {
     pub max_matrix_cells: Option<u64>,
     /// Unchanged lines kept around each change; `None` gives one hunk holding the whole file.
     pub context: Option<usize>,
+}
+
+/// Refuses options that would make the diff allocate without bound.
+pub fn check_options(options: &TextDiffOptions) -> Result<(), crate::error::StoreError> {
+    match options.max_matrix_cells {
+        Some(cells) if cells > MAX_MATRIX_CELLS_CEILING => Err(crate::error::StoreError::with_details(
+            "DIFF_OPTIONS_INVALID",
+            "maxMatrixCells exceeds the fixed ceiling",
+            serde_json::json!({ "maximum": MAX_MATRIX_CELLS_CEILING }),
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// Lines with their terminators, as the TypeScript `splitLines` regex cuts them.
@@ -95,7 +110,7 @@ fn diff_hunks(rows: &[String], context: usize) -> Vec<String> {
     let mut groups: Vec<(usize, usize)> = Vec::new();
     for index in changed {
         let start = index.saturating_sub(context);
-        let end = (index + context).min(rows.len() - 1);
+        let end = index.saturating_add(context).min(rows.len() - 1);
         match groups.last_mut() {
             Some(last) if start <= last.1 + 1 => last.1 = end,
             _ => groups.push((start, end)),
@@ -116,7 +131,7 @@ fn diff_hunks(rows: &[String], context: usize) -> Vec<String> {
 
 fn lcs_diff(old_lines: &[&str], new_lines: &[&str], options: &TextDiffOptions) -> Vec<String> {
     let cells = (old_lines.len() as u64 + 1).checked_mul(new_lines.len() as u64 + 1);
-    let max = options.max_matrix_cells.unwrap_or(DEFAULT_MAX_MATRIX_CELLS);
+    let max = options.max_matrix_cells.unwrap_or(DEFAULT_MAX_MATRIX_CELLS).min(MAX_MATRIX_CELLS_CEILING);
     match cells {
         Some(cells) if cells <= max => matrix_diff(old_lines, new_lines),
         _ => patience_diff(old_lines, new_lines, max),
@@ -401,5 +416,26 @@ mod tests {
         let diff = binary_diff(&[1, 2, 3], &[1, 9, 3, 4]);
         assert_eq!((diff.changed_bytes, diff.first_changed_offset, diff.last_changed_offset), (2, Some(1), Some(3)));
         assert_eq!(binary_diff(&[1], &[1]).first_changed_offset, None);
+    }
+
+    #[test]
+    fn a_hostile_context_does_not_overflow() {
+        let old: String = (0..20).map(|n| format!("line {n}\n")).collect();
+        let new = old.replace("line 10", "changed");
+        let options = TextDiffOptions { context: Some(usize::MAX), ..Default::default() };
+        let diff = unified_text_diff(&old, &new, "a", "b", &options);
+        assert!(diff.contains("-line 10") && diff.contains("+changed"));
+    }
+
+    #[test]
+    fn a_matrix_ceiling_above_the_fixed_one_is_refused() {
+        let too_big = TextDiffOptions { max_matrix_cells: Some(MAX_MATRIX_CELLS_CEILING + 1), ..Default::default() };
+        assert_eq!(check_options(&too_big).unwrap_err().code, "DIFF_OPTIONS_INVALID");
+        assert!(check_options(&TextDiffOptions { max_matrix_cells: Some(MAX_MATRIX_CELLS_CEILING), ..Default::default() }).is_ok());
+        assert!(check_options(&TextDiffOptions::default()).is_ok());
+        // Even an unchecked caller cannot make the diff allocate past the ceiling.
+        let lines: String = (0..30).map(|n| format!("{n}\n")).collect();
+        let unchecked = TextDiffOptions { max_matrix_cells: Some(u64::MAX), context: Some(1) };
+        assert!(!unified_text_diff(&lines, &lines.replace("5\n", "five\n"), "a", "b", &unchecked).is_empty());
     }
 }

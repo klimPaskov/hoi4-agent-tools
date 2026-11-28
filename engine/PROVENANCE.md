@@ -64,7 +64,7 @@ measurement supports.
 ## Crates of the parallel port
 
 The crates added for the parallel port of ADR 0089 (ADR 0091) each keep their own provenance
-table, so two branches never edit this file: `crates/core`, `crates/txn`, `crates/artifact-store`, `crates/jobs`,
+table, so two branches never edit this file: `crates/core`, `crates/txn`, `crates/os`, `crates/artifact-store`, `crates/jobs`,
 `crates/tech`, `crates/event`, `crates/decision`, `crates/probability`, `crates/impact`,
 `crates/health`, `crates/script-write`, `crates/focus-write`, `crates/gui`, `crates/map`,
 `crates/reference` and `crates/server`, each in its `PROVENANCE.md`.

@@ -1,20 +1,32 @@
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
-import { ArtifactStore } from '../src/hoi4_agent_tools/core/artifacts.js';
 import {
+  ArtifactStore,
+  boundedSourceHashEvidence,
+} from '../src/hoi4_agent_tools/core/artifacts.js';
+import { sweepTemporaryDirectories } from '../src/hoi4_agent_tools/core/temporary-directories.js';
+import {
+  artifactsAvailable,
   binaryDiffOnEngine,
+  commitArtifacts,
+  describeArtifact,
   comparePngImagesOnEngine,
   listArtifactPage,
   listArtifacts,
   planManagedOutputsOnEngine,
   putArtifacts,
   readArtifact,
+  readLogicalArtifact,
   refreshManagedOutputsOnEngine,
+  releaseArtifacts,
   summarizeChangedFilesOnEngine,
+  sweepTemporaryDirectoriesOnEngine,
   unifiedTextDiffOnEngine,
   type EnginePathRule,
   type EngineStoreWorkspace,
@@ -381,6 +393,233 @@ try {
         (await tsStore.read(tsWorkspace, uri)).bytes.toString('base64'),
         (await readArtifact(swapped, uri, undefined, limits)).bytes.toString('base64'),
       );
+
+    // chunked puts, logical reads, describe, available, release, the scratch sweep, hash evidence
+    {
+      const chunkLimits = { maxBytes: 50_000_000, maxEntries: 10_000, maxSingleBytes: 8192 };
+      const tsChunkRoot = path.join(scratch, `ts-chunk-${storeSerial}`);
+      const rustChunkRoot = path.join(scratch, `rust-chunk-${storeSerial}`);
+      const rustReleaseRoot = path.join(scratch, `rust-release-${storeSerial}`);
+      storeSerial += 1;
+      for (const folder of [tsChunkRoot, rustChunkRoot, rustReleaseRoot])
+        await mkdir(folder, { recursive: true });
+      const chunkTs = new ArtifactStore(
+        chunkLimits.maxBytes,
+        chunkLimits.maxEntries,
+        chunkLimits.maxSingleBytes,
+      );
+      const chunkTsWorkspace = { ...tsWorkspace, artifactRoot: tsChunkRoot };
+      const chunkRustWorkspace = { ...rustWorkspace, artifactRoot: rustChunkRoot };
+      const outcome = async (run: () => Promise<unknown>): Promise<unknown> => {
+        try {
+          return { ok: await run() };
+        } catch (error) {
+          return { error: (error as { code?: string }).code ?? 'unknown' };
+        }
+      };
+      const logicalOptions = { mimeType: 'application/json', maxBytes: 1_000_000, maxChunks: 1000 };
+      let chunkSerial = 0;
+      for (const relative of sample(chosen, 14)) {
+        const content = await readFile(path.join(root, relative));
+        if (content.length < 1 || content.length > 100_000) continue;
+        const name =
+          `${String(chunkSerial).padStart(3, '0')}-${path.basename(relative).replace(/[^A-Za-z0-9._-]/gu, '_')}`.slice(
+            0,
+            100,
+          );
+        chunkSerial += 1;
+        const provenance = {
+          kind: 'parity',
+          toolVersion: '1',
+          schemaVersion: '1',
+          sourceHashes: { [relative]: sha256Bytes(content) },
+        };
+        const expected = await chunkTs.putChunked(
+          chunkTsWorkspace,
+          name,
+          'application/json',
+          content,
+          provenance,
+          'chunked',
+        );
+        const actual = (
+          await putArtifacts(
+            chunkRustWorkspace,
+            [{ name, mimeType: 'application/json', content, provenance, description: 'chunked' }],
+            { chunked: true, limits: chunkLimits },
+          )
+        ).artifacts[0]!;
+        const addressOf = (value: {
+          uri: string;
+          mimeType: string;
+          size?: number | undefined;
+          sha256: string;
+          provenanceHash: string;
+        }) => [value.uri, value.mimeType, value.size ?? null, value.sha256, value.provenanceHash];
+        check('chunked', `${id}:${name}:address`, addressOf(expected), addressOf(actual));
+        const tsRead = await chunkTs.readLogical(chunkTsWorkspace, expected.uri, logicalOptions);
+        const rustRead = await readLogicalArtifact(
+          chunkRustWorkspace,
+          actual.uri,
+          logicalOptions,
+          chunkLimits,
+        );
+        const readOf = (value: {
+          bytes: Buffer;
+          name: string;
+          totalSize: number;
+          mimeType: string;
+        }) => [value.bytes.toString('base64'), value.name, value.totalSize, value.mimeType];
+        check('chunked', `${id}:${name}:logical`, readOf(tsRead), readOf(rustRead));
+        check(
+          'chunked',
+          `${id}:${name}:source-bytes`,
+          content.toString('base64'),
+          rustRead.bytes.toString('base64'),
+        );
+        const tsDescribed = await chunkTs.describe(chunkTsWorkspace, expected.uri);
+        const rustDescribed = await describeArtifact(chunkRustWorkspace, actual.uri, chunkLimits);
+        const describedOf = (value: {
+          uri: string;
+          name: string;
+          mimeType: string;
+          size?: number | undefined;
+          sha256: string;
+          provenanceHash: string;
+          description?: string | undefined;
+        }) => [
+          value.uri,
+          value.name,
+          value.mimeType,
+          value.size ?? null,
+          value.sha256,
+          value.provenanceHash,
+          value.description ?? null,
+        ];
+        check('describe', `${id}:${name}`, describedOf(tsDescribed), describedOf(rustDescribed));
+        check(
+          'available',
+          `${id}:${name}`,
+          await outcome(() => chunkTs.available(chunkTsWorkspace, [{ uri: expected.uri }])),
+          await outcome(() => artifactsAvailable(chunkRustWorkspace, [actual.uri], chunkLimits)),
+        );
+        const missing = chunkTs.uri('parity', 'f'.repeat(64), 'e'.repeat(64), 'missing.txt');
+        check(
+          'available',
+          `${id}:${name}:missing`,
+          await outcome(() =>
+            chunkTs.available(chunkTsWorkspace, [{ uri: expected.uri }, { uri: missing }]),
+          ),
+          await outcome(() =>
+            artifactsAvailable(chunkRustWorkspace, [actual.uri, missing], chunkLimits),
+          ),
+        );
+      }
+
+      // release: a put taken back leaves the root as it was, and a file another put reused stays
+      const releaseWorkspace = { ...rustWorkspace, artifactRoot: rustReleaseRoot };
+      // Files only: the folders a put made are tidied by the next storage scan, not by release.
+      const tree = async () => {
+        const files: string[] = [];
+        for (const entry of await readdir(rustReleaseRoot, { recursive: true })) {
+          const relative = entry.replaceAll('\\', '/');
+          if (relative.startsWith('.artifact-')) continue;
+          if ((await stat(path.join(rustReleaseRoot, relative))).isFile()) files.push(relative);
+        }
+        return files.sort();
+      };
+      const releaseBytes = Buffer.from(`release parity ${id}`);
+      const releaseProvenance = {
+        kind: 'parity',
+        toolVersion: '1',
+        schemaVersion: '1',
+        sourceHashes: { release: sha256Bytes(releaseBytes) },
+      };
+      const releaseWrite = {
+        name: 'release.txt',
+        mimeType: 'text/plain',
+        content: releaseBytes,
+        provenance: releaseProvenance,
+      };
+      const before = await tree();
+      const first = await putArtifacts(releaseWorkspace, [releaseWrite], { limits });
+      await releaseArtifacts(releaseWorkspace, first.created, limits);
+      check('release', `${id}:roundtrip`, before, await tree());
+      const held = await putArtifacts(releaseWorkspace, [releaseWrite], { limits });
+      const reused = await putArtifacts(releaseWorkspace, [releaseWrite], { limits });
+      await commitArtifacts(releaseWorkspace, reused.created, limits);
+      await releaseArtifacts(releaseWorkspace, held.created, limits);
+      check(
+        'release',
+        `${id}:reused-file-kept`,
+        Buffer.from(releaseBytes).toString('base64'),
+        (
+          await readArtifact(releaseWorkspace, held.artifacts[0]!.uri, undefined, limits)
+        ).bytes.toString('base64'),
+      );
+
+      // source hash evidence: the TypeScript commitment and the engine's, over real path names
+      for (let round = 0; round < 12; round += 1) {
+        const paths = sample(chosen, Math.floor(rnd() * 400));
+        if (round % 3 === 0) paths.push('zz\u{1F600}', 'zz\uFF21', 'zz\u00E9', 'ZZ');
+        const hashes = Object.fromEntries(paths.map((entry) => [entry, sha256Bytes(entry)]));
+        const answer = await sharedResidentEngine().request(
+          'artifacts.source_hash_evidence',
+          { sourceHashes: hashes },
+          undefined,
+          {},
+        );
+        check(
+          'evidence',
+          `${id}:round-${round}`,
+          boundedSourceHashEvidence(hashes),
+          answer.ok ? answer.response.result : answer,
+        );
+      }
+
+      // scratch sweep: both sweeps judge the same directories alike
+      const deadPid = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore' }).pid;
+      for (const protectedFirst of [false, true]) {
+        const folders = {
+          ts: path.join(scratch, `sweep-ts-${storeSerial}-${protectedFirst}`),
+          rust: path.join(scratch, `sweep-rust-${storeSerial}-${protectedFirst}`),
+        };
+        for (const parent of Object.values(folders)) {
+          await mkdir(parent, { recursive: true });
+          const layout: Array<[string, number | undefined]> = [
+            ['hoi4-map-AAAAAA', deadPid],
+            ['hoi4-map-BBBBBB', process.pid],
+            ['hoi4-map-CCCCCC', undefined],
+            ['hoi4-map-DDDDDD', deadPid],
+          ];
+          for (const [folder, pid] of layout) {
+            await mkdir(path.join(parent, folder), { recursive: true });
+            await writeFile(path.join(parent, folder, 'data.bin'), Buffer.alloc(64));
+            if (pid !== undefined)
+              await writeFile(
+                path.join(parent, folder, '.hoi4-temp-owner.json'),
+                JSON.stringify({ version: 1, pid, host: os.hostname(), token: randomUUID() }),
+              );
+          }
+        }
+        const options = (parent: string) => ({
+          ownedFixturesOnly: true,
+          now: Date.now() + 1_000_000,
+          staleMs: 0,
+          ...(protectedFirst ? { protectedRoots: [path.join(parent, 'hoi4-map-AAAAAA')] } : {}),
+        });
+        const expected = await sweepTemporaryDirectories(folders.ts, options(folders.ts));
+        const actual = await sweepTemporaryDirectoriesOnEngine(folders.rust, options(folders.rust));
+        check('sweep', `${id}:${protectedFirst ? 'protected' : 'plain'}`, expected, actual);
+        check(
+          'sweep',
+          `${id}:${protectedFirst ? 'protected' : 'plain'}:survivors`,
+          (await readdir(folders.ts)).sort(),
+          (await readdir(folders.rust)).sort(),
+        );
+        storeSerial += 1;
+      }
+    }
 
     // managed outputs
     const permits: EnginePathRule = {

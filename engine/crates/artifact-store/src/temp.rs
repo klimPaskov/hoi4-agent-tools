@@ -8,7 +8,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
@@ -67,7 +66,11 @@ fn owned_fixture_name(name: &str) -> bool {
     is_alnum6(tail) && (1..=64).contains(&middle.len()) && middle.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
+/// The host name as `os.hostname()` reports it; the environment is the fallback when the system cannot say.
 pub fn hostname() -> String {
+    if let Some(name) = hoi4_os::hostname() {
+        return name;
+    }
     for variable in ["COMPUTERNAME", "HOSTNAME"] {
         if let Ok(value) = std::env::var(variable)
             && !value.is_empty()
@@ -75,32 +78,18 @@ pub fn hostname() -> String {
             return value;
         }
     }
-    Command::new("hostname").output().ok().map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default()
+    String::new()
 }
 
-/// Whether a process with this id exists (`process.kill(pid, 0)` of the TypeScript code).
+/// Whether a process with this id may exist (`process.kill(pid, 0)` of the TypeScript code).
+/// "Cannot tell" and "exists but belongs to another user" both count as alive, so the sweep never
+/// removes the scratch directory of a live job on a doubtful answer.
 pub fn process_alive(pid: u32) -> bool {
-    #[cfg(windows)]
-    {
-        Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
-            .output()
-            .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
-    }
-    #[cfg(not(windows))]
-    {
-        Command::new("kill").args(["-0", &pid.to_string()]).output().is_ok_and(|out| out.status.success())
-    }
+    hoi4_os::process_state(pid).maybe_alive()
 }
 
-#[cfg(unix)]
 fn effective_uid() -> Option<u32> {
-    Command::new("id").arg("-u").output().ok().and_then(|out| String::from_utf8_lossy(&out.stdout).trim().parse().ok())
-}
-
-#[cfg(not(unix))]
-fn effective_uid() -> Option<u32> {
-    None
+    hoi4_os::effective_uid()
 }
 
 /// `Some(Some(owner))` for a valid record, `Some(None)` for none, `None` for an unreadable or
@@ -170,7 +159,7 @@ fn inventory(directory: &Path) -> Option<Inventory> {
 fn normalize(path: &Path) -> PathBuf {
     let text = path.to_string_lossy().into_owned();
     // A canonical Windows path carries a verbatim prefix; the configured spelling does not.
-    let text = text.strip_prefix(r"\?\").map_or(text.clone(), str::to_owned);
+    let text = text.strip_prefix(r"\\?\").map_or(text.clone(), str::to_owned);
     PathBuf::from(if cfg!(windows) { text.to_lowercase() } else { text })
 }
 
@@ -179,9 +168,20 @@ fn overlaps(left: &Path, right: &Path) -> bool {
     a.starts_with(&b) || b.starts_with(&a)
 }
 
+/// A random version 4 UUID, the form the TypeScript server's `z.uuid()` accepts for lock tokens.
 fn new_token() -> String {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    let hex = hoi4_core::canonical::sha256_hex(format!("{}:{nanos}", std::process::id()).as_bytes());
+    let mut bytes = [0u8; 16];
+    if getrandom::fill(&mut bytes).is_err() {
+        // Without system randomness the token still has to be unique per process and instant.
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+        let hex = hoi4_core::canonical::sha256_hex(format!("{}:{nanos}", std::process::id()).as_bytes());
+        for (index, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16).unwrap_or(0);
+        }
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
@@ -391,6 +391,97 @@ mod tests {
         assert!(!owned_fixture_name("hoi4--AAAAAA") && !owned_fixture_name("hoi4-Map-AAAAAA") && !owned_fixture_name("hoi4-map-AAAAA"));
         assert!(scratch_name("hoi4-event-eval-a1b2c3") && !scratch_name("hoi4-event-eval-a1b2c"));
         assert!(reference_snapshot_name(".reference-snapshot-a1b2c3"));
+    }
+
+    #[test]
+    fn tokens_are_version_4_uuids() {
+        for _ in 0..50 {
+            let token = new_token();
+            let parts: Vec<&str> = token.split('-').collect();
+            assert_eq!(parts.iter().map(|part| part.len()).collect::<Vec<_>>(), vec![8, 4, 4, 4, 12]);
+            assert!(token.bytes().all(|byte| byte == b'-' || byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+            assert!(parts[2].starts_with('4'));
+            assert!(matches!(parts[3].as_bytes()[0], b'8' | b'9' | b'a' | b'b'));
+        }
+        assert_ne!(new_token(), new_token());
+    }
+
+    #[test]
+    fn the_verbatim_prefix_is_removed_before_paths_are_compared() {
+        assert_eq!(normalize(Path::new(r"\\?\C:\Temp\Job")), normalize(Path::new(r"C:\Temp\Job")));
+        assert!(overlaps(Path::new(r"\\?\C:\Temp"), Path::new(r"C:\Temp\Job")));
+    }
+
+    #[test]
+    fn a_doubtful_process_answer_counts_as_alive() {
+        assert!(process_alive(std::process::id()));
+        // Pid 0 cannot be asked about; the answer is "unknown", which must never read as dead.
+        assert!(process_alive(0));
+    }
+
+    #[test]
+    fn a_live_sweep_lock_keeps_the_directory() {
+        let parent = tempfile::tempdir().unwrap();
+        let directory = make(parent.path(), "hoi4-map-AAAAAA", Some(11), 10);
+        let lock = json!({ "version": 1, "pid": std::process::id(), "host": hostname(), "token": new_token() });
+        fs::write(directory.join(SWEEP_LOCK), lock.to_string()).unwrap();
+        let outcome = sweep_temporary_directories(parent.path(), &options(), &|pid| pid == std::process::id()).unwrap();
+        assert_eq!(outcome.removed, 0);
+        assert!(directory.exists());
+    }
+
+    #[test]
+    fn a_malformed_sweep_lock_keeps_the_directory() {
+        let parent = tempfile::tempdir().unwrap();
+        let directory = make(parent.path(), "hoi4-map-AAAAAA", Some(11), 10);
+        fs::write(directory.join(SWEEP_LOCK), b"{\"version\":1}").unwrap();
+        assert_eq!(sweep_temporary_directories(parent.path(), &options(), &|_| false).unwrap().removed, 0);
+        assert!(directory.exists());
+    }
+
+    #[test]
+    fn an_owner_on_another_host_is_never_swept() {
+        let parent = tempfile::tempdir().unwrap();
+        let directory = parent.path().join("hoi4-map-AAAAAA");
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("data.bin"), b"x").unwrap();
+        fs::write(directory.join(OWNER_FILE), json!({ "version": 1, "pid": 11, "host": "another-host", "token": new_token() }).to_string()).unwrap();
+        assert_eq!(sweep_temporary_directories(parent.path(), &options(), &|_| false).unwrap().removed, 0);
+        assert!(directory.exists());
+    }
+
+    /// Another user's scratch directory is skipped even when its owner is dead.
+    #[cfg(unix)]
+    #[test]
+    fn another_users_scratch_is_skipped() {
+        let parent = tempfile::tempdir().unwrap();
+        let directory = make(parent.path(), "hoi4-map-AAAAAA", Some(11), 10);
+        let uid = hoi4_os::effective_uid().unwrap();
+        let foreign = SweepOptions { current_uid: Some(uid.wrapping_add(1)), ..options() };
+        assert_eq!(sweep_temporary_directories(parent.path(), &foreign, &|_| false).unwrap().removed, 0);
+        assert!(directory.exists());
+    }
+
+    /// A link inside a swept directory is removed as a link; what it points at is never followed.
+    #[test]
+    fn a_link_under_scratch_is_not_followed() {
+        let parent = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("keep.txt"), b"keep").unwrap();
+        let directory = make(parent.path(), "hoi4-map-AAAAAA", Some(11), 10);
+        let link = directory.join("link");
+        #[cfg(unix)]
+        let linked = std::os::unix::fs::symlink(outside.path(), &link).is_ok();
+        #[cfg(windows)]
+        let linked = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J", &link.to_string_lossy(), &outside.path().to_string_lossy()])
+            .output()
+            .is_ok_and(|out| out.status.success());
+        if !linked {
+            return;
+        }
+        let _ = sweep_temporary_directories(parent.path(), &options(), &|_| false).unwrap();
+        assert!(outside.path().join("keep.txt").exists());
     }
 
     fn path_text(path: &Path) -> String {

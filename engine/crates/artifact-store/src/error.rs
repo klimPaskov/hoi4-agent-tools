@@ -26,8 +26,18 @@ impl StoreError {
 
     pub fn into_response(self) -> OpResponse {
         let mut error = json!({ "code": self.code, "message": self.message });
-        if let Some(details) = self.details {
-            error["details"] = details;
+        // The engine protocol carries an error's extra fields at the top level of the error object
+        // (the client collects them as `details`), like the transaction engine's refusals.
+        match self.details {
+            Some(Value::Object(fields)) => {
+                for (key, value) in fields {
+                    if key != "code" && key != "message" {
+                        error[key] = value;
+                    }
+                }
+            }
+            Some(other) => error["details"] = other,
+            None => {}
         }
         OpResponse { result: Err(error), payload: Vec::new() }
     }

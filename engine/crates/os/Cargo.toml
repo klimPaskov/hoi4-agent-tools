@@ -1,0 +1,30 @@
+[package]
+name = "hoi4-os"
+description = "Operating-system queries that need unsafe code: process liveness, file identity, host name, effective user (packet P3 review)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+
+# This is the only crate of the workspace that may use `unsafe`; every call is a documented
+# system call behind a safe function. The other crates keep `unsafe_code = "forbid"`.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"

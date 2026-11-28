@@ -42,7 +42,12 @@ export const engineStoredArtifactSchema = engineArtifactLinkSchema.extend({
   provenance: z.record(z.string(), z.unknown()),
 });
 
-const createdSchema = z.object({ targets: z.array(z.string()), manifests: z.array(z.string()) });
+const createdSchema = z.object({
+  targets: z.array(z.string()),
+  manifests: z.array(z.string()),
+  /** The engine's claim on these files until the caller commits or releases the put. */
+  batch: z.string().optional(),
+});
 const putResultSchema = z.object({
   artifacts: z.array(engineStoredArtifactSchema),
   physical: z.array(engineStoredArtifactSchema),
@@ -102,7 +107,7 @@ export async function putArtifacts(
   } = {},
 ): Promise<z.infer<typeof putResultSchema>> {
   const packed = packWrites(writes);
-  const call = (retained?: string[]) =>
+  const call = (retained?: string[], epoch?: number) =>
     callEngineOperation({
       op: options.chunked === true ? 'artifacts.put_chunked' : 'artifacts.put',
       body: {
@@ -110,22 +115,35 @@ export async function putArtifacts(
         writes: packed.writes,
         ...(options.retention === undefined ? {} : { retentionPending: true }),
         ...(retained === undefined ? {} : { retainedUris: retained }),
+        ...(epoch === undefined ? {} : { retentionEpoch: epoch }),
       },
       payload: packed.payload,
       result: putResultSchema,
       ...(options.request === undefined ? {} : { options: options.request }),
     });
-  try {
-    return (await call()).result;
-  } catch (error) {
-    if (
-      options.retention === undefined ||
-      (error as { code?: string }).code !== 'ARTIFACT_RETENTION_REQUIRED'
-    )
-      throw error;
-    return (await call([...(await options.retention())])).result;
+  let retained: string[] | undefined;
+  let epoch: number | undefined;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await call(retained, epoch)).result;
+    } catch (error) {
+      if (
+        options.retention === undefined ||
+        attempt >= retentionAttempts ||
+        (error as { code?: string }).code !== 'ARTIFACT_RETENTION_REQUIRED'
+      )
+        throw error;
+      // The epoch is taken before the pins are read: a commit made meanwhile moves it, and the
+      // engine then asks again instead of evicting an artifact that list does not know about.
+      const reported = (error as { details?: { epoch?: unknown } }).details?.epoch;
+      epoch = typeof reported === 'number' ? reported : undefined;
+      retained = [...(await options.retention())];
+    }
   }
 }
+
+/** How many times a put re-reads the caller's pins when commits keep changing them. */
+const retentionAttempts = 5;
 
 /** Takes back the files a put created, when the caller's own commit failed. */
 export async function releaseArtifacts(
@@ -135,6 +153,22 @@ export async function releaseArtifacts(
 ): Promise<void> {
   await callEngineOperation({
     op: 'artifacts.release',
+    body: { ...storeBody(workspace, limits), created },
+    result: z.object({}),
+  });
+}
+
+/**
+ * Tells the engine the caller's commit succeeded, so the files of a put are no longer held against
+ * eviction. A put's claim also expires on its own after ten minutes.
+ */
+export async function commitArtifacts(
+  workspace: EngineStoreWorkspace,
+  created: EngineCreated,
+  limits?: EngineStoreLimits,
+): Promise<void> {
+  await callEngineOperation({
+    op: 'artifacts.commit',
     body: { ...storeBody(workspace, limits), created },
     result: z.object({}),
   });
@@ -277,13 +311,15 @@ export async function unifiedTextDiffOnEngine(
   newName: string,
   options: { context?: number; maxMatrixCells?: number } = {},
 ): Promise<string> {
-  return (
-    await callEngineOperation({
-      op: 'diff.text',
-      body: { old: oldText, new: newText, oldName, newName, ...options },
-      result: z.object({ diff: z.string() }),
-    })
-  ).result.diff;
+  // Both texts and the diff travel as payload: a real file's diff is larger than a response header may be.
+  const oldBytes = Buffer.from(oldText, 'utf8');
+  const answer = await callEngineOperation({
+    op: 'diff.text',
+    body: { oldLength: oldBytes.length, oldName, newName, ...options },
+    payload: Buffer.concat([oldBytes, Buffer.from(newText, 'utf8')]),
+    result: z.object({ length: z.number() }),
+  });
+  return answer.payload.toString('utf8');
 }
 
 const binaryDiffSchema = z.object({

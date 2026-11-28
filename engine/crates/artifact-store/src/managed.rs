@@ -44,6 +44,65 @@ pub struct DirRule {
     pub pattern: Option<String>,
 }
 
+/// JavaScript's `\d`, `\w` and `\b` are ASCII and its `\s` is a fixed set of spaces, while the
+/// Rust regex engine reads all of them as Unicode. The difference decides which recorded files a
+/// regeneration deletes, so the shorthand classes are rewritten to their JavaScript meaning.
+/// A negated shorthand inside a character class cannot be written that way and is refused.
+fn javascript_pattern(pattern: &str) -> Result<String, ()> {
+    const SPACE: &str = "\\t\\n\\x0B\\x0C\\r \\x{00A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}";
+    let mut out = String::with_capacity(pattern.len() + 16);
+    let mut in_class = false;
+    let mut chars = pattern.chars();
+    while let Some(character) = chars.next() {
+        match character {
+            '\\' => {
+                let Some(escaped) = chars.next() else { return Err(()) };
+                match (escaped, in_class) {
+                    ('d', false) => out.push_str("[0-9]"),
+                    ('d', true) => out.push_str("0-9"),
+                    ('D', false) => out.push_str("[^0-9]"),
+                    ('w', false) => out.push_str("[0-9A-Za-z_]"),
+                    ('w', true) => out.push_str("0-9A-Za-z_"),
+                    ('W', false) => out.push_str("[^0-9A-Za-z_]"),
+                    ('s', false) => {
+                        out.push('[');
+                        out.push_str(SPACE);
+                        out.push(']');
+                    }
+                    ('s', true) => out.push_str(SPACE),
+                    ('S', false) => {
+                        out.push_str("[^");
+                        out.push_str(SPACE);
+                        out.push(']');
+                    }
+                    ('D' | 'W' | 'S', true) => return Err(()),
+                    ('b', false) => out.push_str("(?-u:\\b)"),
+                    ('B', false) => out.push_str("(?-u:\\B)"),
+                    _ => {
+                        out.push('\\');
+                        out.push(escaped);
+                    }
+                }
+            }
+            '[' if !in_class => {
+                in_class = true;
+                out.push('[');
+            }
+            ']' if in_class => {
+                in_class = false;
+                out.push(']');
+            }
+            other => out.push(other),
+        }
+    }
+    Ok(out)
+}
+
+fn compile_pattern(pattern: &str) -> StoreResult<Regex> {
+    let invalid = || StoreError::new("MANAGED_OUTPUT_RULE_INVALID", "A managed-output path rule has an invalid pattern");
+    Regex::new(&javascript_pattern(pattern).map_err(|()| invalid())?).map_err(|_| invalid())
+}
+
 fn posix_split(path: &str) -> (String, &str) {
     match path.rsplit_once('/') {
         Some((dir, file)) => (if dir.is_empty() { "/".into() } else { dir.to_owned() }, file),
@@ -59,9 +118,7 @@ impl PathRule {
             PathRule::Not(rule) => rule.validate(),
             PathRule::Path(_) => Ok(()),
             PathRule::Dir(rule) => match &rule.pattern {
-                Some(pattern) => Regex::new(pattern)
-                    .map(|_| ())
-                    .map_err(|_| StoreError::new("MANAGED_OUTPUT_RULE_INVALID", "A managed-output path rule has an invalid pattern")),
+                Some(pattern) => compile_pattern(pattern).map(|_| ()),
                 None => Ok(()),
             },
         }
@@ -77,7 +134,7 @@ impl PathRule {
                 let (dir, file) = posix_split(path);
                 rule.dirs.contains(&dir)
                     && (rule.files.iter().any(|name| name == file)
-                        || rule.pattern.as_ref().is_some_and(|pattern| Regex::new(pattern).is_ok_and(|regex| regex.is_match(file))))
+                        || rule.pattern.as_ref().is_some_and(|pattern| compile_pattern(pattern).is_ok_and(|regex| regex.is_match(file))))
             }
         }
     }
@@ -551,5 +608,40 @@ mod tests {
         assert!(!rule.matches("history/states/x.txt"));
         assert!(PathRule::Dir(DirRule { dirs: vec![".".into()], files: vec!["a.txt".into()], pattern: None }).matches("a.txt"));
         assert!(PathRule::Dir(DirRule { dirs: vec![], files: vec![], pattern: Some("(".into()) }).validate().is_err());
+    }
+
+    fn dir_rule(pattern: &str) -> PathRule {
+        PathRule::Dir(DirRule { dirs: vec!["gfx".into()], files: vec![], pattern: Some(pattern.into()) })
+    }
+
+    /// JavaScript's `\d`, `\w` and `\b` are ASCII; the Rust defaults are Unicode and would match
+    /// files the TypeScript rule leaves alone, which are then deleted as outputs.
+    #[test]
+    fn shorthand_classes_match_the_javascript_meaning() {
+        let digits = dir_rule(r"^\d+\.png$");
+        assert!(digits.matches("gfx/123.png"));
+        assert!(!digits.matches("gfx/\u{663}\u{664}.png"), "Arabic-Indic digits are not \\d in JavaScript");
+        let word = dir_rule(r"^\w+$");
+        assert!(word.matches("gfx/abc_9"));
+        assert!(!word.matches("gfx/caf\u{e9}"), "\\w is ASCII");
+        let boundary = dir_rule(r"\bmap\b");
+        assert!(boundary.matches("gfx/a map.txt"));
+        assert!(boundary.matches("gfx/\u{e9}map.txt"), "an accented letter is not a word character for \\b");
+        let space = dir_rule(r"^a\sb$");
+        assert!(space.matches("gfx/a b") && space.matches("gfx/a\u{a0}b") && space.matches("gfx/a\u{feff}b"));
+        assert!(!space.matches("gfx/a\u{85}b"), "U+0085 is not JavaScript whitespace");
+        let not_digit = dir_rule(r"^\D+$");
+        assert!(not_digit.matches("gfx/abc") && !not_digit.matches("gfx/a1"));
+        let in_class = dir_rule(r"^[\w.-]+$");
+        assert!(in_class.matches("gfx/a-b.c_d") && !in_class.matches("gfx/\u{e9}"));
+    }
+
+    #[test]
+    fn a_negated_shorthand_inside_a_class_is_refused() {
+        assert_eq!(dir_rule(r"[\W]").validate().unwrap_err().code, "MANAGED_OUTPUT_RULE_INVALID");
+        assert_eq!(dir_rule(r"[\S]").validate().unwrap_err().code, "MANAGED_OUTPUT_RULE_INVALID");
+        assert_eq!(dir_rule(r"(").validate().unwrap_err().code, "MANAGED_OUTPUT_RULE_INVALID");
+        assert_eq!(dir_rule(r"abc\").validate().unwrap_err().code, "MANAGED_OUTPUT_RULE_INVALID");
+        assert!(dir_rule(r"^[a-z]\d$").validate().is_ok());
     }
 }

@@ -189,7 +189,9 @@ dependencies = [
 name = "hoi4-artifacts"
 version = "0.1.0"
 dependencies = [
+ "getrandom",
  "hoi4-core",
+ "hoi4-os",
  "png",
  "regex",
  "serde",
@@ -339,6 +341,14 @@ dependencies = [
  "hoi4-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "hoi4-os"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "windows-sys",
 ]
 
 [[package]]
