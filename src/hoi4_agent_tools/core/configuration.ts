@@ -191,6 +191,12 @@ export const serverConfigurationSchema = z
      * indexes instead of scanning cold; 0 starts a fresh worker for every job.
      */
     jobWorkerIdleSeconds: z.number().int().min(0).max(3_600).default(180),
+    /**
+     * How long after the last tool call the in-memory analysis caches (scans, indexes and the
+     * views built from them) are released; the next call rebuilds what it needs. A busy server
+     * reuses them between calls. `0` releases them as soon as a call ends.
+     */
+    idleCacheReleaseSeconds: z.number().int().min(0).max(3_600).default(30),
     scanMaxBytes: z
       .number()
       .int()

@@ -1,12 +1,33 @@
 //! Event analyzer and the event graph (packet P6).
 //!
-//! Skeleton crate of the parallel port (ADR 0091). It will be ported from
-//! `src/hoi4_agent_tools/event/`; each adapted file names its source in its header and in this
-//! crate's `PROVENANCE.md`. Only this crate's packet edits files under `crates/event/`.
+//! Ported from `src/hoi4_agent_tools/event/`; each adapted file names its source in its header
+//! and in this crate's `PROVENANCE.md`. Only this crate's packet edits files under
+//! `crates/event/`.
+//!
+//! - [`graph`]: the event graph snapshot in its wire shape.
+//! - [`source_analysis`]: one fragment of nodes, edges, state accesses and findings per source file.
+//! - [`graph_build`]: merges the fragments into the semantic graph, projects helpers and derives
+//!   state links and findings.
+//! - [`algorithms`]: traces, shortest paths, strongly connected components and reachability.
+//! - [`ops`]: the engine operations over a graph snapshot sent in the request body.
+
+pub mod algorithms;
+pub mod graph;
+pub mod graph_build;
+pub mod native_effects;
+pub mod ops;
+pub mod source_analysis;
+pub mod state_keys;
 
 use hoi4_core::ops::Registry;
 
 /// Adds this crate's engine operations to the registry `hoi4-engine serve` dispatches through.
 pub fn register(registry: &mut Registry) {
-    let _ = registry;
+    ops::register(registry);
 }
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod graph_build_tests;

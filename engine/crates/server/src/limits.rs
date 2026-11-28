@@ -150,6 +150,11 @@ impl Admission {
         state.reserved_body_bytes += body_bytes;
         Ok(AdmissionTicket { state: Arc::clone(&self.state), body_bytes, overflow, released: false })
     }
+
+    /// The body bytes admitted requests hold now, out of the aggregate budget.
+    pub fn reserved_body_bytes(&self) -> u64 {
+        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).reserved_body_bytes
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -240,8 +245,11 @@ mod tests {
     fn aggregate_body_budget_is_reserved_and_released() {
         let admission = Admission::with_aggregate(&config(8, 4096), 6000);
         let first = admission.admit(true, None).unwrap();
+        assert_eq!(admission.reserved_body_bytes(), 4096);
         assert_eq!(admission.admit(true, Some("2000")).unwrap_err(), AdmissionRefusal::BodyCapacityLimit);
+        assert_eq!(admission.reserved_body_bytes(), 4096, "a refused request reserves nothing");
         drop(first);
+        assert_eq!(admission.reserved_body_bytes(), 0);
         assert!(admission.admit(true, Some("2000")).is_ok());
     }
 
