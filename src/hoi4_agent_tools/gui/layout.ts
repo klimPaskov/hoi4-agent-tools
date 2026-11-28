@@ -18,7 +18,7 @@ import {
   GUI_TEXT_MAX_CHARACTERS,
   GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES,
 } from './limits.js';
-import { guiElementAttributeFidelity } from './source-graph.js';
+import { guiElementAttributeFidelity, guiTextLooksLikeLocalisationKey } from './source-graph.js';
 import type {
   FidelityCategory,
   FidelityItem,
@@ -311,12 +311,7 @@ function resolveTokenText(
   const localised = scenario.localisation[value] ?? localisation.get(value);
   let text = localised ?? value;
   assertTextLength(text, 'GUI resolved localisation');
-  if (
-    localised === undefined &&
-    /^[A-Za-z0-9_.-]+$/u.test(value) &&
-    (value.includes('_') || value === value.toUpperCase())
-  )
-    missingLocalisation = true;
+  if (localised === undefined && guiTextLooksLikeLocalisationKey(value)) missingLocalisation = true;
   const expandTokens = (input: string, stack: ReadonlySet<string>, depth: number): string =>
     replaceTextBounded(
       input,

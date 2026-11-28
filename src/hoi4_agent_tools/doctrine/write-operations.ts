@@ -246,7 +246,7 @@ export async function computeDoctrineWrite(
   let plan: DoctrineWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planDoctrineWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planDoctrineWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll(KINDS[target.kind].indexKind, input.id)
@@ -256,7 +256,7 @@ export async function computeDoctrineWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewDoctrineFile(target.newPath, planInput);
+    plan = await planNewDoctrineFile(target.newPath, planInput);
   }
   const missing: DoctrineWriteData['missing'] = {
     localisation: [],

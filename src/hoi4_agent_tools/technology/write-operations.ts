@@ -216,7 +216,7 @@ export async function computeTechWrite(
   let plan: TechWritePlan;
   if ('file' in target) {
     file = target.file;
-    plan = planTechWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
+    plan = await planTechWrite({ bytes: file.bytes, path: file.relativePath }, planInput);
   } else {
     const inMod = snapshot.index
       .findAll('technology', input.id)
@@ -226,7 +226,7 @@ export async function computeTechWrite(
         id: input.id,
         path: inMod.path,
       });
-    plan = planNewTechFile(target.newPath, planInput);
+    plan = await planNewTechFile(target.newPath, planInput);
   }
   const missing: TechWriteData['missing'] = {
     localisation: [],

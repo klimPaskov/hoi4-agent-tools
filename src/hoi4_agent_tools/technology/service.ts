@@ -38,17 +38,8 @@ import type {
   TechnologySourceFragment,
   TechnologyUnlockKind,
 } from './model.js';
-import {
-  analyzeTechnologyImpact,
-  discoverTechnologyFolders,
-  explainTechnology,
-  inspectTechnologyUnlocks,
-  lintTechnologyGraph,
-  technologyBonusCoverage,
-  technologyScanReport,
-  traceTechnology,
-  type TechnologyImpactInput,
-} from './queries.js';
+import { buildTechnologyGraphOnEngine, queryTechnologyGraph } from './engine-graph.js';
+import type { TechnologyImpactInput } from './queries.js';
 import {
   renderTechnologyGraph,
   technologyRenderIconSprites,
@@ -105,6 +96,8 @@ export interface TechnologyAnalysisResult {
   reportJson: string;
   artifacts: StoredArtifact[];
   helperExpansion?: HelperExpansionSummary;
+  /** Mode explain: the engine's inline summary of the technology. */
+  explainSummary?: unknown;
 }
 
 export interface TechnologyRenderServiceInput extends RenderProgress {
@@ -224,7 +217,9 @@ function sharedState(engine: CoreEngine): SharedTechnologyState {
   return state;
 }
 
-function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['get']>): string[] {
+export function technologyScanPatterns(
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+): string[] {
   const roots = workspace.registration.roots;
   const under = (values: readonly string[], glob: string): string[] =>
     values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
@@ -253,7 +248,7 @@ function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['ge
   ].sort(compareCodeUnits);
 }
 
-async function scanTechnologySources(
+export async function scanTechnologySources(
   engine: CoreEngine,
   workspaceId: string,
   workspace: ReturnType<CoreEngine['resolver']['get']>,
@@ -777,11 +772,9 @@ export class TechnologyTreeViewer {
       cached?.generation === generation && cached.snapshot.revision === snapshot.revision;
     const preliminary = unchangedSource
       ? cached.graph
-      : await buildTechnologyGraphAsync(snapshot, {
+      : await buildTechnologyGraphOnEngine(snapshot, {
           workspaceIdentity: workspace.workspaceIdentity,
-          cache: this.#state.fragments,
           ...(analysisMode === undefined ? {} : { analysisMode }),
-          ...(options.signal === undefined ? {} : { signal: options.signal }),
         });
     const guiSprites = [
       ...preliminary.itemLayouts.flatMap(({ designTeamIcon }) =>
@@ -828,12 +821,10 @@ export class TechnologyTreeViewer {
       );
     if (unchangedSource && assetIdentity(assetFiles) === assetIdentity(cached.assetFiles))
       return cached.graph;
-    const graph = await buildTechnologyGraphAsync(snapshot, {
+    const graph = await buildTechnologyGraphOnEngine(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
-      cache: this.#state.fragments,
       assetFiles,
       ...(analysisMode === undefined ? {} : { analysisMode }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     if (options.renderOnly === true)
       graph.analysisBoundary.assumptions.push(
@@ -884,66 +875,35 @@ export class TechnologyTreeViewer {
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
-    let report: unknown;
-    switch (input.mode) {
-      case 'scan':
-        report = technologyScanReport(graph);
-        break;
-      case 'folders':
-        report = discoverTechnologyFolders(graph, input.folderId);
-        break;
-      case 'trace':
-        if (input.technologyId === undefined)
-          throw new ServiceError('TECHNOLOGY_REQUIRED', 'Technology trace requires technologyId');
-        report = traceTechnology(graph, {
-          technologyId: input.technologyId,
-          direction: input.direction ?? 'both',
-          maxDepth: input.maxDepth ?? 32,
-          maxNodes: input.maxNodes ?? 2_000,
-          includeSubTechnologies: input.includeSubTechnologies ?? true,
-          ...(input.signal === undefined ? {} : { signal: input.signal }),
-        });
-        break;
-      case 'explain':
-        if (input.technologyId === undefined)
-          throw new ServiceError(
-            'TECHNOLOGY_REQUIRED',
-            'Technology explanation requires technologyId',
-          );
-        report = explainTechnology(graph, input.technologyId, input.signal);
-        break;
-      case 'unlocks':
-        report = inspectTechnologyUnlocks(graph, {
-          ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
-          ...(input.targetKind === undefined ? {} : { targetKind: input.targetKind }),
-          ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
-        });
-        break;
-      case 'bonus_coverage':
-        report = technologyBonusCoverage(graph, {
-          ...(input.categoryId === undefined ? {} : { categoryId: input.categoryId }),
-          ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
-        });
-        break;
-      case 'lint':
-        report = lintTechnologyGraph(graph, {
-          ...(input.classifications === undefined
-            ? {}
-            : { classifications: input.classifications }),
-          ...(input.codes === undefined ? {} : { codes: input.codes }),
-          ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
-          ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
-        });
-        break;
-      case 'impact':
-        if (input.impact === undefined)
-          throw new ServiceError(
-            'TECH_IMPACT_REQUIRED',
-            'Technology impact analysis requires a subject',
-          );
-        report = analyzeTechnologyImpact(graph, input.impact);
-        break;
-    }
+    if (input.mode === 'trace' && input.technologyId === undefined)
+      throw new ServiceError('TECHNOLOGY_REQUIRED', 'Technology trace requires technologyId');
+    if (input.mode === 'explain' && input.technologyId === undefined)
+      throw new ServiceError('TECHNOLOGY_REQUIRED', 'Technology explanation requires technologyId');
+    if (input.mode === 'impact' && input.impact === undefined)
+      throw new ServiceError(
+        'TECH_IMPACT_REQUIRED',
+        'Technology impact analysis requires a subject',
+      );
+    const answer = await queryTechnologyGraph(graph, {
+      mode: input.mode,
+      ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
+      ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
+      ...(input.categoryId === undefined ? {} : { categoryId: input.categoryId }),
+      ...(input.targetKind === undefined ? {} : { targetKind: input.targetKind }),
+      ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
+      ...(input.mode !== 'trace'
+        ? {}
+        : {
+            direction: input.direction ?? 'both',
+            maxDepth: input.maxDepth ?? 32,
+            maxNodes: input.maxNodes ?? 2_000,
+            includeSubTechnologies: input.includeSubTechnologies ?? true,
+          }),
+      ...(input.classifications === undefined ? {} : { classifications: input.classifications }),
+      ...(input.codes === undefined ? {} : { codes: input.codes }),
+      ...(input.impact === undefined ? {} : { impact: input.impact }),
+    });
+    const report: unknown = answer.report;
     const reportJson = `${canonicalJson({
       schemaVersion: 'technology-analysis.v1',
       workspaceId: graph.workspaceId,
@@ -1000,6 +960,9 @@ export class TechnologyTreeViewer {
       report,
       reportJson,
       artifacts: [artifact, ...(graphArtifact === undefined ? [] : [graphArtifact])],
+      ...(answer.summary === undefined || answer.summary === null
+        ? {}
+        : { explainSummary: answer.summary }),
     };
   }
 
