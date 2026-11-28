@@ -160,3 +160,58 @@ describe('inline GUI diagnostics (#62)', () => {
     expect(inlineDiagnostics(list)).toEqual(list);
   });
 });
+
+describe('GUI placeholder texts', () => {
+  const textBox = (name: string, y: number, text: string) =>
+    `instantTextBoxType = { name = "${name}" position = { x = 0 y = ${y} } font = "hoi_20b" text = "${text}" maxWidth = 200 maxHeight = 20 }`;
+  const textWindow = scanned(
+    'interface/placeholders.gui',
+    `guiTypes = { containerWindowType = { name = "placeholders" position = { x = 0 y = 0 } size = { width = 400 height = 200 }
+      ${textBox('title', 0, 'Title text here!')}
+      ${textBox('dash', 30, '--')}
+      ${textBox('word', 60, 'close')}
+      ${textBox('found', 90, 'found_title')}
+      ${textBox('missing', 120, 'PLACEHOLDER_WINDOW_MISSING_TITLE')}
+    } }`,
+  );
+  const localisation = scanned(
+    'localisation/english/placeholders_l_english.yml',
+    '﻿l_english:\n found_title:0 "Found"\n',
+  );
+  const files = [textWindow, localisation];
+  const messages = (diagnostics: readonly { code: string; message: string }[], codes: string[]) =>
+    diagnostics.filter(({ code }) => codes.includes(code)).map(({ message }) => message);
+
+  it('draws a text that is not in key form as it is written, not as a missing key', async () => {
+    const graph = graphFor(files);
+    const graphMessages = messages(graph.diagnostics, ['GUI_REFERENCE_UNRESOLVED']);
+    const sceneMessages = messages(await validate(files, 'placeholders'), [
+      'GUI_MISSING_LOCALISATION',
+      'GUI_REFERENCE_UNRESOLVED',
+    ]);
+    for (const literal of ['Title text here!', '--', 'close', 'found_title'])
+      for (const list of [graphMessages, sceneMessages])
+        expect(list.filter((message) => message.includes(literal))).toEqual([]);
+    const title = graph.elements.find(({ name }) => name === 'title');
+    expect(
+      graph.edges.filter(({ kind, from }) => kind === 'uses_localisation' && from === title?.id),
+    ).toEqual([]);
+    const found = graph.elements.find(({ name }) => name === 'found');
+    expect(
+      graph.edges.find(({ kind, from }) => kind === 'uses_localisation' && from === found?.id)
+        ?.resolved,
+    ).toBe(true);
+  });
+
+  it('still reports a missing key in key form', async () => {
+    const isMissing = (message: string) => message.includes('PLACEHOLDER_WINDOW_MISSING_TITLE');
+    expect(
+      messages(graphFor(files).diagnostics, ['GUI_REFERENCE_UNRESOLVED']).filter(isMissing),
+    ).toHaveLength(1);
+    expect(
+      messages(await validate(files, 'placeholders'), ['GUI_MISSING_LOCALISATION']).filter(
+        isMissing,
+      ),
+    ).toHaveLength(1);
+  });
+});

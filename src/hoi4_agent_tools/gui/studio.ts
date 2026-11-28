@@ -475,6 +475,42 @@ function selectedElements(
   return [...selected.values()];
 }
 
+const definitionReferenceKinds = new Set(['uses_sprite', 'uses_font', 'static_fallback']);
+
+/**
+ * A window graph keeps whole .gui files, so it also holds the other windows of the selected
+ * window's file, and it keeps every script file. The graph checks the references of all of them.
+ * Adds the .gfx file of every sprite and font that a kept source names and the full inventory
+ * resolves, so a sprite of a sibling window, a sprite a defined_text returns or a static
+ * fallback is not reported as missing because its .gfx file was left out of the window graph.
+ */
+function keepReferencedDefinitionSources(graph: GuiSourceGraph, selectedPaths: Set<string>): void {
+  const definitionPaths = new Map<string, string>();
+  for (const { id, sourcePath } of [...graph.sprites, ...graph.fonts])
+    definitionPaths.set(id, sourcePath);
+  const nodePaths = new Map(graph.nodes.map(({ id, path: nodePath }) => [id, nodePath]));
+  const kept = (id: string) => {
+    const nodePath = nodePaths.get(id);
+    return (
+      nodePath !== undefined && (!/\.(?:gui|gfx)$/iu.test(nodePath) || selectedPaths.has(nodePath))
+    );
+  };
+  const references = graph.edges.filter(
+    ({ kind, resolved, to }) =>
+      resolved && definitionReferenceKinds.has(kind) && definitionPaths.has(to),
+  );
+  let added = true;
+  while (added) {
+    added = false;
+    for (const edge of references) {
+      const target = definitionPaths.get(edge.to)!;
+      if (selectedPaths.has(target) || !kept(edge.from)) continue;
+      selectedPaths.add(target);
+      added = true;
+    }
+  }
+}
+
 function assertTargetWindowAvailable(graph: GuiSourceGraph, windowName: string): void {
   if (graph.elements.some(({ name }) => name === windowName)) return;
   if (!graph.skippedPossibleSymbolKinds.includes('gui_element')) return;
@@ -1624,6 +1660,7 @@ export class ScriptedGuiStudio {
         )
       )
         selectedPaths.add(font.sourcePath);
+    keepReferencedDefinitionSources(definitions.graph, selectedPaths);
     const files = mergeScannedFiles(
       definitions.files.filter(
         (file) =>
