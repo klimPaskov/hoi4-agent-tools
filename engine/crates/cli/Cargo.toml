@@ -40,6 +40,10 @@ serde_json.workspace = true
 sha2.workspace = true
 rayon.workspace = true
 
+[features]
+# Test builds for the TypeScript cross-recovery tests: the rewrite engine can be told to abort.
+test-abort = ["hoi4-txn/test-abort"]
+
 [lints]
 workspace = true
 
