@@ -29,7 +29,7 @@ pub struct Refusal {
 }
 
 fn refuse(code: &'static str, message: impl Into<String>) -> Refusal {
-    Refusal { code, message: message.into(), details: Value::Null }
+    Refusal { code, message: message.into(), details: json!({}) }
 }
 
 #[derive(Debug, Deserialize)]

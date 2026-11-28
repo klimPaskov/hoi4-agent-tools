@@ -173,7 +173,7 @@ fn reachable_follows_the_direction() {
 fn operations_are_registered_and_refuse_a_malformed_request() {
     let mut registry = Registry::new();
     crate::register(&mut registry);
-    assert_eq!(registry.names(), vec!["event.components", "event.fragments", "event.graph", "event.path", "event.reachable", "event.trace"]);
+    assert_eq!(registry.names(), vec!["event.components", "event.fragments", "event.graph", "event.inspect", "event.path", "event.reachable", "event.trace"]);
     let bad = registry.dispatch("event.path", &OpContext::default(), &json!({ "graph": 1 }), &[]).unwrap();
     assert_eq!(bad.result.unwrap_err()["code"], "invalid_request");
     let request = json!({
@@ -267,4 +267,14 @@ fn the_graph_is_built_from_files_read_by_path() {
     });
     let refused = registry.dispatch("event.graph", &OpContext::default(), &stale, &[]).unwrap();
     assert_eq!(refused.result.unwrap_err()["code"], "EVENT_SOURCE_STALE");
+}
+
+#[test]
+fn an_answer_over_the_response_limit_is_refused_instead_of_sent() {
+    let value = json!({ "text": "x".repeat(200) });
+    let refused = crate::ops::payload_response_for_test(&value, 100).result.unwrap_err();
+    assert_eq!(refused["code"], "EVENT_RESULT_TOO_LARGE");
+    let sent = crate::ops::payload_response_for_test(&value, 10_000);
+    assert!(sent.result.is_ok());
+    assert!(!sent.payload.is_empty());
 }

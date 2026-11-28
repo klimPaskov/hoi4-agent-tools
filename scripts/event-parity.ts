@@ -193,14 +193,38 @@ for (const root of values.dir ?? []) {
 }
 sources.sort((a, b) => (a.file.relativePath < b.file.relativePath ? -1 : 1));
 
-/** The first element of two arrays that differs, or both values cut short. */
-function firstDifference(left: unknown, right: unknown): string {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    const at = left.findIndex((item, index) => canonicalJson(item) !== canonicalJson(right[index]));
-    const index = at === -1 ? Math.min(left.length, right.length) : at;
-    return `    [${index}] of ${left.length} ts, ${right.length} rust\n    ts:   ${canonicalJson(left[index]).slice(0, 700)}\n    rust: ${canonicalJson(right[index]).slice(0, 700)}\n`;
+/** A value as text, cut short, for a report of where two values differ. */
+function shown(value: unknown): string {
+  try {
+    return canonicalJson(value).slice(0, 700);
+  } catch {
+    return '(too large to show)';
   }
-  return `    ts:   ${canonicalJson(left).slice(0, 700)}\n    rust: ${canonicalJson(right).slice(0, 700)}\n`;
+}
+
+/** Where two values first differ: the path down to the first differing piece, and both pieces. */
+function firstDifference(left: unknown, right: unknown, at = ''): string {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    const index = left.findIndex((item, position) => !sameValue(item, right[position]));
+    if (index !== -1 && index < right.length)
+      return firstDifference(left[index], right[index], `${at}[${index}]`);
+    return `    ${at || 'value'}: ${left.length} ts items, ${right.length} rust items\n    ts tail:   ${shown(left[right.length])}\n    rust tail: ${shown(right[left.length])}\n`;
+  }
+  if (typeof left === 'object' && left !== null && typeof right === 'object' && right !== null) {
+    const a = left as Record<string, unknown>;
+    const b = right as Record<string, unknown>;
+    const key = [...new Set([...Object.keys(a), ...Object.keys(b)])].find(
+      (candidate) => !sameValue(a[candidate], b[candidate]),
+    );
+    if (key !== undefined) return firstDifference(a[key], b[key], `${at}.${key}`);
+  }
+  const size = (value: unknown): string =>
+    Array.isArray(value)
+      ? `array of ${value.length}`
+      : typeof value === 'object' && value !== null
+        ? `object with keys ${Object.keys(value).join(',')}`
+        : typeof value;
+  return `    at ${at || 'value'}\n    ts:   ${size(left)} ${shown(left)}\n    rust: ${size(right)} ${shown(right)}\n`;
 }
 
 function wire(context: EventSourceAnalysisContext): Record<string, unknown> {
@@ -234,6 +258,27 @@ function wire(context: EventSourceAnalysisContext): Record<string, unknown> {
 
 type InspectParams = Omit<EventInspectInput, 'workspaceId' | 'refresh' | 'principal' | 'signal'>;
 
+/** Whether two values are the same JSON, compared piece by piece when one string cannot hold them. */
+function sameValue(left: unknown, right: unknown): boolean {
+  try {
+    return canonicalJson(left) === canonicalJson(right);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    if (Array.isArray(left) && Array.isArray(right))
+      return (
+        left.length === right.length && left.every((item, index) => sameValue(item, right[index]))
+      );
+    if (typeof left === 'object' && left !== null && typeof right === 'object' && right !== null) {
+      const a = left as Record<string, unknown>;
+      const b = right as Record<string, unknown>;
+      return [...new Set([...Object.keys(a), ...Object.keys(b)])].every((key) =>
+        sameValue(a[key], b[key]),
+      );
+    }
+    return false;
+  }
+}
+
 /** The mode queries of one graph, answered by TypeScript and by the engine's event.inspect. */
 async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<string[]> {
   const events = graph.nodes.filter((node) => node.kind === 'event' && node.eventId !== undefined);
@@ -253,7 +298,6 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
     ['scan', { mode: 'scan' }],
     ['roots', { mode: 'roots' }],
     ['lint', { mode: 'lint' }],
-    ['state flow', { mode: 'state_flow' }],
     ['not found', { mode: 'roots', selector: eventSelector('definitely_missing.1') }],
     ['no selector for trace', { mode: 'trace' }],
     ['no subject for impact', { mode: 'impact' }],
@@ -263,6 +307,8 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
       { mode: 'state_flow', stateSubject: { kind: 'country_flag', name: 'no_such_flag_anywhere' } },
     ],
   ];
+  // The whole state flow of a large graph passes the response limit, which the engine refuses; its filtered forms are compared.
+  if (graph.stateAccesses.length <= 5_000) cases.push(['state flow', { mode: 'state_flow' }]);
   if (first?.eventId !== undefined) {
     const selector = eventSelector(first.eventId);
     cases.push(
@@ -376,6 +422,7 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
   const graphJson = Buffer.from(canonicalJson(graph), 'utf8');
   const failed: string[] = [];
   for (const [name, params] of cases) {
+    if (process.env.PARITY_CASE !== undefined && !name.includes(process.env.PARITY_CASE)) continue;
     let expected: unknown;
     try {
       expected = eventInspectOutcome(graph, params);
@@ -414,14 +461,10 @@ async function inspectParity(graph: EventGraphSnapshot, label: string): Promise<
         },
       };
     } else actual = { engine: outcome };
-    const left = canonicalJson(JSON.parse(canonicalJson(expected)));
-    const right = canonicalJson(actual);
-    if (left !== right) {
+    if (!sameValue(expected, actual)) {
       failed.push(`inspect ${label} ${name}`);
       if (failed.length <= 3)
-        process.stderr.write(
-          `  inspect ${name}\n${firstDifference(JSON.parse(left), JSON.parse(right))}`,
-        );
+        process.stderr.write(`  inspect ${name}\n${firstDifference(expected, actual)}`);
     }
   }
   process.stdout.write(`inspect ${label}: ${cases.length} cases, ${failed.length} differ\n`);

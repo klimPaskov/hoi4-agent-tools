@@ -194,10 +194,27 @@ impl From<ContextWire> for source_analysis::Context {
 /// A result too large for the response header: the JSON goes in the payload and the header names it,
 /// with the wall time of each phase in milliseconds.
 fn payload_response(name: &str, value: &Value, count: usize, timings: Value) -> OpResponse {
+    payload_response_within(name, value, count, timings, MAX_RESPONSE_BYTES)
+}
+
+/// The largest response payload the TypeScript client accepts (`RESIDENT_ENGINE_MAX_PAYLOAD_BYTES`).
+/// A larger answer is refused, since the client would stop the engine instead.
+const MAX_RESPONSE_BYTES: usize = 512 * 1024 * 1024;
+
+fn payload_response_within(name: &str, value: &Value, count: usize, timings: Value, limit: usize) -> OpResponse {
     match serde_json::to_vec(value) {
+        Ok(bytes) if bytes.len() > limit => OpResponse::error(
+            "EVENT_RESULT_TOO_LARGE",
+            format!("The {name} answer is {} bytes, over the {limit} byte response limit; narrow the selection", bytes.len()),
+        ),
         Ok(bytes) => OpResponse::ok_with_payload(json!({ "payload": name, "count": count, "timingsMs": timings }), bytes),
         Err(error) => OpResponse::error("internal", error.to_string()),
     }
+}
+
+#[cfg(test)]
+pub(crate) fn payload_response_for_test(value: &Value, limit: usize) -> OpResponse {
+    payload_response_within("test", value, 1, json!({}), limit)
 }
 
 fn file_bytes<'a>(file: &FragmentFile, payload: &'a [u8]) -> Result<Cow<'a, [u8]>, OpResponse> {
