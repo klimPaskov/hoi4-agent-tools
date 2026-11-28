@@ -14,6 +14,10 @@ import { buildTechnologyGraphOnEngine } from '../src/hoi4_agent_tools/technology
 import { scanTechnologySources } from '../src/hoi4_agent_tools/technology/service.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'tech-parity' });
 
 /**
  * Parity check for the technology graph on the Rust engine (packet P5, ADR 0089). On each corpus

@@ -47,6 +47,10 @@ import {
 } from '../src/hoi4_agent_tools/map/world-outputs.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'artifacts-parity' });
 
 /**
  * Parity check for the artifact store, diffs, changed-file summary, managed outputs and image diff

@@ -6,6 +6,10 @@ import { parseArgs } from 'node:util';
 import { sharedResidentEngine } from '../src/hoi4_agent_tools/core/resident-engine.js';
 import { ServiceError } from '../src/hoi4_agent_tools/core/result.js';
 import type * as NewSourceModule from '../src/hoi4_agent_tools/core/source/index.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'script-write-parity' });
 
 /**
  * Parity check for the script writers on the Rust engine (ADR 0089, packet P10). For every file of

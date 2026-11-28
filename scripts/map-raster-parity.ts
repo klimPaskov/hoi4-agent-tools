@@ -13,6 +13,10 @@ import { AgentNudger } from '../src/hoi4_agent_tools/map/service.js';
 import { typeScriptProvinceTopology } from '../src/hoi4_agent_tools/map/validation.js';
 import { locateCorpus } from './bench/corpus.js';
 import { corpusFileSchema } from './bench/schema.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'map-raster-parity' });
 
 /**
  * Parity check for the province raster on the shared Rust engine (ADR 0084). On each workspace

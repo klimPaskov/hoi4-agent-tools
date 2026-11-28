@@ -23,6 +23,10 @@ import {
   type EventSourceAnalysisContext,
 } from '../src/hoi4_agent_tools/event/source-analysis.js';
 import type { EventType } from '../src/hoi4_agent_tools/event/model.js';
+import { capEngineMemory } from './bench/engine-memory-cap.js';
+
+// Every engine this script starts runs under a hard memory cap (HOI4_PARITY_ENGINE_MAX_MB).
+capEngineMemory({ label: 'event-parity' });
 
 /**
  * Parity check for the event source analysis on the shared Rust engine (packet P6). Every file is
