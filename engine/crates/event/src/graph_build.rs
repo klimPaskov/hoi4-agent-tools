@@ -290,17 +290,17 @@ fn is_derived(edge: &Value) -> bool {
     edge.get("derived").and_then(Value::as_bool).unwrap_or(false)
 }
 
-fn definitions(nodes: &[Value]) -> Vec<(String, Vec<Value>)> {
-    let mut groups: HashMap<String, Vec<Value>> = HashMap::new();
+fn definitions(nodes: &[Value]) -> Vec<(String, Vec<&Value>)> {
+    let mut groups: HashMap<String, Vec<&Value>> = HashMap::new();
     for node in nodes {
         if text(node, "kind") != "event" {
             continue;
         }
         if let Some(event_id) = text_opt(node, "eventId") {
-            groups.entry(event_id.to_string()).or_default().push(node.clone());
+            groups.entry(event_id.to_string()).or_default().push(node);
         }
     }
-    let mut ordered: Vec<(String, Vec<Value>)> = groups.into_iter().collect();
+    let mut ordered: Vec<(String, Vec<&Value>)> = groups.into_iter().collect();
     ordered.sort_by(|(a, _), (b, _)| cmp(a, b));
     for (_, values) in &mut ordered {
         values.sort_by(|a, b| cmp(&location_key(a.get("location")), &location_key(b.get("location"))).then_with(|| cmp(text(a, "id"), text(b, "id"))));
@@ -308,15 +308,22 @@ fn definitions(nodes: &[Value]) -> Vec<(String, Vec<Value>)> {
     ordered
 }
 
-fn merge_fragments(fragments: &[Value]) -> G {
+fn take_list(fragment: &mut Value, key: &str) -> Vec<Value> {
+    match fragment.get_mut(key).map(Value::take) {
+        Some(Value::Array(items)) => items,
+        _ => Vec::new(),
+    }
+}
+
+fn merge_fragments(fragments: Vec<Value>) -> G {
     let mut graph = G::default();
-    for fragment in fragments {
-        graph.nodes.extend(list(fragment, "nodes").iter().cloned());
-        graph.edges.extend(list(fragment, "edges").iter().cloned());
-        graph.accesses.extend(list(fragment, "stateAccesses").iter().cloned());
-        graph.issues.extend(list(fragment, "issues").iter().cloned());
-        graph.unresolved.extend(list(fragment, "unresolved").iter().cloned());
-        graph.localisation.extend(list(fragment, "localisation").iter().cloned());
+    for mut fragment in fragments {
+        graph.nodes.extend(take_list(&mut fragment, "nodes"));
+        graph.edges.extend(take_list(&mut fragment, "edges"));
+        graph.accesses.extend(take_list(&mut fragment, "stateAccesses"));
+        graph.issues.extend(take_list(&mut fragment, "issues"));
+        graph.unresolved.extend(take_list(&mut fragment, "unresolved"));
+        graph.localisation.extend(take_list(&mut fragment, "localisation"));
     }
     graph
 }
@@ -1034,14 +1041,17 @@ fn state_links_for(graph: &mut G, budget: &mut Budget) -> Done<Vec<Value>> {
         let mut reads: Vec<&Value> = consumers[key].values().copied().collect();
         reads.sort_by(|a, b| cmp(text(a, "id"), text(b, "id")));
         for consumer in reads {
-            let writes = {
-                let mut found: Vec<Value> = Vec::new();
+            let writes: Vec<&Value> = {
+                let mut found: Vec<&Value> = Vec::new();
                 for producer_key in compatible_producer_keys(consumer) {
                     if let Some(values) = producers.get(&producer_key) {
-                        found.extend(values.values().map(|v| (*v).clone()));
+                        found.extend(values.values().copied());
                     }
                 }
-                stable_unique(found)
+                let mut seen = HashSet::new();
+                found.retain(|value| seen.insert(text(value, "id")));
+                found.sort_by(|a, b| cmp(text(a, "id"), text(b, "id")));
+                found
             };
             let consumer_owner = semantic_owner(text(consumer, "ownerId"), &nodes, &parent);
             for producer in &writes {
@@ -1742,10 +1752,8 @@ fn unreachable_issues(graph: &mut G, budget: &mut Budget) -> Done<()> {
 fn normalize_issue_subjects(graph: &mut G) {
     let nodes = node_map(&graph.nodes);
     let parent = option_parents(&graph.edges);
-    let mut next: Vec<Value> = Vec::with_capacity(graph.issues.len());
-    for issue in &graph.issues {
+    for issue in &mut graph.issues {
         let Some(Value::Array(subjects)) = issue.get("details").and_then(|d| d.get("subjectIds")) else {
-            next.push(issue.clone());
             continue;
         };
         let mapped: Vec<String> = subjects.iter().filter_map(Value::as_str).map(|id| semantic_owner(id, &nodes, &parent)).collect();
@@ -1754,11 +1762,8 @@ fn normalize_issue_subjects(graph: &mut G) {
             .filter(|id| kind_of(&nodes, id) != Some("unresolved") || !mapped.iter().any(|candidate| kind_of(&nodes, candidate) != Some("unresolved")))
             .cloned()
             .collect();
-        let mut copy = issue.clone();
-        copy["details"]["subjectIds"] = json!(sorted_strings(kept));
-        next.push(copy);
+        issue["details"]["subjectIds"] = json!(sorted_strings(kept));
     }
-    graph.issues = next;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1801,10 +1806,8 @@ fn partial_inventory(input: &Input) -> (Vec<Value>, Vec<Value>) {
     (vec![diagnostic], vec![unresolved])
 }
 
-fn sort_nodes(values: &[Value]) -> Vec<Value> {
-    let mut sorted = values.to_vec();
-    sorted.sort_by(|a, b| cmp(text(a, "id"), text(b, "id")).then_with(|| cmp(&location_key(a.get("location")), &location_key(b.get("location")))));
-    sorted
+fn sort_nodes(values: &mut [Value]) {
+    values.sort_by(|a, b| cmp(text(a, "id"), text(b, "id")).then_with(|| cmp(&location_key(a.get("location")), &location_key(b.get("location")))));
 }
 
 fn severity_order(value: &str) -> u8 {
@@ -1843,12 +1846,31 @@ fn statistics(nodes: &[Value], edges: &[Value], accesses: &[Value], issues: &[Va
     })
 }
 
-/// Build the event semantic graph from the fragments of the active files.
+/// The graph and the wall time of each phase, in milliseconds.
+pub struct Built {
+    pub graph: Value,
+    pub timings: Vec<(&'static str, u64)>,
+}
+
+/// Build the event semantic graph from the fragments of the active files, leaving the input intact.
 pub fn build_graph(input: &Input) -> Done<Value> {
+    build_owned(input.clone()).map(|built| built.graph)
+}
+
+/// Build the event semantic graph, consuming the fragments so no copy of them is kept.
+pub fn build_owned(mut input: Input) -> Done<Built> {
     let mut budget = Budget::default();
-    let mut fragments = input.fragments.clone();
+    let mut timings: Vec<(&'static str, u64)> = Vec::new();
+    let mut clock = std::time::Instant::now();
+    let mut mark = |name: &'static str| {
+        timings.push((name, clock.elapsed().as_millis() as u64));
+        clock = std::time::Instant::now();
+    };
+    let mut fragments = std::mem::take(&mut input.fragments);
     fragments.sort_by(|a, b| cmp(text(a, "sourcePath"), text(b, "sourcePath")).then_with(|| cmp(text(a, "sourceHash"), text(b, "sourceHash"))));
-    let mut graph = merge_fragments(&fragments);
+    let mut graph = merge_fragments(fragments);
+    let input = &input;
+    mark("merge");
     let (partial_diagnostics, partial_unresolved) = partial_inventory(input);
     graph.unresolved.extend(partial_unresolved);
 
@@ -1863,6 +1885,7 @@ pub fn build_graph(input: &Input) -> Done<Value> {
     normalize_public_event_node_ids(&mut graph);
     normalize_cross_file_edges(&mut graph);
     ensure_referenced_nodes(&mut graph);
+    mark("normalize");
     if input.project_helpers {
         let nodes = node_map(&graph.nodes);
         let mut walk_edges: Vec<&Value> = graph.edges.iter().filter(|edge| !is_derived(edge)).collect();
@@ -1901,9 +1924,10 @@ pub fn build_graph(input: &Input) -> Done<Value> {
         let accesses = project_helper_state_accesses(&mut graph, &mut budget, &walked)?;
         graph.accesses.extend(accesses);
     }
+    mark("helpers");
     add_terminal_nodes(&mut graph);
 
-    graph.nodes = sort_nodes(&graph.nodes);
+    sort_nodes(&mut graph.nodes);
     graph.edges = stable_unique(std::mem::take(&mut graph.edges));
     graph.accesses = stable_unique(std::mem::take(&mut graph.accesses));
     graph.unresolved = stable_unique(std::mem::take(&mut graph.unresolved));
@@ -1919,17 +1943,22 @@ pub fn build_graph(input: &Input) -> Done<Value> {
             }],
         }));
     }
+    mark("terminals and sorting");
     let links = if input.focused { Vec::new() } else { state_links_for(&mut graph, &mut budget)? };
+    mark("state links");
     if !input.focused {
         duplicate_and_reference_issues(&mut graph);
         unresolved_issues(&mut graph);
         structural_call_issues(&mut graph, &mut budget)?;
+        mark("call findings");
         localisation_issues(&mut graph);
         state_lifecycle_issues(&mut graph, &links, &mut budget)?;
+        mark("state findings");
         unreachable_issues(&mut graph, &mut budget)?;
         normalize_issue_subjects(&mut graph);
     }
     graph.issues = stable_issues(std::mem::take(&mut graph.issues));
+    mark("other findings");
 
     limits(&graph)?;
     assert_limit(links.len(), MAX_STATE_LINKS, "EVENT_STATE_LINK_LIMIT", "state-link count")?;
@@ -1944,11 +1973,8 @@ pub fn build_graph(input: &Input) -> Done<Value> {
             .issues
             .iter()
             .any(|issue| matches!(text(issue, "code"), "EVENT_HELPER_DEPTH_LIMIT" | "EVENT_HELPER_PROJECTION_LIMIT" | "EVENT_HELPER_STATE_PROJECTION_LIMIT"));
-    let nodes = sort_nodes(&graph.nodes);
-    let edges = stable_unique(std::mem::take(&mut graph.edges));
-    let accesses = stable_unique(std::mem::take(&mut graph.accesses));
-    let issues = stable_issues(std::mem::take(&mut graph.issues));
-    let unresolved = stable_unique(std::mem::take(&mut graph.unresolved));
+    // Already sorted and unique above; the sorts are idempotent, so nothing is repeated here.
+    let G { nodes, edges, accesses, issues, unresolved, .. } = graph;
     let mut source_hashes = Map::new();
     let mut files = input.files.clone();
     files.sort_by(|a, b| cmp(&a.0, &b.0));
@@ -1957,25 +1983,28 @@ pub fn build_graph(input: &Input) -> Done<Value> {
     }
     let statistics = statistics(&nodes, &edges, &accesses, &issues);
     let identity = input.workspace_identity.clone().unwrap_or_else(|| hash_canonical(&json!({ "workspaceId": input.workspace_id })));
-    Ok(json!({
-        "schemaVersion": 1,
-        "parserVersion": "clausewitz-cst.v1",
-        "analysisMode": if input.focused { "focused" } else { "full" },
-        "workspaceId": input.workspace_id,
-        "workspaceIdentity": identity,
-        "revision": input.revision,
-        "complete": complete,
-        "sourceHashes": source_hashes,
-        "filesScanned": files.iter().map(|(path, _)| path.clone()).collect::<Vec<_>>(),
-        "skippedSourceCount": input.skipped_source_count,
-        "skippedSources": input.skipped_sources,
-        "nodes": nodes,
-        "edges": edges,
-        "stateAccesses": accesses,
-        "stateLinks": links,
-        "issues": issues,
-        "diagnostics": diagnostics,
-        "unresolved": unresolved,
-        "statistics": statistics,
-    }))
+    // The big lists move into the result; `json!` would copy every one of them.
+    let mut graph = Map::new();
+    graph.insert("schemaVersion".into(), json!(1));
+    graph.insert("parserVersion".into(), json!("clausewitz-cst.v1"));
+    graph.insert("analysisMode".into(), json!(if input.focused { "focused" } else { "full" }));
+    graph.insert("workspaceId".into(), json!(input.workspace_id));
+    graph.insert("workspaceIdentity".into(), json!(identity));
+    graph.insert("revision".into(), json!(input.revision));
+    graph.insert("complete".into(), json!(complete));
+    graph.insert("sourceHashes".into(), Value::Object(source_hashes));
+    graph.insert("filesScanned".into(), json!(files.iter().map(|(path, _)| path.clone()).collect::<Vec<_>>()));
+    graph.insert("skippedSourceCount".into(), json!(input.skipped_source_count));
+    graph.insert("skippedSources".into(), Value::Array(input.skipped_sources.clone()));
+    graph.insert("nodes".into(), Value::Array(nodes));
+    graph.insert("edges".into(), Value::Array(edges));
+    graph.insert("stateAccesses".into(), Value::Array(accesses));
+    graph.insert("stateLinks".into(), Value::Array(links));
+    graph.insert("issues".into(), Value::Array(issues));
+    graph.insert("diagnostics".into(), Value::Array(diagnostics));
+    graph.insert("unresolved".into(), Value::Array(unresolved));
+    graph.insert("statistics".into(), statistics);
+    let graph = Value::Object(graph);
+    mark("assemble");
+    Ok(Built { graph, timings })
 }

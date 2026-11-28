@@ -166,6 +166,8 @@ interface Source {
   file: ScannedFile;
 }
 const include = new RegExp(values.include ?? '', 'u');
+/** Files read from disk: the engine reads these itself by path instead of taking their bytes. */
+const onDisk = new Set<string>();
 const sources: Source[] = SYNTHETIC.map(([relativePath, text]) => ({
   file: scanned(
     relativePath,
@@ -179,8 +181,13 @@ for (const root of values.dir ?? []) {
     for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
       const next = relative === '' ? entry.name : `${relative}/${entry.name}`;
       if (entry.isDirectory()) stack.push(next);
-      else if (/.(?:txt|yml)$/iu.test(entry.name) && include.test(next))
-        sources.push({ file: scanned(next, await readFile(path.join(root, next))) });
+      else if (/\.(?:txt|yml)$/iu.test(entry.name) && include.test(next)) {
+        const absolute = path.join(root, next);
+        const scannedFile = scanned(next, await readFile(absolute));
+        scannedFile.absolutePath = absolute;
+        onDisk.add(scannedFile.displayPath);
+        sources.push({ file: scannedFile });
+      }
     }
   }
 }
@@ -446,27 +453,33 @@ async function rust(files: ScannedFile[], context: EventSourceAnalysisContext): 
   return out;
 }
 
-async function rustBatch(files: ScannedFile[], context: EventSourceAnalysisContext) {
-  const chunks = files.map((file) => file.bytes);
-  const offsets: Array<[number, number]> = [];
+/** The request entries of files and the payload holding the bytes of those not read by path. */
+function entries(files: ScannedFile[]): { files: Record<string, unknown>[]; payload: Buffer } {
+  const chunks: Buffer[] = [];
   let at = 0;
-  for (const chunk of chunks) {
-    offsets.push([at, chunk.length]);
-    at += chunk.length;
-  }
+  const described = files.map((file) => {
+    const common = {
+      relativePath: file.relativePath,
+      displayPath: file.displayPath,
+      sha256: file.sha256,
+      cacheKey: `key:${file.displayPath}`,
+    };
+    if (onDisk.has(file.displayPath))
+      return { ...common, path: file.absolutePath, size: file.size };
+    chunks.push(file.bytes);
+    const entry = { ...common, payload: [at, file.bytes.length] };
+    at += file.bytes.length;
+    return entry;
+  });
+  return { files: described, payload: Buffer.concat(chunks) };
+}
+
+async function rustBatch(files: ScannedFile[], context: EventSourceAnalysisContext) {
+  const described = entries(files);
   const outcome = await engine.request(
     'event.fragments',
-    {
-      files: files.map((file, index) => ({
-        relativePath: file.relativePath,
-        displayPath: file.displayPath,
-        sha256: file.sha256,
-        cacheKey: `key:${file.displayPath}`,
-        payload: offsets[index],
-      })),
-      context: wire(context),
-    },
-    Buffer.concat(chunks),
+    { files: described.files, context: wire(context) },
+    described.payload,
     { timeoutMs: 1_800_000 },
   );
   if (!outcome.ok) throw new Error(`engine unavailable: ${JSON.stringify(outcome)}`);
@@ -548,23 +561,27 @@ if (values['skip-graph'] !== true) {
     const covered = activeFiles(snapshot).filter(
       (file) => shouldAnalyzeEventFile(file) && !snapshot.index.isSourceSkipped(file.displayPath),
     );
-    const fragmentsStarted = performance.now();
-    const fragments = await rust(covered, {
-      knownEventIds: catalog.eventIds,
-      knownEventTypes: catalog.eventTypes,
-      knownHelperIds: catalog.helperIds,
-      knownDecisionIds: catalog.decisionIds,
-      activeEventPaths: catalog.activeEventPaths,
-      retainedEventPaths: catalog.retainedEventPaths,
-      activeHelperPaths: catalog.activeHelperPaths,
-      activeDecisionPaths: catalog.activeDecisionPaths,
-      inventoryComplete: snapshot.complete,
-    });
+    // One request: the engine reads the files by path, analyzes them and builds the graph, so no
+    // fragments cross the pipe.
+    const described = entries(covered);
     const graphStarted = performance.now();
     const outcome = await engine.request(
       'event.graph',
       {
-        fragments,
+        analyze: {
+          files: described.files,
+          context: wire({
+            knownEventIds: catalog.eventIds,
+            knownEventTypes: catalog.eventTypes,
+            knownHelperIds: catalog.helperIds,
+            knownDecisionIds: catalog.decisionIds,
+            activeEventPaths: catalog.activeEventPaths,
+            retainedEventPaths: catalog.retainedEventPaths,
+            activeHelperPaths: catalog.activeHelperPaths,
+            activeDecisionPaths: catalog.activeDecisionPaths,
+            inventoryComplete: snapshot.complete,
+          }),
+        },
         files: activeFiles(snapshot).map(({ displayPath, sha256 }) => ({ displayPath, sha256 })),
         workspaceId: snapshot.workspaceId,
         revision: snapshot.revision,
@@ -574,7 +591,7 @@ if (values['skip-graph'] !== true) {
         diagnostics: snapshot.diagnostics,
         projectHelpers,
       },
-      undefined,
+      described.payload,
       { timeoutMs: 1_800_000 },
     );
     const graphMs = performance.now() - graphStarted;
@@ -583,8 +600,7 @@ if (values['skip-graph'] !== true) {
     const typescriptGraph = buildEventGraph(snapshot, { projectHelpers });
     const typescriptMs = performance.now() - typescriptStarted;
     process.stdout.write(
-      `timing projectHelpers=${projectHelpers}: engine fragments ${Math.round(graphStarted - fragmentsStarted)} ms (${covered.length} files), engine graph ${Math.round(graphMs)} ms, TypeScript graph ${Math.round(typescriptMs)} ms
-`,
+      `timing projectHelpers=${projectHelpers}: engine ${Math.round(graphMs)} ms for ${covered.length} files and ${Math.round(outcome.response.payload.length / 1048576)} MB of graph (${JSON.stringify((outcome.response.result as { timingsMs?: unknown }).timingsMs)}), TypeScript ${Math.round(typescriptMs)} ms\n`,
     );
     const left = JSON.parse(canonicalJson(typescriptGraph)) as Record<string, unknown>;
     const right = JSON.parse(outcome.response.payload.toString('utf8')) as Record<string, unknown>;
