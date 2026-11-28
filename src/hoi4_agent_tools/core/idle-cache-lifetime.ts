@@ -1,3 +1,4 @@
+import type { CoreEngine } from './engine.js';
 import { compactManagedHeap } from './managed-heap.js';
 
 export const DEFAULT_IDLE_CACHE_RELEASE_MS = 30_000;
@@ -92,4 +93,18 @@ export class IdleCacheLifetime {
     if (this.#active !== 0 || activeCacheOperations !== 0) deferredReleases.add(this);
     else this.release();
   }
+}
+
+/**
+ * The cache lifetime of one group of operations on `engine`: its caches are released after the
+ * configured `idleCacheReleaseSeconds` without a call (default 30 s).
+ */
+export function idleCacheLifetime(
+  engine: CoreEngine,
+  releaseCaches: () => void,
+): IdleCacheLifetime {
+  return new IdleCacheLifetime(
+    releaseCaches,
+    engine.resolver.config().idleCacheReleaseSeconds * 1000,
+  );
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../core/engine.js';
 import type { JobOperations } from '../core/job-executor.js';
-import { IdleCacheLifetime } from '../core/idle-cache-lifetime.js';
+import { idleCacheLifetime } from '../core/idle-cache-lifetime.js';
 import { toolResult } from '../core/operation-result.js';
 import { ServiceError } from '../core/result.js';
 import { techWriteRequestSchema } from '../schemas/tech-write.js';
@@ -22,7 +22,7 @@ function wire(result: Parameters<typeof toolResult>[0]): z.infer<typeof wireResu
 /** Registers `hoi4.tech_write`: a read-only preview, or one journaled transaction. */
 export function registerTechWriteJobs(operations: JobOperations, engine: CoreEngine): void {
   const viewer = new TechnologyTreeViewer(engine);
-  const lifetime = new IdleCacheLifetime(() => viewer.clearCaches());
+  const lifetime = idleCacheLifetime(engine, () => viewer.clearCaches());
   operations.registerWrite(
     'hoi4.tech_write',
     techWriteRequestSchema,
