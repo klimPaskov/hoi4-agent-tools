@@ -1,0 +1,1 @@
+- Fixed `hoi4.gui_render` drawing a masked flag shield (a `maskedShieldType` sprite such as the base game's small flag) as its overlay only, with no flag colours. The mask was applied by brightness when its alpha was uniform, so the game's black, fully opaque mask cut the whole flag away. The renderer now uses only the mask's alpha, as the game's masked flag shader does.
