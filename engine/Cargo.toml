@@ -10,6 +10,7 @@ members = [
     "crates/cli",
     "crates/core",
     "crates/txn",
+    "crates/os",
     "crates/artifact-store",
     "crates/jobs",
     "crates/tech",
@@ -31,7 +32,7 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/klimPaskov/hoi4-agent-tools"
-rust-version = "1.88"
+rust-version = "1.89"
 publish = false
 
 [workspace.dependencies]
@@ -44,6 +45,7 @@ hoi4-preview = { path = "crates/preview" }
 hoi4-core = { path = "crates/core" }
 hoi4-txn = { path = "crates/txn" }
 hoi4-artifacts = { path = "crates/artifact-store" }
+hoi4-os = { path = "crates/os" }
 hoi4-jobs = { path = "crates/jobs" }
 hoi4-tech = { path = "crates/tech" }
 hoi4-event = { path = "crates/event" }

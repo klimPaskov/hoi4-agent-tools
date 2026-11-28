@@ -10,8 +10,16 @@ publish.workspace = true
 
 [dependencies]
 hoi4-core.workspace = true
+hoi4-os.workspace = true
+getrandom = "0.3.3"
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+png.workspace = true
+regex = "1.11"
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true
