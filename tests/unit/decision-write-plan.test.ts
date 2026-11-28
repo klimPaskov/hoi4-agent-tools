@@ -211,9 +211,8 @@ describe('decision_write plan: a new file and categories', () => {
   });
 
   it('lists the category blocks of a file', async () => {
-    expect(decisionCategories({ bytes: bytes(FILE), path: 'common/decisions/test.txt' })).toEqual([
-      'tst_category',
-      'tst_other',
-    ]);
+    expect(
+      await decisionCategories({ bytes: bytes(FILE), path: 'common/decisions/test.txt' }),
+    ).toEqual(['tst_category', 'tst_other']);
   });
 });

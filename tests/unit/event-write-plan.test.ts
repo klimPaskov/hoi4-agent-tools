@@ -227,7 +227,7 @@ describe('event_write plan: a new file and file contents', () => {
   });
 
   it('reads the ids and namespaces of a file', async () => {
-    expect(eventFileContents({ bytes: bytes(FILE), path: 'events/test.txt' })).toEqual({
+    expect(await eventFileContents({ bytes: bytes(FILE), path: 'events/test.txt' })).toEqual({
       ids: ['tst.1', 'tst.2'],
       namespaces: ['tst'],
     });
