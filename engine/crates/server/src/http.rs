@@ -427,6 +427,11 @@ impl HttpServerHandle {
         self.shared.sessions.len()
     }
 
+    /// The body bytes that admitted requests reserve now, out of the aggregate body budget.
+    pub fn reserved_body_bytes(&self) -> u64 {
+        self.shared.admission.reserved_body_bytes()
+    }
+
     /// Stops accepting, closes every session and waits for the accept and cleanup threads.
     pub fn close(mut self) {
         self.stop();

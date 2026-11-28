@@ -19,6 +19,8 @@ use serde_json::{Map, Value, json};
 
 const TOKEN_A: &str = "alice-static-secret-0123456789abcdef";
 const TOKEN_B: &str = "bob-static-secret-0123456789abcdefgh";
+/// The default body limit; the aggregate body budget is twice it.
+const MAX_BODY: u64 = hoi4_server::config::HTTP_MAX_BODY_BYTES;
 
 fn service() -> Arc<CoreService> {
     Arc::new(CoreService::new(
@@ -854,13 +856,16 @@ fn the_aggregate_body_budget_is_bounded_and_released_after_interrupted_uploads()
     let id = open_session(&server, TOKEN_A);
     let port = server.address().port();
     let upload = |authorization: &str| {
-        format!("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{authorization}Content-Type: application/json\r\nContent-Length: 67108864\r\n\r\n{{")
+        format!("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{authorization}Content-Type: application/json\r\nContent-Length: {MAX_BODY}\r\n\r\n{{")
     };
     // An unauthenticated upload is refused before its body and holds nothing.
     let mut anonymous = connect(&server);
     anonymous.write_all(upload("").as_bytes()).unwrap();
     assert!(read_until(&mut anonymous, "\r\n").starts_with("HTTP/1.1 401"));
+    assert_eq!(server.reserved_body_bytes(), 0, "the refused upload holds nothing");
     // Two authenticated maximum-size uploads fill the aggregate budget of twice the body limit.
+    // The wait reads the reservation itself: a probe request sent meanwhile reserves its own body,
+    // and one admitted between the two uploads leaves too little for the second.
     let held: Vec<TcpStream> = (0..2)
         .map(|_| {
             let mut stream = connect(&server);
@@ -868,13 +873,40 @@ fn the_aggregate_body_budget_is_bounded_and_released_after_interrupted_uploads()
             stream
         })
         .collect();
-    eventually("both uploads hold their reservation", || {
-        let probe = Request::post(&initialize_body()).bearer(TOKEN_A).send(&server);
-        probe.status == 429 && probe.json() == json!({ "error": "body_capacity_limit" })
-    });
+    eventually("both uploads hold their reservation", || server.reserved_body_bytes() == 2 * MAX_BODY);
+    let probe = Request::post(&initialize_body()).bearer(TOKEN_A).send(&server);
+    assert_eq!((probe.status, probe.json()), (429, json!({ "error": "body_capacity_limit" })));
+    assert_eq!(server.reserved_body_bytes(), 2 * MAX_BODY, "the refused probe holds nothing");
     drop(held);
     drop(anonymous);
-    eventually("the interrupted uploads release their reservation", || Request::post(&ping(2)).bearer(TOKEN_A).session(&id).send(&server).status == 200);
+    eventually("the interrupted uploads release their reservation", || server.reserved_body_bytes() == 0);
+    assert_eq!(Request::post(&ping(2)).bearer(TOKEN_A).session(&id).send(&server).status, 200);
+}
+
+#[test]
+fn a_request_admitted_between_two_maximum_uploads_leaves_too_little_for_the_second() {
+    // Why the test above waits on the reservation: a small request admitted while the first
+    // maximum-size upload holds its reservation takes part of the budget the second one needs.
+    let server = static_server(json!({ "maxConcurrentRequests": 8 }));
+    let port = server.address().port();
+    let head = |length: u64| {
+        format!(
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {TOKEN_A}\r\nContent-Type: application/json\r\nContent-Length: {length}\r\n\r\n{{"
+        )
+    };
+    let mut first = connect(&server);
+    first.write_all(head(MAX_BODY).as_bytes()).unwrap();
+    eventually("the first upload holds its reservation", || server.reserved_body_bytes() == MAX_BODY);
+    let mut small = connect(&server);
+    small.write_all(head(200).as_bytes()).unwrap();
+    eventually("the small request holds its reservation", || server.reserved_body_bytes() == MAX_BODY + 200);
+    let mut second = connect(&server);
+    second.write_all(head(MAX_BODY).as_bytes()).unwrap();
+    let refused = read_until(&mut second, "\r\n\r\n");
+    assert!(refused.starts_with("HTTP/1.1 429"), "{refused}");
+    assert_eq!(server.reserved_body_bytes(), MAX_BODY + 200, "the refused upload holds nothing");
+    drop((first, small));
+    eventually("the uploads release their reservation", || server.reserved_body_bytes() == 0);
 }
 
 // ---- Ported from http-authorization.test.ts:250 ----
