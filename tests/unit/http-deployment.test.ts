@@ -229,7 +229,12 @@ describe('Streamable HTTP deployment policy', () => {
       version: 1,
       http: { publicUrl: 'https://tools.example.test/mcp', oauth },
     });
-    const writeTools = ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite'];
+    const writeTools = [
+      'hoi4.focus_rewrite',
+      'hoi4.gui_rewrite',
+      'hoi4.map_rewrite',
+      'hoi4.common_write',
+    ];
     for (const name of writeTools) {
       expect(
         requiredScopesForMcpRequest(config, {

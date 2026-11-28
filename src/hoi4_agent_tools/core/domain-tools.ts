@@ -12,6 +12,7 @@ import {
   guiRewriteRequestSchema,
 } from '../schemas/gui-requests.js';
 import { characterWriteRequestSchema } from '../schemas/character-write.js';
+import { commonWriteRequestSchema } from '../schemas/common-write.js';
 import { decisionWriteRequestSchema } from '../schemas/decision-write.js';
 import { doctrineWriteRequestSchema } from '../schemas/doctrine-write.js';
 import { techWriteRequestSchema } from '../schemas/tech-write.js';
@@ -59,6 +60,7 @@ export const DOMAIN_TOOL_NAMES = [
   'hoi4.decision_write',
   'hoi4.tech_write',
   'hoi4.doctrine_write',
+  'hoi4.common_write',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
   'hoi4.gui_rewrite',
@@ -93,6 +95,7 @@ export const DOMAIN_TOOL_ARGUMENT_SCHEMAS: Record<
   'hoi4.decision_write': decisionWriteRequestSchema,
   'hoi4.tech_write': techWriteRequestSchema,
   'hoi4.doctrine_write': doctrineWriteRequestSchema,
+  'hoi4.common_write': commonWriteRequestSchema,
   'hoi4.gui_inspect': guiInspectRequestSchema,
   'hoi4.gui_render': guiRenderRequestSchema,
   'hoi4.gui_rewrite': guiRewriteRequestSchema,
@@ -118,5 +121,6 @@ export const MUTATION_TOOL_NAMES: ReadonlySet<string> = new Set([
   'hoi4.decision_write',
   'hoi4.tech_write',
   'hoi4.doctrine_write',
+  'hoi4.common_write',
   'hoi4.focus_rewrite',
 ]);

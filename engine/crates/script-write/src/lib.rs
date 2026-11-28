@@ -7,6 +7,7 @@
 //! a `hoi4_core::plan::RewritePlan` for the one applier.
 
 pub mod character;
+pub mod common;
 pub mod decision;
 pub mod doctrine;
 pub mod event;

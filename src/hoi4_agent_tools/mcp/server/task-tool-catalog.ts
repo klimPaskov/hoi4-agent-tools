@@ -1,5 +1,6 @@
 import { analysisTaskTools } from '../tools/analysis.js';
 import { characterWriteTaskTools } from '../tools/character-write.js';
+import { commonWriteTaskTools } from '../tools/common-write.js';
 import { decisionWriteTaskTools } from '../tools/decision-write.js';
 import { doctrineWriteTaskTools } from '../tools/doctrine-write.js';
 import { techWriteTaskTools } from '../tools/tech-write.js';
@@ -25,6 +26,7 @@ export const taskToolCatalog: readonly TaskToolDefinition[] = [
   ...decisionWriteTaskTools,
   ...techWriteTaskTools,
   ...doctrineWriteTaskTools,
+  ...commonWriteTaskTools,
   ...eventTaskTools,
   ...analysisTaskTools,
   ...technologyTaskTools,

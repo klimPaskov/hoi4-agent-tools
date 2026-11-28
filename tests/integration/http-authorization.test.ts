@@ -208,6 +208,30 @@ describe('MCP Streamable HTTP authorization challenges', () => {
       `Bearer error="insufficient_scope", scope="hoi4:read hoi4:write", resource_metadata="${metadataUrl}"`,
     );
 
+    const commonWrite = await post(
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'hoi4.common_write',
+          arguments: {
+            workspaceId: 'not-registered',
+            kind: 'ai_strategy',
+            operation: 'remove',
+            id: 'tst_one',
+            apply: true,
+          },
+        },
+      },
+      readToken,
+      sessionId,
+    );
+    expect(commonWrite.status).toBe(403);
+    expect(commonWrite.headers.get('www-authenticate')).toBe(
+      `Bearer error="insufficient_scope", scope="hoi4:read hoi4:write", resource_metadata="${metadataUrl}"`,
+    );
+
     const upgraded = await post(writeCall, await token('hoi4:read hoi4:write'), sessionId);
     expect(upgraded.status).toBe(403);
     expect(upgraded.headers.get('www-authenticate')).toBeNull();

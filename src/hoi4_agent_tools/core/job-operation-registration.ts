@@ -52,6 +52,11 @@ export async function registerWorkerOperations(
       operations,
       engine,
     );
+  else if (toolName === 'hoi4.common_write')
+    (await import('../common-write/write-job-operations.js')).registerCommonWriteJobs(
+      operations,
+      engine,
+    );
   else if (toolName === 'hoi4.doctrine_write')
     (await import('../doctrine/write-job-operations.js')).registerDoctrineWriteJobs(
       operations,

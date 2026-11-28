@@ -16,7 +16,7 @@ use crate::config::HttpConfig;
 use crate::error::ServiceError;
 
 /// Tools that need the `hoi4:write` scope over HTTP.
-pub const WRITE_SCOPED_TOOLS: [&str; 10] = [
+pub const WRITE_SCOPED_TOOLS: [&str; 11] = [
     "hoi4.focus_rewrite",
     "hoi4.gui_rewrite",
     "hoi4.map_rewrite",
@@ -27,6 +27,7 @@ pub const WRITE_SCOPED_TOOLS: [&str; 10] = [
     "hoi4.decision_write",
     "hoi4.tech_write",
     "hoi4.doctrine_write",
+    "hoi4.common_write",
 ];
 
 /// The scopes one JSON-RPC body needs: the base scopes, plus `hoi4:write` for a write tool call.
@@ -126,6 +127,8 @@ mod tests {
         assert_eq!(required_scopes_for_mcp_request(&config, None), vec!["hoi4:read"]);
         assert_eq!(required_scopes_for_mcp_request(&config, Some(&call("hoi4.focus_rewrite"))), vec!["hoi4:read", "hoi4:write"]);
         assert_eq!(required_scopes_for_mcp_request(&config, Some(&call("hoi4.focus_inspect"))), vec!["hoi4:read"]);
+        // A read-only token reaches only the read scope, so a call of the common writer needs more.
+        assert_eq!(required_scopes_for_mcp_request(&config, Some(&call("hoi4.common_write"))), vec!["hoi4:read", "hoi4:write"]);
         let listed = json!({ "method": "tools/list", "params": { "name": "hoi4.map_rewrite" } });
         assert_eq!(required_scopes_for_mcp_request(&config, Some(&listed)), vec!["hoi4:read"]);
     }

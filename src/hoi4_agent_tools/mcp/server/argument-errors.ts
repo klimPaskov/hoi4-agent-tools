@@ -47,6 +47,8 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"operation":"add","id":"my_events.1","createNamespace":true,"body":"title = my_events.1.t"}',
   'hoi4.decision_write':
     '{"operation":"add","id":"my_decision","category":"my_category","body":"icon = generic_research"}',
+  'hoi4.common_write':
+    '{"kind":"on_action","operation":"add","id":"on_startup","file":"common/on_actions/my_mod.txt","createFile":true,"body":"effect = { add_political_power = 10 }"}',
   'hoi4.tech_write':
     '{"operation":"add","id":"my_tech","body":"research_cost = 1.5 start_year = 1936"}',
   'hoi4.doctrine_write':
