@@ -30,9 +30,9 @@ const FILE = [
 const bytes = (text: string) => Buffer.from(text, 'utf8');
 const plan = (input: IdeaWriteInput, text = FILE) =>
   planIdeaWrite({ bytes: bytes(text), path: 'common/ideas/test.txt' }, input);
-const codeOf = (action: () => unknown): string => {
+const codeOf = async (action: () => unknown): Promise<string> => {
   try {
-    action();
+    await action();
   } catch (error) {
     if (error instanceof ServiceError) return error.code;
     throw error;
@@ -41,8 +41,8 @@ const codeOf = (action: () => unknown): string => {
 };
 
 describe('idea_write plan: add', () => {
-  it('puts a new idea at the end of its category, after a blank line, and changes nothing else', () => {
-    const result = plan({
+  it('puts a new idea at the end of its category, after a blank line, and changes nothing else', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'third_spirit',
       category: 'country',
@@ -71,8 +71,8 @@ describe('idea_write plan: add', () => {
     expect(result.diff).not.toContain('-\t\t');
   });
 
-  it('puts an idea into an empty category without a leading blank line', () => {
-    const result = plan({
+  it('puts an idea into an empty category without a leading blank line', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'hidden_one',
       category: 'hidden_ideas',
@@ -83,18 +83,18 @@ describe('idea_write plan: add', () => {
     );
   });
 
-  it('indents with the file own indentation unit', () => {
+  it('indents with the file own indentation unit', async () => {
     const spaced = FILE.replaceAll('\t', '    ');
-    const result = plan(
+    const result = await plan(
       { operation: 'add', id: 'spaced_one', category: 'country', body: 'picture = x' },
       spaced,
     );
     expect(result.text).toContain('\n        spaced_one = {\n            picture = x\n        }\n');
   });
 
-  it('keeps CRLF line endings and a byte order mark', () => {
+  it('keeps CRLF line endings and a byte order mark', async () => {
     const crlf = `${String.fromCharCode(0xfeff)}${FILE.replaceAll('\n', '\r\n')}`;
-    const result = plan(
+    const result = await plan(
       { operation: 'add', id: 'crlf_one', category: 'country', body: 'picture = x\nname = y' },
       crlf,
     );
@@ -105,31 +105,35 @@ describe('idea_write plan: add', () => {
     expect([...result.bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   });
 
-  it('refuses a duplicate id, a missing or unknown category and a body that is not one block', () => {
+  it('refuses a duplicate id, a missing or unknown category and a body that is not one block', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'add', id: 'first_spirit', category: 'country', body: 'a = b' }),
       ),
     ).toBe('IDEA_WRITE_DUPLICATE_ID');
-    expect(codeOf(() => plan({ operation: 'add', id: 'x_one', body: 'a = b' }))).toBe(
+    expect(await codeOf(() => plan({ operation: 'add', id: 'x_one', body: 'a = b' }))).toBe(
       'IDEA_WRITE_CATEGORY_REQUIRED',
     );
     expect(
-      codeOf(() => plan({ operation: 'add', id: 'x_one', category: 'nowhere', body: 'a = b' })),
+      await codeOf(() =>
+        plan({ operation: 'add', id: 'x_one', category: 'nowhere', body: 'a = b' }),
+      ),
     ).toBe('IDEA_WRITE_CATEGORY_NOT_FOUND');
     for (const body of ['a = { b = c', 'a = b }\nother = {', '', '   \n']) {
       expect(
-        codeOf(() => plan({ operation: 'add', id: 'x_one', category: 'country', body })),
+        await codeOf(() => plan({ operation: 'add', id: 'x_one', category: 'country', body })),
       ).toMatch(/^IDEA_WRITE_BODY_(INVALID|REQUIRED)$/u);
     }
     expect(
-      codeOf(() => plan({ operation: 'add', id: '9bad id', category: 'country', body: 'a = b' })),
+      await codeOf(() =>
+        plan({ operation: 'add', id: '9bad id', category: 'country', body: 'a = b' }),
+      ),
     ).toBe('IDEA_WRITE_ID_INVALID');
   });
 
-  it('refuses a source with syntax errors', () => {
+  it('refuses a source with syntax errors', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan(
           { operation: 'add', id: 'x_one', category: 'country', body: 'a = b' },
           'ideas = { country = {',
@@ -140,8 +144,8 @@ describe('idea_write plan: add', () => {
 });
 
 describe('idea_write plan: replace and remove', () => {
-  it('replaces only the idea block and keeps the comment above it', () => {
-    const result = plan({
+  it('replaces only the idea block and keeps the comment above it', async () => {
+    const result = await plan({
       operation: 'replace',
       id: 'first_spirit',
       body: '\tpicture = other\n\tmodifier = { stability_factor = 0.2 }',
@@ -157,66 +161,66 @@ describe('idea_write plan: replace and remove', () => {
     expect(result.untouchedDefinitions).toBe(1);
   });
 
-  it('removes the idea, its line and the blank line that separated it', () => {
-    const result = plan({ operation: 'remove', id: 'second_spirit' });
+  it('removes the idea, its line and the blank line that separated it', async () => {
+    const result = await plan({ operation: 'remove', id: 'second_spirit' });
     expect(result.text).toBe(
       FILE.replace('\n\n\t\tsecond_spirit = {\n\t\t\tpicture = second_spirit\n\t\t}', ''),
     );
     expect(result.untouchedDefinitions).toBe(1);
   });
 
-  it('gives back the original bytes after an add and a remove of the same idea', () => {
-    const added = plan({
+  it('gives back the original bytes after an add and a remove of the same idea', async () => {
+    const added = await plan({
       operation: 'add',
       id: 'round_trip',
       category: 'country',
       body: 'picture = x',
     });
-    const removed = planIdeaWrite(
+    const removed = await planIdeaWrite(
       { bytes: added.bytes, path: 'common/ideas/test.txt' },
       { operation: 'remove', id: 'round_trip' },
     );
     expect(removed.bytes.equals(bytes(FILE))).toBe(true);
   });
 
-  it('refuses an id that is not in the file, a move between categories and a body on remove', () => {
-    expect(codeOf(() => plan({ operation: 'replace', id: 'nope_one', body: 'a = b' }))).toBe(
+  it('refuses an id that is not in the file, a move between categories and a body on remove', async () => {
+    expect(await codeOf(() => plan({ operation: 'replace', id: 'nope_one', body: 'a = b' }))).toBe(
       'IDEA_WRITE_NOT_FOUND',
     );
-    expect(codeOf(() => plan({ operation: 'remove', id: 'nope_one' }))).toBe(
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'nope_one' }))).toBe(
       'IDEA_WRITE_NOT_FOUND',
     );
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'replace', id: 'first_spirit', category: 'hidden_ideas', body: 'a = b' }),
       ),
     ).toBe('IDEA_WRITE_CATEGORY_MISMATCH');
-    expect(codeOf(() => plan({ operation: 'remove', id: 'first_spirit', body: 'a = b' }))).toBe(
-      'IDEA_WRITE_BODY_UNEXPECTED',
-    );
+    expect(
+      await codeOf(() => plan({ operation: 'remove', id: 'first_spirit', body: 'a = b' })),
+    ).toBe('IDEA_WRITE_BODY_UNEXPECTED');
   });
 
-  it('refuses an id defined twice rather than guessing which one', () => {
+  it('refuses an id defined twice rather than guessing which one', async () => {
     const twice = FILE.replace(
       '\thidden_ideas = {\n\t}',
       '\thidden_ideas = {\n\t\tfirst_spirit = { picture = dup }\n\t}',
     );
-    expect(codeOf(() => plan({ operation: 'remove', id: 'first_spirit' }, twice))).toBe(
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'first_spirit' }, twice))).toBe(
       'IDEA_WRITE_DUPLICATE_ID',
     );
   });
 });
 
 describe('idea_write plan: creating a category or a file', () => {
-  it('adds a missing category with the idea in it, only when asked to', () => {
+  it('adds a missing category with the idea in it, only when asked to', async () => {
     const input = {
       operation: 'add',
       id: 'adviser_one',
       category: 'political_advisor',
       body: 'slot = political_advisor',
     } as const;
-    expect(codeOf(() => plan(input))).toBe('IDEA_WRITE_CATEGORY_NOT_FOUND');
-    const result = plan({ ...input, createCategory: true });
+    expect(await codeOf(() => plan(input))).toBe('IDEA_WRITE_CATEGORY_NOT_FOUND');
+    const result = await plan({ ...input, createCategory: true });
     expect(result.text).toBe(
       FILE.replace(
         '\thidden_ideas = {\n\t}\n}',
@@ -227,9 +231,9 @@ describe('idea_write plan: creating a category or a file', () => {
     expect(result.untouchedDefinitions).toBe(2);
   });
 
-  it('refuses a bad category name and a file with no single ideas block', () => {
+  it('refuses a bad category name and a file with no single ideas block', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({
           operation: 'add',
           id: 'x_one',
@@ -240,7 +244,7 @@ describe('idea_write plan: creating a category or a file', () => {
       ),
     ).toBe('IDEA_WRITE_CATEGORY_INVALID');
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan(
           { operation: 'add', id: 'x_one', category: 'extra', body: 'a = b', createCategory: true },
           'ideas = {\n}\nideas = {\n}\n',
@@ -249,8 +253,8 @@ describe('idea_write plan: creating a category or a file', () => {
     ).toBe('IDEA_WRITE_LAYOUT_UNSUPPORTED');
   });
 
-  it('makes a new file with one category and one idea, in the game own layout', () => {
-    const result = planNewIdeaFile('common/ideas/new_ideas.txt', {
+  it('makes a new file with one category and one idea, in the game own layout', async () => {
+    const result = await planNewIdeaFile('common/ideas/new_ideas.txt', {
       operation: 'add',
       id: 'fresh_spirit',
       category: 'country',
@@ -275,7 +279,7 @@ describe('idea_write plan: creating a category or a file', () => {
     expect(result.untouchedDefinitions).toBe(0);
   });
 
-  it('refuses a new file without a category or body, and anything but add', () => {
+  it('refuses a new file without a category or body, and anything but add', async () => {
     const base = {
       operation: 'add',
       id: 'fresh_spirit',
@@ -283,14 +287,14 @@ describe('idea_write plan: creating a category or a file', () => {
       body: 'a = b',
     } as const;
     const { category: _category, ...withoutCategory } = base;
-    expect(codeOf(() => planNewIdeaFile('common/ideas/n.txt', withoutCategory))).toBe(
+    expect(await codeOf(() => planNewIdeaFile('common/ideas/n.txt', withoutCategory))).toBe(
       'IDEA_WRITE_CATEGORY_REQUIRED',
     );
-    expect(codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, body: '' }))).toBe(
+    expect(await codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, body: '' }))).toBe(
       'IDEA_WRITE_BODY_REQUIRED',
     );
     expect(
-      codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, operation: 'remove' })),
+      await codeOf(() => planNewIdeaFile('common/ideas/n.txt', { ...base, operation: 'remove' })),
     ).toBe('IDEA_WRITE_FILE_NOT_FOUND');
   });
 });

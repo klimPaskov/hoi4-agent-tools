@@ -30,9 +30,9 @@ const FILE = [
 const bytes = (text: string) => Buffer.from(text, 'utf8');
 const plan = (input: DecisionWriteInput, text = FILE) =>
   planDecisionWrite({ bytes: bytes(text), path: 'common/decisions/test.txt' }, input);
-const codeOf = (action: () => unknown): string => {
+const codeOf = async (action: () => unknown): Promise<string> => {
   try {
-    action();
+    await action();
   } catch (error) {
     if (error instanceof ServiceError) return error.code;
     throw error;
@@ -41,8 +41,8 @@ const codeOf = (action: () => unknown): string => {
 };
 
 describe('decision_write plan: add', () => {
-  it('puts a new decision at the end of its category, after a blank line, and changes nothing else', () => {
-    const result = plan({
+  it('puts a new decision at the end of its category, after a blank line, and changes nothing else', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'tst_third',
       category: 'tst_category',
@@ -71,8 +71,8 @@ describe('decision_write plan: add', () => {
     expect(result.diff).not.toContain('\n-');
   });
 
-  it('puts a decision into an empty category block without a leading blank line', () => {
-    const result = plan({
+  it('puts a decision into an empty category block without a leading blank line', async () => {
+    const result = await plan({
       operation: 'add',
       id: 'tst_only',
       category: 'tst_other',
@@ -83,9 +83,9 @@ describe('decision_write plan: add', () => {
     );
   });
 
-  it('keeps CRLF line endings and the file indentation', () => {
+  it('keeps CRLF line endings and the file indentation', async () => {
     const crlf = FILE.replaceAll('\n', '\r\n').replaceAll('\t', '  ');
-    const result = plan(
+    const result = await plan(
       { operation: 'add', id: 'tst_third', category: 'tst_category', body: 'cost = 5' },
       crlf,
     );
@@ -93,34 +93,34 @@ describe('decision_write plan: add', () => {
     expect(result.text.replaceAll('\r\n', '')).not.toContain('\n');
   });
 
-  it('refuses an unknown category unless told to create it, then appends a block', () => {
-    const add = (extra: Partial<DecisionWriteInput>) =>
+  it('refuses an unknown category unless told to create it, then appends a block', async () => {
+    const add = async (extra: Partial<DecisionWriteInput>) =>
       plan({ operation: 'add', id: 'tst_new', category: 'tst_fresh', body: 'cost = 1', ...extra });
-    expect(codeOf(() => add({}))).toBe('DECISION_WRITE_CATEGORY_NOT_FOUND');
-    const made = add({ createCategory: true });
+    expect(await codeOf(() => add({}))).toBe('DECISION_WRITE_CATEGORY_NOT_FOUND');
+    const made = await add({ createCategory: true });
     expect(made.text).toBe(`${FILE}\ntst_fresh = {\n\ttst_new = {\n\t\tcost = 1\n\t}\n}\n`);
     expect(made.untouchedDefinitions).toBe(2);
   });
 
-  it('refuses a duplicate id, an invalid id or category, and a missing or broken body', () => {
-    const add = (id: string, body?: string, category = 'tst_category') =>
-      codeOf(() =>
+  it('refuses a duplicate id, an invalid id or category, and a missing or broken body', async () => {
+    const add = async (id: string, body?: string, category = 'tst_category') =>
+      await codeOf(() =>
         plan({ operation: 'add', id, category, ...(body === undefined ? {} : { body }) }),
       );
-    expect(add('tst_first', 'cost = 1')).toBe('DECISION_WRITE_DUPLICATE_ID');
-    expect(add('1 bad', 'cost = 1')).toBe('DECISION_WRITE_ID_INVALID');
-    expect(add('tst_new', 'cost = 1', 'bad name')).toBe('DECISION_WRITE_CATEGORY_INVALID');
-    expect(add('tst_new')).toBe('DECISION_WRITE_BODY_REQUIRED');
-    expect(add('tst_new', 'cost = { x')).toBe('DECISION_WRITE_BODY_INVALID');
-    expect(add('tst_new', 'a = b\n}\ntst_x = {\nc = d')).toBe('DECISION_WRITE_BODY_INVALID');
-    expect(codeOf(() => plan({ operation: 'add', id: 'tst_new', body: 'cost = 1' }))).toBe(
+    expect(await add('tst_first', 'cost = 1')).toBe('DECISION_WRITE_DUPLICATE_ID');
+    expect(await add('1 bad', 'cost = 1')).toBe('DECISION_WRITE_ID_INVALID');
+    expect(await add('tst_new', 'cost = 1', 'bad name')).toBe('DECISION_WRITE_CATEGORY_INVALID');
+    expect(await add('tst_new')).toBe('DECISION_WRITE_BODY_REQUIRED');
+    expect(await add('tst_new', 'cost = { x')).toBe('DECISION_WRITE_BODY_INVALID');
+    expect(await add('tst_new', 'a = b\n}\ntst_x = {\nc = d')).toBe('DECISION_WRITE_BODY_INVALID');
+    expect(await codeOf(() => plan({ operation: 'add', id: 'tst_new', body: 'cost = 1' }))).toBe(
       'DECISION_WRITE_CATEGORY_REQUIRED',
     );
   });
 
-  it('refuses a file with syntax errors and createCategory on replace', () => {
+  it('refuses a file with syntax errors and createCategory on replace', async () => {
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan(
           { operation: 'add', id: 'tst_new', category: 'tst_category', body: 'cost = 1' },
           'tst_category = {\n\ttst_a = {\n',
@@ -128,7 +128,7 @@ describe('decision_write plan: add', () => {
       ),
     ).toBe('DECISION_WRITE_SOURCE_INVALID');
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'replace', id: 'tst_first', body: 'cost = 1', createCategory: true }),
       ),
     ).toBe('DECISION_WRITE_CATEGORY_UNEXPECTED');
@@ -136,8 +136,8 @@ describe('decision_write plan: add', () => {
 });
 
 describe('decision_write plan: replace and remove', () => {
-  it('replaces one decision and leaves the comment and the neighbour as they were', () => {
-    const result = plan({
+  it('replaces one decision and leaves the comment and the neighbour as they were', async () => {
+    const result = await plan({
       operation: 'replace',
       id: 'tst_first',
       body: 'icon = generic_research\ncost = 75',
@@ -152,25 +152,25 @@ describe('decision_write plan: replace and remove', () => {
     expect(result.untouchedDefinitions).toBe(1);
   });
 
-  it('removes one decision with its blank separator and restores by add', () => {
-    const removed = plan({ operation: 'remove', id: 'tst_second' });
+  it('removes one decision with its blank separator and restores by add', async () => {
+    const removed = await plan({ operation: 'remove', id: 'tst_second' });
     expect(removed.text).toBe(FILE.replace('\n\ttst_second = {\n\t\tcost = 25\n\t}\n', ''));
-    const restored = plan(
+    const restored = await plan(
       { operation: 'add', id: 'tst_second', category: 'tst_category', body: 'cost = 25' },
       removed.text,
     );
     expect(restored.text).toBe(FILE);
   });
 
-  it('refuses an unknown id, a body on remove, a category move, and an id defined twice', () => {
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst_nobody' }))).toBe(
+  it('refuses an unknown id, a body on remove, a category move, and an id defined twice', async () => {
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst_nobody' }))).toBe(
       'DECISION_WRITE_NOT_FOUND',
     );
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst_first', body: 'a = b' }))).toBe(
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst_first', body: 'a = b' }))).toBe(
       'DECISION_WRITE_BODY_UNEXPECTED',
     );
     expect(
-      codeOf(() =>
+      await codeOf(() =>
         plan({ operation: 'replace', id: 'tst_first', category: 'tst_other', body: 'cost = 1' }),
       ),
     ).toBe('DECISION_WRITE_CATEGORY_MISMATCH');
@@ -178,15 +178,15 @@ describe('decision_write plan: replace and remove', () => {
       'tst_other = {\n}',
       'tst_other = {\n\ttst_first = {\n\t\tcost = 1\n\t}\n}',
     );
-    expect(codeOf(() => plan({ operation: 'remove', id: 'tst_first' }, doubled))).toBe(
+    expect(await codeOf(() => plan({ operation: 'remove', id: 'tst_first' }, doubled))).toBe(
       'DECISION_WRITE_DUPLICATE_ID',
     );
   });
 });
 
 describe('decision_write plan: a new file and categories', () => {
-  it('makes a file with one category block and one decision in the game style', () => {
-    const result = planNewDecisionFile('common/decisions/new.txt', {
+  it('makes a file with one category block and one decision in the game style', async () => {
+    const result = await planNewDecisionFile('common/decisions/new.txt', {
       operation: 'add',
       id: 'tst_new',
       category: 'tst_category',
@@ -196,22 +196,23 @@ describe('decision_write plan: a new file and categories', () => {
     expect(result.untouchedDefinitions).toBe(0);
   });
 
-  it('only adds, and needs a category and a valid body', () => {
-    const make = (input: DecisionWriteInput) =>
-      codeOf(() => planNewDecisionFile('common/decisions/new.txt', input));
-    expect(make({ operation: 'remove', id: 'tst_new' })).toBe('DECISION_WRITE_FILE_NOT_FOUND');
-    expect(make({ operation: 'add', id: 'tst_new', body: 'a = b' })).toBe(
+  it('only adds, and needs a category and a valid body', async () => {
+    const make = async (input: DecisionWriteInput) =>
+      await codeOf(() => planNewDecisionFile('common/decisions/new.txt', input));
+    expect(await make({ operation: 'remove', id: 'tst_new' })).toBe(
+      'DECISION_WRITE_FILE_NOT_FOUND',
+    );
+    expect(await make({ operation: 'add', id: 'tst_new', body: 'a = b' })).toBe(
       'DECISION_WRITE_CATEGORY_REQUIRED',
     );
-    expect(make({ operation: 'add', id: 'tst_new', category: 'c', body: 'a = {' })).toBe(
+    expect(await make({ operation: 'add', id: 'tst_new', category: 'c', body: 'a = {' })).toBe(
       'DECISION_WRITE_BODY_INVALID',
     );
   });
 
-  it('lists the category blocks of a file', () => {
-    expect(decisionCategories({ bytes: bytes(FILE), path: 'common/decisions/test.txt' })).toEqual([
-      'tst_category',
-      'tst_other',
-    ]);
+  it('lists the category blocks of a file', async () => {
+    expect(
+      await decisionCategories({ bytes: bytes(FILE), path: 'common/decisions/test.txt' }),
+    ).toEqual(['tst_category', 'tst_other']);
   });
 });

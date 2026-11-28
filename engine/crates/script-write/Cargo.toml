@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 hoi4-core.workspace = true
+hoi4-syntax.workspace = true
+hoi4-engine.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
