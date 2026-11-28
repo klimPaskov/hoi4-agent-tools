@@ -670,26 +670,14 @@ export class GuiAssetCatalog {
         .resize(width, height, { fit: 'fill', kernel: 'nearest' })
         .raw()
         .toBuffer();
-      let alphaVaries = false;
-      const firstAlpha = maskPixels[3] ?? 255;
-      for (let offset = 7; offset < maskPixels.length; offset += 4) {
-        if (maskPixels[offset] !== firstAlpha) {
-          alphaVaries = true;
-          break;
-        }
-      }
+      // The game's masked flag shader takes only the mask's alpha (`OutColor.a = MaskColor.a`);
+      // its colour is ignored, so a black mask with full alpha shows the whole flag.
       const alphaMask = Buffer.alloc(maskPixels.length);
       for (let offset = 0; offset < maskPixels.length; offset += 4) {
         alphaMask[offset] = 255;
         alphaMask[offset + 1] = 255;
         alphaMask[offset + 2] = 255;
-        alphaMask[offset + 3] = alphaVaries
-          ? maskPixels[offset + 3]!
-          : Math.round(
-              maskPixels[offset]! * 0.2126 +
-                maskPixels[offset + 1]! * 0.7152 +
-                maskPixels[offset + 2]! * 0.0722,
-            );
+        alphaMask[offset + 3] = maskPixels[offset + 3]!;
       }
       composites.push({
         input: await sharp(alphaMask, {

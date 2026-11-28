@@ -507,7 +507,8 @@ function renderMaskedShield(element: GuiSceneElement, textures: TextureDefinitio
   if (mask?.supported !== true || mask.dataUri === undefined)
     return renderSpriteImage(sprite, rect, textures);
   const id = `gui-mask-${sha256Bytes(element.id).slice(0, 20)}`;
-  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" ${rectAttributes(rect)}>${textures.use(mask.dataUri, rect)}</mask></defs>${textures.use(sprite.dataUri, rect, ` mask="url(#${id})"`)}`;
+  // Alpha, not luminance: the game's masked shader keeps only the mask's alpha.
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" style="mask-type:alpha" ${rectAttributes(rect)}>${textures.use(mask.dataUri, rect)}</mask></defs>${textures.use(sprite.dataUri, rect, ` mask="url(#${id})"`)}`;
 }
 
 function renderElementSprite(element: GuiSceneElement, textures: TextureDefinitions): string {
